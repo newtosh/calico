@@ -57,7 +57,7 @@ If a webhook bearer token is set, add `-H "Authorization: Bearer $GROK_DESK_WEBH
 
 ## Panel URL and token
 
-Wi-Fi SSID and password still have to be entered on the device. After the board is joined and a status poll succeeds, the dashboard section **Panel config** (or `PUT /api/panel`) stores a companion URL and bearer token on the companion. The same `GET /api/status` the panel already polls then includes:
+Wi-Fi SSID and password can be written over USB with `scripts/provision-wifi.py` (see [firmware/README.md](firmware/README.md)). The on-device keyboard still works. After the board is joined and a status poll succeeds, the dashboard section **Panel config** (or `PUT /api/panel`) stores a companion URL and bearer token on the companion. The same `GET /api/status` the panel already polls then includes:
 
 ```json
 "panel": {"url": "http://192.168.4.30:8787", "token": "desk-secret"}

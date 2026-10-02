@@ -8,6 +8,11 @@ companion/data/
 web/node_modules/
 web/dist/
 firmware/build/
+# NVS images from scripts/provision-wifi.py (the script uses a temp dir; do not commit these)
+provision-wifi.csv
+provision-wifi.bin
+nvs.bin
+*.nvs.bin
 firmware/managed_components/
 firmware/sdkconfig
 firmware/dependencies.lock
