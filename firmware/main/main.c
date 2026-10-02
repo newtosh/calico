@@ -14,7 +14,8 @@
 #include <stdio.h>
 #include <string.h>
 
-static desk_settings_t s_settings;
+static wifi_store_t s_store;
+static desk_settings_t s_active;
 static int s_failures;
 static char s_status_body[8192];
 static volatile int s_scan_busy;
@@ -35,16 +36,29 @@ static void copy_setting(char *dest, size_t dest_len, const char *src) {
 }
 
 static void save_and_restart(const char *ssid, const char *pass, const char *url, const char *token) {
-    copy_setting(s_settings.ssid, sizeof(s_settings.ssid), ssid);
-    copy_setting(s_settings.pass, sizeof(s_settings.pass), pass);
-    copy_setting(s_settings.url, sizeof(s_settings.url), url);
-    copy_setting(s_settings.token, sizeof(s_settings.token), token);
-    net_save(&s_settings);
+    const char *net_url = url;
+    const char *net_token = token;
+    if (!ssid || !ssid[0]) {
+        ui_set_settings_status("Select or type an SSID.");
+        return;
+    }
+    /* Same text as the global default means this network keeps following it. */
+    if (url && s_store.url[0] && strcmp(url, s_store.url) == 0) {
+        net_url = "";
+    }
+    if (token && strcmp(token, s_store.token) == 0) {
+        net_token = "";
+    }
+    if (wifi_upsert(&s_store, ssid, pass, net_url, net_token) != 0) {
+        ui_set_settings_status("Could not save that network.");
+        return;
+    }
+    net_save(&s_store);
     esp_restart();
 }
 
 static void dismiss_alert(void) {
-    net_dismiss(&s_settings);
+    net_dismiss(&s_active);
 }
 
 /* waveshare/esp32_s3_touch_amoled_2_16 2.0.1 declares bsp_display_lock as
@@ -84,21 +98,22 @@ static void request_scan(void) {
     }
 }
 
-/* URL and token ride the status poll the panel already makes. SSID and
- * password stay in NVS. A failed poll never gets here. Restart matches Save. */
+/* URL and token ride the status poll the panel already makes. This writes
+ * only the global url and token. Wi-Fi passwords are not on this path.
+ * A failed poll never gets here. */
 static void apply_panel_push(const char *body) {
     desk_panel_t panel;
     if (desk_panel_from_json(body, &panel) != 0) {
         return;
     }
-    if (!desk_panel_should_apply(&panel, s_settings.url, s_settings.token)) {
+    if (!desk_panel_should_apply(&panel, s_store.url, s_store.token)) {
         return;
     }
-    copy_setting(s_settings.url, sizeof(s_settings.url), panel.url);
+    copy_setting(s_store.url, sizeof(s_store.url), panel.url);
     if (panel.token_set) {
-        copy_setting(s_settings.token, sizeof(s_settings.token), panel.token);
+        copy_setting(s_store.token, sizeof(s_store.token), panel.token);
     }
-    net_save(&s_settings);
+    net_save_globals(s_store.url, s_store.token);
     esp_restart();
 }
 
@@ -108,7 +123,7 @@ static void poll_task(void *arg) {
     memset(&view, 0, sizeof(view));
     while (1) {
         desk_view_t next;
-        if (net_fetch_status(&s_settings, s_status_body, sizeof(s_status_body)) == 0) {
+        if (net_fetch_status(&s_active, s_status_body, sizeof(s_status_body)) == 0) {
             apply_panel_push(s_status_body);
             if (desk_view_from_json(s_status_body, &next) == 0) {
                 s_failures = 0;
@@ -129,22 +144,41 @@ static void poll_task(void *arg) {
 
 void app_main(void) {
     esp_err_t err = nvs_flash_init();
+    desk_settings_t fields;
+    int selected;
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ESP_ERROR_CHECK(nvs_flash_init());
     }
     bsp_display_start();
-    net_load(&s_settings);
+    net_load(&s_store);
+    memset(&fields, 0, sizeof(fields));
+    copy_setting(fields.url, sizeof(fields.url), s_store.url);
+    copy_setting(fields.token, sizeof(fields.token), s_store.token);
     if (lock_lvgl()) {
         ui_init(save_and_restart, dismiss_alert, request_scan);
-        ui_set_fields(&s_settings);
-        if (s_settings.ssid[0] == '\0') {
+        ui_set_fields(&fields);
+        ui_set_known(&s_store);
+        if (s_store.count == 0) {
             ui_open_settings();
         }
         unlock_lvgl();
     }
-    if (s_settings.ssid[0]) {
-        net_wifi_start(&s_settings);
+    if (s_store.count == 0) {
+        return;
+    }
+    selected = net_wifi_select(&s_store, &s_active);
+    if (selected == 0) {
+        net_wifi_start(&s_active);
         xTaskCreate(poll_task, "poll", 16384, NULL, 5, NULL);
+        return;
+    }
+    if (lock_lvgl()) {
+        if (selected < 0) {
+            ui_show_panel_note("SCAN FAILED", "Could not scan for Wi-Fi.");
+        } else {
+            ui_show_panel_note("NO NETWORK", "No saved network in range");
+        }
+        unlock_lvgl();
     }
 }

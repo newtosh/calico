@@ -38,32 +38,96 @@ static void copy_field(char *dest, size_t dest_len, const char *src) {
     dest[i] = '\0';
 }
 
-void net_load(desk_settings_t *out) {
+static void read_str(nvs_handle_t handle, const char *key, char *dest, size_t dest_len) {
+    size_t length = dest_len;
+    dest[0] = '\0';
+    if (nvs_get_str(handle, key, dest, &length) != ESP_OK) {
+        dest[0] = '\0';
+    }
+}
+
+static void slot_key(char *dest, size_t dest_len, int index, const char *field) {
+    snprintf(dest, dest_len, "n%d%s", index, field);
+}
+
+static void set_or_erase(nvs_handle_t handle, const char *key, const char *value, int keep_empty) {
+    esp_err_t err;
+    if (value && (value[0] || keep_empty)) {
+        ESP_ERROR_CHECK(nvs_set_str(handle, key, value ? value : ""));
+        return;
+    }
+    err = nvs_erase_key(handle, key);
+    if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) {
+        ESP_ERROR_CHECK(err);
+    }
+}
+
+void net_load(wifi_store_t *out) {
     nvs_handle_t handle;
-    size_t length;
-    memset(out, 0, sizeof(*out));
-    copy_field(out->url, sizeof(out->url), "http://192.168.4.30:8787");
+    char key[16];
+    char legacy_ssid[33];
+    char legacy_pass[65];
+    int i;
+    wifi_store_init(out);
     if (nvs_open("desk", NVS_READONLY, &handle) != ESP_OK) {
         return;
     }
-    length = sizeof(out->ssid);
-    nvs_get_str(handle, "ssid", out->ssid, &length);
-    length = sizeof(out->pass);
-    nvs_get_str(handle, "pass", out->pass, &length);
-    length = sizeof(out->url);
-    nvs_get_str(handle, "url", out->url, &length);
-    length = sizeof(out->token);
-    nvs_get_str(handle, "token", out->token, &length);
+    read_str(handle, "url", out->url, sizeof(out->url));
+    if (!out->url[0]) {
+        copy_field(out->url, sizeof(out->url), WIFI_DEFAULT_URL);
+    }
+    read_str(handle, "token", out->token, sizeof(out->token));
+    for (i = 0; i < WIFI_NET_MAX; i++) {
+        slot_key(key, sizeof(key), i, "ssid");
+        read_str(handle, key, out->nets[out->count].ssid, sizeof(out->nets[0].ssid));
+        if (!out->nets[out->count].ssid[0]) {
+            continue;
+        }
+        slot_key(key, sizeof(key), i, "pass");
+        read_str(handle, key, out->nets[out->count].pass, sizeof(out->nets[0].pass));
+        slot_key(key, sizeof(key), i, "url");
+        read_str(handle, key, out->nets[out->count].url, sizeof(out->nets[0].url));
+        slot_key(key, sizeof(key), i, "token");
+        read_str(handle, key, out->nets[out->count].token, sizeof(out->nets[0].token));
+        out->count++;
+    }
+    if (out->count == 0) {
+        read_str(handle, "ssid", legacy_ssid, sizeof(legacy_ssid));
+        read_str(handle, "pass", legacy_pass, sizeof(legacy_pass));
+        wifi_migrate_legacy(out, legacy_ssid, legacy_pass);
+    }
     nvs_close(handle);
 }
 
-void net_save(const desk_settings_t *in) {
+void net_save(const wifi_store_t *in) {
+    nvs_handle_t handle;
+    char key[16];
+    int i;
+    ESP_ERROR_CHECK(nvs_open("desk", NVS_READWRITE, &handle));
+    set_or_erase(handle, "url", in->url, 0);
+    set_or_erase(handle, "token", in->token, 1);
+    set_or_erase(handle, "ssid", "", 0);
+    set_or_erase(handle, "pass", "", 0);
+    for (i = 0; i < WIFI_NET_MAX; i++) {
+        const wifi_net_t *net = i < in->count ? &in->nets[i] : NULL;
+        slot_key(key, sizeof(key), i, "ssid");
+        set_or_erase(handle, key, net ? net->ssid : "", 0);
+        slot_key(key, sizeof(key), i, "pass");
+        set_or_erase(handle, key, net ? net->pass : "", net != NULL);
+        slot_key(key, sizeof(key), i, "url");
+        set_or_erase(handle, key, net ? net->url : "", 0);
+        slot_key(key, sizeof(key), i, "token");
+        set_or_erase(handle, key, net && net->token[0] ? net->token : "", 0);
+    }
+    ESP_ERROR_CHECK(nvs_commit(handle));
+    nvs_close(handle);
+}
+
+void net_save_globals(const char *url, const char *token) {
     nvs_handle_t handle;
     ESP_ERROR_CHECK(nvs_open("desk", NVS_READWRITE, &handle));
-    ESP_ERROR_CHECK(nvs_set_str(handle, "ssid", in->ssid));
-    ESP_ERROR_CHECK(nvs_set_str(handle, "pass", in->pass));
-    ESP_ERROR_CHECK(nvs_set_str(handle, "url", in->url));
-    ESP_ERROR_CHECK(nvs_set_str(handle, "token", in->token));
+    set_or_erase(handle, "url", url, 0);
+    set_or_erase(handle, "token", token, 1);
     ESP_ERROR_CHECK(nvs_commit(handle));
     nvs_close(handle);
 }
@@ -114,7 +178,9 @@ void net_wifi_start(const desk_settings_t *in) {
 }
 
 int net_wifi_scan(net_ap_t *out, int max_out) {
-    wifi_scan_config_t scan = {0};
+    wifi_scan_config_t scan = {
+        .show_hidden = true,
+    };
     wifi_ap_record_t *recs = NULL;
     net_ap_t found[48];
     uint16_t count = 48;
@@ -190,6 +256,91 @@ int net_wifi_scan(net_ap_t *out, int max_out) {
     }
     ESP_LOGI(TAG, "scan found %d", n);
     return n;
+}
+
+static int scan_one(const char *ssid, int *rssi_out) {
+    wifi_scan_config_t scan = {0};
+    wifi_ap_record_t recs[8];
+    uint8_t ssid_buf[33];
+    uint16_t count = 8;
+    int i;
+    int found = 0;
+    int rssi = 0;
+    memset(ssid_buf, 0, sizeof(ssid_buf));
+    copy_field((char *)ssid_buf, sizeof(ssid_buf), ssid);
+    scan.ssid = ssid_buf;
+    scan.show_hidden = 1;
+    if (esp_wifi_scan_start(&scan, true) != ESP_OK) {
+        return 0;
+    }
+    if (esp_wifi_scan_get_ap_records(&count, recs) != ESP_OK) {
+        return 0;
+    }
+    for (i = 0; i < (int)count; i++) {
+        if (!found || recs[i].rssi > rssi) {
+            rssi = recs[i].rssi;
+            found = 1;
+        }
+    }
+    if (found && rssi_out) {
+        *rssi_out = rssi;
+    }
+    return found;
+}
+
+int net_wifi_select(const wifi_store_t *store, desk_settings_t *chosen) {
+    net_ap_t aps[NET_SCAN_MAX];
+    wifi_heard_t heard[NET_SCAN_MAX + WIFI_NET_MAX];
+    int n;
+    int h = 0;
+    int i;
+    int idx;
+    if (!store || !chosen || store->count <= 0) {
+        return 1;
+    }
+    n = net_wifi_scan(aps, NET_SCAN_MAX);
+    if (n < 0) {
+        ESP_LOGI(TAG, "scan failed");
+        return -1;
+    }
+    for (i = 0; i < n && h < (int)(sizeof(heard) / sizeof(heard[0])); i++) {
+        heard[h].ssid = aps[i].ssid;
+        heard[h].rssi = aps[i].rssi;
+        h++;
+    }
+    for (i = 0; i < store->count; i++) {
+        int seen = 0;
+        int j;
+        int rssi = 0;
+        for (j = 0; j < h; j++) {
+            if (heard[j].ssid && strcmp(heard[j].ssid, store->nets[i].ssid) == 0) {
+                seen = 1;
+                break;
+            }
+        }
+        if (seen) {
+            continue;
+        }
+        if (!scan_one(store->nets[i].ssid, &rssi)) {
+            continue;
+        }
+        if (h >= (int)(sizeof(heard) / sizeof(heard[0]))) {
+            break;
+        }
+        heard[h].ssid = store->nets[i].ssid;
+        heard[h].rssi = rssi;
+        h++;
+    }
+    idx = wifi_pick(store, heard, h);
+    if (idx < 0) {
+        ESP_LOGI(TAG, "no saved network in range");
+        return 1;
+    }
+    memset(chosen, 0, sizeof(*chosen));
+    copy_field(chosen->ssid, sizeof(chosen->ssid), store->nets[idx].ssid);
+    copy_field(chosen->pass, sizeof(chosen->pass), store->nets[idx].pass);
+    wifi_endpoint(store, idx, chosen->url, sizeof(chosen->url), chosen->token, sizeof(chosen->token));
+    return 0;
 }
 
 static esp_err_t on_http(esp_http_client_event_t *event) {

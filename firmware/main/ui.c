@@ -48,6 +48,48 @@ static void (*s_on_dismiss)(void);
 static ui_scan_fn s_on_scan;
 static int s_mic_hold;
 static int s_hiding;
+static wifi_net_t s_known[WIFI_NET_MAX];
+static int s_known_count;
+static char s_global_url[128];
+static char s_global_token[128];
+
+static void copy_text(char *dest, size_t dest_len, const char *src) {
+    size_t i;
+    if (dest_len == 0) {
+        return;
+    }
+    if (!src) {
+        dest[0] = '\0';
+        return;
+    }
+    for (i = 0; i + 1 < dest_len && src[i]; i++) {
+        dest[i] = src[i];
+    }
+    dest[i] = '\0';
+}
+
+/* Show this SSID's own URL and token when it has them, otherwise the global default. */
+static void show_endpoint_for(const char *ssid) {
+    const char *url = s_global_url;
+    const char *token = s_global_token;
+    int i;
+    if (!s_url || !s_token) {
+        return;
+    }
+    for (i = 0; i < s_known_count; i++) {
+        if (ssid && ssid[0] && strcmp(s_known[i].ssid, ssid) == 0) {
+            if (s_known[i].url[0]) {
+                url = s_known[i].url;
+            }
+            if (s_known[i].token[0]) {
+                token = s_known[i].token;
+            }
+            break;
+        }
+    }
+    lv_textarea_set_text(s_url, url);
+    lv_textarea_set_text(s_token, token);
+}
 
 static void style_text(lv_obj_t *label) {
     lv_obj_set_style_text_color(label, lv_color_hex(INK), 0);
@@ -115,7 +157,12 @@ static void on_field(lv_event_t *event) {
     } else if (code == LV_EVENT_READY || code == LV_EVENT_CANCEL) {
         hide_keyboard(1);
     } else if (code == LV_EVENT_VALUE_CHANGED && ta == s_ssid) {
-        set_selected_label(lv_textarea_get_text(s_ssid));
+        const char *typed = lv_textarea_get_text(s_ssid);
+        const char *url_now = lv_textarea_get_text(s_url);
+        set_selected_label(typed);
+        if (!url_now || (s_global_url[0] && strcmp(url_now, s_global_url) == 0)) {
+            show_endpoint_for(typed);
+        }
     }
 }
 
@@ -150,7 +197,9 @@ static void on_pick(lv_event_t *event) {
         return;
     }
     lv_textarea_set_text(s_ssid, s_aps[index].ssid);
+    lv_textarea_set_text(s_pass, "");
     set_selected_label(s_aps[index].ssid);
+    show_endpoint_for(s_aps[index].ssid);
     for (i = 0; i < s_row_count; i++) {
         style_row(s_rows[i], i == (int)index);
     }
@@ -358,7 +407,7 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     s_status = lv_label_create(s_body);
     lv_obj_set_width(s_status, lv_pct(100));
     lv_label_set_long_mode(s_status, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(s_status, "Nearby networks");
+    lv_label_set_text(s_status, "Scan to add a network. Others stay saved.");
     style_text(s_status);
 
     s_list = lv_obj_create(s_body);
@@ -381,8 +430,8 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     style_text(s_selected);
 
     s_pass = make_field(s_body, "Password", "Wi-Fi password", 1, NULL);
-    s_url = make_field(s_body, "Companion URL", "http://192.168.4.30:8787", 0, NULL);
-    s_token = make_field(s_body, "Bearer token", "optional", 0, NULL);
+    s_url = make_field(s_body, "URL for this network", "http://192.168.4.30:8787", 0, NULL);
+    s_token = make_field(s_body, "Token for this network", "optional", 0, NULL);
     manual = action_button(s_body, "Type SSID", on_manual);
     lv_obj_set_width(manual, lv_pct(100));
     s_ssid = make_field(s_body, "SSID", "Network name", 0, &s_ssid_box);
@@ -416,11 +465,45 @@ void ui_set_fields(const desk_settings_t *settings) {
     if (!settings) {
         return;
     }
+    copy_text(s_global_url, sizeof(s_global_url), settings->url);
+    copy_text(s_global_token, sizeof(s_global_token), settings->token);
     lv_textarea_set_text(s_ssid, settings->ssid);
-    lv_textarea_set_text(s_pass, settings->pass);
+    lv_textarea_set_text(s_pass, "");
     lv_textarea_set_text(s_url, settings->url);
     lv_textarea_set_text(s_token, settings->token);
     set_selected_label(settings->ssid);
+}
+
+void ui_set_known(const wifi_store_t *store) {
+    int i;
+    s_known_count = 0;
+    if (!store) {
+        return;
+    }
+    copy_text(s_global_url, sizeof(s_global_url), store->url);
+    copy_text(s_global_token, sizeof(s_global_token), store->token);
+    for (i = 0; i < store->count && i < WIFI_NET_MAX; i++) {
+        memset(&s_known[i], 0, sizeof(s_known[i]));
+        copy_text(s_known[i].ssid, sizeof(s_known[i].ssid), store->nets[i].ssid);
+        copy_text(s_known[i].url, sizeof(s_known[i].url), store->nets[i].url);
+        copy_text(s_known[i].token, sizeof(s_known[i].token), store->nets[i].token);
+        s_known_count++;
+    }
+}
+
+void ui_set_settings_status(const char *text) {
+    if (!s_status) {
+        return;
+    }
+    lv_label_set_text(s_status, text && text[0] ? text : "");
+}
+
+void ui_show_panel_note(const char *phase, const char *message) {
+    if (!s_phase || !s_message) {
+        return;
+    }
+    lv_label_set_text(s_phase, phase && phase[0] ? phase : "IDLE");
+    lv_label_set_text(s_message, message ? message : "");
 }
 
 void ui_show_scanning(void) {

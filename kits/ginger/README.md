@@ -41,7 +41,7 @@ Optional Cursor list polling starts when `CURSOR_API_KEY` is set. It maps `ACTIV
 
 ## Flash the panel
 
-See [firmware/README.md](firmware/README.md). ESP-IDF 5.4, target `esp32s3`, BSP `waveshare/esp32_s3_touch_amoled_2_16`. Without a toolchain, run the `desk_view` host test and open `firmware/simulator/index.html`.
+See [firmware/README.md](firmware/README.md). ESP-IDF 5.5, target `esp32s3`, BSP `waveshare/esp32_s3_touch_amoled_2_16`. Without a toolchain, run the host tests and open `firmware/simulator/index.html`.
 
 ## Grok Bot
 
@@ -57,13 +57,13 @@ If a webhook bearer token is set, add `-H "Authorization: Bearer $GROK_DESK_WEBH
 
 ## Panel URL and token
 
-Wi-Fi SSID and password can be written over USB with `scripts/provision-wifi.py` (see [firmware/README.md](firmware/README.md)). The on-device keyboard still works. After the board is joined and a status poll succeeds, the dashboard section **Panel config** (or `PUT /api/panel`) stores a companion URL and bearer token on the companion. The same `GET /api/status` the panel already polls then includes:
+Wi-Fi networks can be added or removed over USB with `scripts/provision-wifi.py add` and `scripts/provision-wifi.py remove` (see [firmware/README.md](firmware/README.md)). The on-device keyboard still works. The panel keeps every saved network and, at boot, joins the saved SSID that is in range. After the board is joined and a status poll succeeds, the dashboard section **Panel config** (or `PUT /api/panel`) stores a companion URL and bearer token on the companion. The same `GET /api/status` the panel already polls then includes:
 
 ```json
 "panel": {"url": "http://192.168.4.30:8787", "token": "desk-secret"}
 ```
 
-If either value differs from NVS, the firmware writes those two fields and restarts, the same as Save. It does not open a port, and it does not change Wi-Fi. `PUT /api/panel` rejects `ssid`, `password`, and the other Wi-Fi keys. Clear removes the object. Values already stored on the panel stay until the next different push or an on-device save.
+If either value differs from the global NVS url and token, the firmware writes those two fields and restarts. It does not open a port, and it does not change Wi-Fi or the saved network list. `PUT /api/panel` rejects `ssid`, `password`, and the other Wi-Fi keys. Clear removes the object. Values already stored on the panel stay until the next different push.
 
 A failed poll does not apply the push. While the panel shows `link down`, the dashboard has only stored the desired config. Use the browser token field when the companion has a webhook token; panel writes use that same check.
 
@@ -77,6 +77,7 @@ Bind is `0.0.0.0:8787` so a phone or the panel on the same LAN can connect. Ther
 cd companion && python3 -m pytest && python3 -m ruff check src tests && python3 -m black --check src tests
 cd ../web && npm test -- --run && npm run build
 gcc -Wall -Werror -I firmware/main firmware/host/test_desk_view.c firmware/main/desk_view.c -o /tmp/test_desk_view && /tmp/test_desk_view
+gcc -Wall -Werror -I firmware/main firmware/host/test_wifi_store.c firmware/main/wifi_store.c -o /tmp/test_wifi_store && /tmp/test_wifi_store
 ```
 
 ## License
