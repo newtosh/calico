@@ -8,9 +8,11 @@
 
 enum {
     SCREEN_PX = 480,
+    /* Bezel covers the rounded corners of the 480 panel. 16px clears them. */
+    EDGE_PX = 16,
     KEYBOARD_PX = 200,
     HEADER_PX = 48,
-    PAD_PX = 10,
+    PAD_PX = EDGE_PX,
     INK = 0xefe7d6,
     INK_DIM = 0xa39b88,
     BG = 0x14160f,
@@ -91,11 +93,11 @@ static void hide_keyboard(int reset_indev) {
 static void show_keyboard(lv_obj_t *ta) {
     lv_obj_t *box;
     lv_keyboard_set_textarea(s_keyboard, ta);
-    lv_obj_set_size(s_keyboard, SCREEN_PX, KEYBOARD_PX);
-    lv_obj_align(s_keyboard, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_size(s_keyboard, SCREEN_PX - (EDGE_PX * 2), KEYBOARD_PX);
+    lv_obj_align(s_keyboard, LV_ALIGN_BOTTOM_MID, 0, -EDGE_PX);
     lv_obj_set_hidden(s_keyboard, false);
     lv_obj_move_foreground(s_keyboard);
-    lv_obj_set_height(s_settings, SCREEN_PX - KEYBOARD_PX);
+    lv_obj_set_height(s_settings, SCREEN_PX - KEYBOARD_PX - EDGE_PX);
     layout_settings();
     box = lv_obj_get_parent(ta);
     if (box) {
@@ -285,7 +287,7 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     s_phase = lv_label_create(screen);
     lv_obj_set_style_text_font(s_phase, &lv_font_montserrat_24, 0);
     lv_obj_set_style_text_color(s_phase, lv_color_hex(INK), 0);
-    lv_obj_align(s_phase, LV_ALIGN_TOP_MID, 0, 36);
+    lv_obj_align(s_phase, LV_ALIGN_TOP_MID, 0, EDGE_PX + 20);
     s_title = lv_label_create(screen);
     lv_obj_set_width(s_title, 400);
     lv_obj_set_style_text_color(s_title, lv_color_hex(INK), 0);
@@ -297,13 +299,13 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_align(s_message, LV_ALIGN_CENTER, 0, 40);
     s_count = lv_label_create(screen);
     lv_obj_set_style_text_color(s_count, lv_color_hex(ROW_MARK), 0);
-    lv_obj_align(s_count, LV_ALIGN_BOTTOM_MID, 0, -48);
+    lv_obj_align(s_count, LV_ALIGN_BOTTOM_MID, 0, -(EDGE_PX + 32));
     mic = lv_button_create(screen);
-    lv_obj_align(mic, LV_ALIGN_BOTTOM_LEFT, 24, -16);
+    lv_obj_align(mic, LV_ALIGN_BOTTOM_LEFT, EDGE_PX + 8, -(EDGE_PX + 8));
     lv_obj_add_event_cb(mic, on_mic, LV_EVENT_CLICKED, NULL);
     lv_label_set_text(lv_label_create(mic), "Mic");
     settings_btn = lv_button_create(screen);
-    lv_obj_align(settings_btn, LV_ALIGN_BOTTOM_RIGHT, -24, -16);
+    lv_obj_align(settings_btn, LV_ALIGN_BOTTOM_RIGHT, -(EDGE_PX + 8), -(EDGE_PX + 8));
     lv_obj_add_event_cb(settings_btn, on_open_settings, LV_EVENT_CLICKED, NULL);
     lv_label_set_text(lv_label_create(settings_btn), "Settings");
 
@@ -390,8 +392,8 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_set_height(save, 44);
 
     s_keyboard = lv_keyboard_create(screen);
-    lv_obj_set_size(s_keyboard, SCREEN_PX, KEYBOARD_PX);
-    lv_obj_align(s_keyboard, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_set_size(s_keyboard, SCREEN_PX - (EDGE_PX * 2), KEYBOARD_PX);
+    lv_obj_align(s_keyboard, LV_ALIGN_BOTTOM_MID, 0, -EDGE_PX);
     lv_obj_set_hidden(s_keyboard, true);
     lv_obj_add_event_cb(s_keyboard, on_keyboard, LV_EVENT_READY, NULL);
     lv_obj_add_event_cb(s_keyboard, on_keyboard, LV_EVENT_CANCEL, NULL);
