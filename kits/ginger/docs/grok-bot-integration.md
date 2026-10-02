@@ -1,0 +1,53 @@
+# Grok Bot webhook
+
+The companion is the device bridge. A Scaffold or Grok Bot routine POSTs here when an agent starts, finishes, or blocks. The panel and the web UI only read the result.
+
+Default URL: `http://<lan-host>:8787/api/webhook/grok-bot`
+
+Send `Authorization: Bearer <token>` when `webhook_token` is set. Leave the header off when the token is empty.
+
+## Event
+
+```json
+{
+  "type": "agent.launched",
+  "agent_id": "scaffold-1",
+  "title": "Scaffold",
+  "message": "Building the desk buddy",
+  "source": "grok-bot"
+}
+```
+
+| Field | Values |
+| --- | --- |
+| `type` | `agent.launched`, `agent.finished`, `agent.needs_you`, `note` |
+| `agent_id` | Required for the three agent types. Optional on `note`. |
+| `title`, `message` | Shown on the panel. Either may be empty. |
+| `source` | Optional. Defaults to `grok-bot`. The inject buttons send `manual`. |
+
+`agent.launched` marks that agent running. `agent.finished` marks it idle. `agent.needs_you` fills the panel and the dashboard with NEEDS YOU until `POST /api/dismiss` or a tap on the panel. `note` is a line in the event list and does not change agents.
+
+The server assigns `id` and `at` and returns the stored event with status 201. Unknown `type`, or an agent event with an empty `agent_id`, is 400.
+
+## Routine sketch
+
+On launch:
+
+```bash
+curl -s -X POST "$DESK_URL/api/webhook/grok-bot" \
+  -H "Authorization: Bearer $GROK_DESK_WEBHOOK_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"agent.launched","agent_id":"'"$AGENT_ID"'","title":"'"$AGENT_TITLE"'","message":"started"}'
+```
+
+On finish, the same call with `"type":"agent.finished"`. When the routine needs a person, send `"type":"agent.needs_you"` and the question in `message`. Drop the Authorization header when no token is configured.
+
+Dismiss from anything that is not the panel:
+
+```bash
+curl -s -X POST "$DESK_URL/api/dismiss" -H "Authorization: Bearer $GROK_DESK_WEBHOOK_TOKEN"
+```
+
+## What this does not replace
+
+VibePulse already shows Claude Code and Codex activity on this class of board, with its own tokenserver. XiaoZhi is a voice assistant stack and wants its own cloud account. This PoC does neither. It only shows Grok Bot and optional Cursor Cloud Agent list state, and it leaves the microphones unused. Wire the webhook if you want the AMOLED to light up when a Grok routine blocks. Keep VibePulse or XiaoZhi if you want their sessions.

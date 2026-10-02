@@ -1,0 +1,144 @@
+#include "desk_view.h"
+
+#include <string.h>
+
+static const char *skip_ws(const char *p) {
+    while (*p == ' ' || *p == '\n' || *p == '\r' || *p == '\t') {
+        p++;
+    }
+    return p;
+}
+
+static const char *find_key(const char *start, const char *end, const char *key) {
+    size_t key_len = strlen(key);
+    const char *p = start;
+    while (p < end) {
+        if (*p == '"' && (size_t)(end - p) >= key_len + 2 && strncmp(p + 1, key, key_len) == 0 &&
+            p[1 + key_len] == '"') {
+            const char *after = skip_ws(p + key_len + 2);
+            if (after < end && *after == ':') {
+                return p;
+            }
+        }
+        p++;
+    }
+    return NULL;
+}
+
+static void copy_string(const char *value, char *out, size_t out_len) {
+    size_t n = 0;
+    if (out_len == 0) {
+        return;
+    }
+    while (*value && *value != '"' && n + 1 < out_len) {
+        out[n++] = *value++;
+    }
+    out[n] = '\0';
+}
+
+static int read_string_field(const char *start, const char *end, const char *key, char *out,
+                             size_t out_len) {
+    const char *key_at = find_key(start, end, key);
+    const char *p;
+    if (!key_at) {
+        return -1;
+    }
+    p = skip_ws(key_at + strlen(key) + 2);
+    if (*p != ':') {
+        return -1;
+    }
+    p = skip_ws(p + 1);
+    if (*p != '"') {
+        return -1;
+    }
+    copy_string(p + 1, out, out_len);
+    return 0;
+}
+
+static const char *object_end(const char *open) {
+    int depth = 0;
+    const char *p = open;
+    int in_string = 0;
+    for (; *p; p++) {
+        if (*p == '"' && (p == open || p[-1] != '\\')) {
+            in_string = !in_string;
+        }
+        if (in_string) {
+            continue;
+        }
+        if (*p == '{') {
+            depth++;
+        } else if (*p == '}') {
+            depth--;
+            if (depth == 0) {
+                return p + 1;
+            }
+        }
+    }
+    return p;
+}
+
+static int count_running(const char *json) {
+    const char *p = json;
+    int count = 0;
+    while ((p = strstr(p, "\"status\"")) != NULL) {
+        const char *value = skip_ws(p + strlen("\"status\""));
+        if (*value == ':') {
+            value = skip_ws(value + 1);
+            if (strncmp(value, "\"running\"", 9) == 0) {
+                count++;
+            }
+        }
+        p += 8;
+    }
+    return count;
+}
+
+int desk_view_from_json(const char *json, desk_view_t *out) {
+    const char *last;
+    const char *value;
+    const char *end;
+    if (!json || !out) {
+        return -1;
+    }
+    memset(out, 0, sizeof(*out));
+    read_string_field(json, json + strlen(json), "phase", out->phase, sizeof(out->phase));
+    last = find_key(json, json + strlen(json), "needs_you");
+    if (last) {
+        value = skip_ws(last + strlen("\"needs_you\""));
+        if (*value == ':') {
+            value = skip_ws(value + 1);
+            out->needs_you = strncmp(value, "true", 4) == 0;
+        }
+    }
+    last = find_key(json, json + strlen(json), "last_event");
+    if (last) {
+        value = skip_ws(last + strlen("\"last_event\""));
+        if (*value == ':') {
+            value = skip_ws(value + 1);
+            if (*value == '{') {
+                end = object_end(value);
+                read_string_field(value, end, "title", out->title, sizeof(out->title));
+                read_string_field(value, end, "message", out->message, sizeof(out->message));
+            }
+        }
+    }
+    out->running_count = count_running(json);
+    return 0;
+}
+
+const char *desk_phase_label(const desk_view_t *view, int consecutive_failures) {
+    if (!view) {
+        return "IDLE";
+    }
+    if (consecutive_failures >= 3) {
+        return "link down";
+    }
+    if (strcmp(view->phase, "needs_you") == 0 || view->needs_you) {
+        return "NEEDS YOU";
+    }
+    if (strcmp(view->phase, "running") == 0) {
+        return "RUNNING";
+    }
+    return "IDLE";
+}

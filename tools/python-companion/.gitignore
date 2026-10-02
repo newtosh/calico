@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+companion/data/
+.env
+web/node_modules/
+web/dist/
+firmware/build/
+firmware/managed_components/
+firmware/sdkconfig
+firmware/dependencies.lock
+.superpowers/
