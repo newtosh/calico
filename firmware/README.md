@@ -15,7 +15,9 @@ idf.py -p PORT flash monitor
 
 The managed BSP is `waveshare/esp32_s3_touch_amoled_2_16` `^2.0.1` with LVGL 9, declared in `main/idf_component.yml`. `sdkconfig.defaults` matches the official LVGL example: 16 MB flash, octal PSRAM, Montserrat 16/20/24.
 
-On first boot the SSID is empty, so the settings screen is up. The default companion URL is `http://192.168.1.10:8787`. Change it to the machine running the companion. Saving restarts the chip and joins Wi-Fi.
+On first boot the SSID is empty, so the settings screen is up and scans for networks. Tap a row to select an SSID (Scan repeats the scan). Password, companion URL, and bearer token are labeled fields under the list. Type SSID is only for a hidden network. The default companion URL is `http://192.168.4.30:8787`. Saving restarts the chip and joins Wi-Fi.
+
+Dismiss the keyboard with Done, the keyboard checkmark, the keyboard hide key, or a tap outside the field. The form above the keyboard scrolls.
 
 ## Host checks without a board
 

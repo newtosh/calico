@@ -1,10 +1,9 @@
 #include "net.h"
 #include "ui.h"
 
-#include "bsp/display.h"
+#include "esp_err.h"
 #include "bsp/esp-bsp.h"
 #include "esp_check.h"
-#include "esp_err.h"
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -16,18 +15,59 @@
 static desk_settings_t s_settings;
 static int s_failures;
 static char s_status_body[8192];
+static volatile int s_scan_busy;
+
+static void copy_setting(char *dest, size_t dest_len, const char *src) {
+    size_t i;
+    if (dest_len == 0) {
+        return;
+    }
+    if (!src) {
+        dest[0] = '\0';
+        return;
+    }
+    for (i = 0; i + 1 < dest_len && src[i]; i++) {
+        dest[i] = src[i];
+    }
+    dest[i] = '\0';
+}
 
 static void save_and_restart(const char *ssid, const char *pass, const char *url, const char *token) {
-    snprintf(s_settings.ssid, sizeof(s_settings.ssid), "%s", ssid);
-    snprintf(s_settings.pass, sizeof(s_settings.pass), "%s", pass);
-    snprintf(s_settings.url, sizeof(s_settings.url), "%s", url);
-    snprintf(s_settings.token, sizeof(s_settings.token), "%s", token);
+    copy_setting(s_settings.ssid, sizeof(s_settings.ssid), ssid);
+    copy_setting(s_settings.pass, sizeof(s_settings.pass), pass);
+    copy_setting(s_settings.url, sizeof(s_settings.url), url);
+    copy_setting(s_settings.token, sizeof(s_settings.token), token);
     net_save(&s_settings);
     esp_restart();
 }
 
 static void dismiss_alert(void) {
     net_dismiss(&s_settings);
+}
+
+static void scan_task(void *arg) {
+    net_ap_t aps[NET_SCAN_MAX];
+    int count;
+    (void)arg;
+    count = net_wifi_scan(aps, NET_SCAN_MAX);
+    if (bsp_display_lock(-1)) {
+        ui_show_networks(count < 0 ? NULL : aps, count);
+        bsp_display_unlock();
+    }
+    s_scan_busy = 0;
+    vTaskDelete(NULL);
+}
+
+static void request_scan(void) {
+    if (s_scan_busy) {
+        return;
+    }
+    s_scan_busy = 1;
+    ui_show_scanning();
+    if (xTaskCreate(scan_task, "wifi-scan", 12288, NULL, 4, NULL) != pdPASS) {
+        s_scan_busy = 0;
+        ui_show_networks(NULL, -1);
+    }
 }
 
 static void poll_task(void *arg) {
@@ -59,7 +99,8 @@ void app_main(void) {
     bsp_display_start();
     net_load(&s_settings);
     bsp_display_lock(-1);
-    ui_init(save_and_restart, dismiss_alert);
+    ui_init(save_and_restart, dismiss_alert, request_scan);
+    ui_set_fields(&s_settings);
     if (s_settings.ssid[0] == '\0') {
         ui_open_settings();
     }
