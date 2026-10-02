@@ -14,6 +14,8 @@ class CompanionConfig:
     cursor_api_key: str
     sqlite_path: str
     cursor_poll_seconds: int
+    panel_url: str = ""
+    panel_token: str = ""
 
 
 def config_path(environ: Mapping[str, str], default: str = "companion/data/config.json") -> str:
@@ -37,6 +39,8 @@ def load_config(path: Path, environ: Mapping[str, str]) -> CompanionConfig:
         cursor_api_key=str(data.get("cursor_api_key", "")),
         sqlite_path=str(data.get("sqlite_path", "")),
         cursor_poll_seconds=int(str(data.get("cursor_poll_seconds", 30))),
+        panel_url=str(data.get("panel_url", "")),
+        panel_token=str(data.get("panel_token", "")),
     )
     overrides = {
         "GROK_DESK_HOST": "bind_host",
@@ -64,6 +68,8 @@ def save_config(path: Path, config: CompanionConfig) -> None:
         "cursor_api_key": config.cursor_api_key,
         "sqlite_path": config.sqlite_path,
         "cursor_poll_seconds": config.cursor_poll_seconds,
+        "panel_url": config.panel_url,
+        "panel_token": config.panel_token,
     }
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
@@ -101,6 +107,8 @@ def merge_config(
         current.cursor_api_key,
         current.sqlite_path,
         current.cursor_poll_seconds,
+        current.panel_url,
+        current.panel_token,
     )
     if "bind_host" in patch:
         merged.bind_host = str(patch["bind_host"])
@@ -120,3 +128,76 @@ def merge_config(
         or merged.sqlite_path != current.sqlite_path
     )
     return merged, restart
+
+
+_WIFI_KEYS = frozenset(
+    {
+        "ssid",
+        "pass",
+        "password",
+        "passphrase",
+        "psk",
+        "wifi",
+        "wifi_ssid",
+        "wifi_password",
+        "wifi_pass",
+    }
+)
+_PANEL_URL_MAX = 127
+_PANEL_TOKEN_MAX = 127
+
+
+def _plain_text(value: object, limit: int) -> str:
+    if not isinstance(value, str) or len(value) > limit:
+        raise ValueError("bad panel")
+    if any(ord(char) <= 32 or ord(char) > 126 or char in '"\\' for char in value):
+        raise ValueError("bad panel")
+    return value
+
+
+def _panel_url(value: object) -> str:
+    if not isinstance(value, str):
+        raise ValueError("bad panel")
+    url = _plain_text(value.rstrip("/"), _PANEL_URL_MAX)
+    if not (url.startswith("http://") or url.startswith("https://")):
+        raise ValueError("bad panel")
+    host = url.split("://", 1)[1].split("/", 1)[0]
+    if not host or "@" in host or host.startswith(":"):
+        raise ValueError("bad panel")
+    return url
+
+
+def panel_public_view(config: CompanionConfig) -> dict[str, object]:
+    return {"url": config.panel_url, "token_set": bool(config.panel_token)}
+
+
+def panel_status_field(config: CompanionConfig) -> dict[str, str] | None:
+    if not config.panel_url:
+        return None
+    return {"url": config.panel_url, "token": config.panel_token}
+
+
+def merge_panel(current: CompanionConfig, patch: Mapping[str, object]) -> CompanionConfig:
+    if _WIFI_KEYS.intersection(patch):
+        raise ValueError("wifi rejected")
+    merged = CompanionConfig(
+        current.bind_host,
+        current.bind_port,
+        current.webhook_token,
+        current.cursor_api_key,
+        current.sqlite_path,
+        current.cursor_poll_seconds,
+        current.panel_url,
+        current.panel_token,
+    )
+    if patch.get("clear") is True:
+        merged.panel_url = ""
+        merged.panel_token = ""
+        return merged
+    if "url" in patch:
+        merged.panel_url = _panel_url(patch["url"])
+    elif not merged.panel_url:
+        raise ValueError("bad panel")
+    if "token" in patch:
+        merged.panel_token = _plain_text(patch["token"], _PANEL_TOKEN_MAX)
+    return merged

@@ -8,7 +8,15 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
-from grok_desk_buddy.config import CompanionConfig, merge_config, public_view, save_config
+from grok_desk_buddy.config import (
+    CompanionConfig,
+    merge_config,
+    merge_panel,
+    panel_public_view,
+    panel_status_field,
+    public_view,
+    save_config,
+)
 from grok_desk_buddy.store import DeskStore, EventIn
 
 _TYPES = {
@@ -65,7 +73,19 @@ def _handler_class(
         def do_GET(self) -> None:
             path = urlparse(self.path).path
             if path == "/api/status":
-                self._json(200, store.status())
+                body = store.status()
+                if config is not None:
+                    panel = panel_status_field(config)
+                    if panel is not None:
+                        # First key: the panel buffer is 8 KB and drops the tail.
+                        body = {"panel": panel, **body}
+                self._json(200, body)
+                return
+            if path == "/api/panel":
+                if config is None:
+                    self._json(404, {"error": "not found"})
+                    return
+                self._json(200, panel_public_view(config))
                 return
             if path == "/api/config":
                 if config is None:
@@ -103,7 +123,7 @@ def _handler_class(
 
         def do_PUT(self) -> None:
             path = urlparse(self.path).path
-            if path != "/api/config" or config is None:
+            if path not in {"/api/config", "/api/panel"} or config is None:
                 self._json(404, {"error": "not found"})
                 return
             if not self._allowed():
@@ -112,6 +132,17 @@ def _handler_class(
             payload = self._read_json()
             if payload is None:
                 self._json(400, {"error": "bad json"})
+                return
+            if path == "/api/panel":
+                try:
+                    updated = merge_panel(config, payload)
+                except ValueError:
+                    self._json(400, {"error": "bad panel"})
+                    return
+                _copy_config(config, updated)
+                if config_path is not None:
+                    save_config(config_path, config)
+                self._json(200, panel_public_view(config))
                 return
             try:
                 updated, restart = merge_config(config, payload)
@@ -193,6 +224,8 @@ def _copy_config(target: CompanionConfig, source: CompanionConfig) -> None:
     target.cursor_api_key = source.cursor_api_key
     target.sqlite_path = source.sqlite_path
     target.cursor_poll_seconds = source.cursor_poll_seconds
+    target.panel_url = source.panel_url
+    target.panel_token = source.panel_token
 
 
 def _safe_file(web_dist: Path, url_path: str) -> Path | None:

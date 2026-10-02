@@ -17,6 +17,8 @@ The managed BSP is `waveshare/esp32_s3_touch_amoled_2_16` `^2.0.1` with LVGL 9, 
 
 On first boot the SSID is empty, so the settings screen is up and scans for networks. Tap a row to select an SSID (Scan repeats the scan). Password, companion URL, and bearer token are labeled fields under the list. Type SSID is only for a hidden network. The default companion URL is `http://192.168.4.30:8787`. Saving restarts the chip and joins Wi-Fi.
 
+After Wi-Fi is up, a successful `GET /api/status` may include `panel` with `url` and `token`. When those differ from NVS, the firmware writes just those two keys and restarts. SSID and password are left as saved. The object is absent until the dashboard stores a push, and a failed poll does not apply it. That is separate from the `link down` label, which is three missed polls.
+
 Dismiss the keyboard with Done, the keyboard checkmark, the keyboard hide key, or a tap outside the field. The form above the keyboard scrolls.
 
 ## Host checks without a board

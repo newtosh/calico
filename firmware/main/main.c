@@ -84,16 +84,38 @@ static void request_scan(void) {
     }
 }
 
+/* URL and token ride the status poll the panel already makes. SSID and
+ * password stay in NVS. A failed poll never gets here. Restart matches Save. */
+static void apply_panel_push(const char *body) {
+    desk_panel_t panel;
+    if (desk_panel_from_json(body, &panel) != 0) {
+        return;
+    }
+    if (!desk_panel_should_apply(&panel, s_settings.url, s_settings.token)) {
+        return;
+    }
+    copy_setting(s_settings.url, sizeof(s_settings.url), panel.url);
+    if (panel.token_set) {
+        copy_setting(s_settings.token, sizeof(s_settings.token), panel.token);
+    }
+    net_save(&s_settings);
+    esp_restart();
+}
+
 static void poll_task(void *arg) {
     desk_view_t view;
     (void)arg;
     memset(&view, 0, sizeof(view));
     while (1) {
         desk_view_t next;
-        if (net_fetch_status(&s_settings, s_status_body, sizeof(s_status_body)) == 0 &&
-            desk_view_from_json(s_status_body, &next) == 0) {
-            s_failures = 0;
-            view = next;
+        if (net_fetch_status(&s_settings, s_status_body, sizeof(s_status_body)) == 0) {
+            apply_panel_push(s_status_body);
+            if (desk_view_from_json(s_status_body, &next) == 0) {
+                s_failures = 0;
+                view = next;
+            } else if (s_failures < 3) {
+                s_failures++;
+            }
         } else if (s_failures < 3) {
             s_failures++;
         }

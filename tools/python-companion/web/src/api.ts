@@ -49,6 +49,17 @@ export interface ConfigPatch {
   cursor_api_key?: string;
 }
 
+export interface PanelPush {
+  url: string;
+  token_set: boolean;
+}
+
+export interface PanelPatch {
+  url?: string;
+  token?: string;
+  clear?: boolean;
+}
+
 const TOKEN_KEY = "grok-desk-token";
 
 export function injectBody(
@@ -139,6 +150,16 @@ export function parseStatus(value: unknown): DeskStatus {
   };
 }
 
+export function parsePanel(value: unknown): PanelPush {
+  if (!isRecord(value) || typeof value.url !== "string") {
+    throw new Error("bad panel");
+  }
+  return {
+    url: value.url,
+    token_set: value.token_set === true,
+  };
+}
+
 export function parseConfig(value: unknown): PublicConfig {
   if (!isRecord(value) || typeof value.bind_host !== "string") {
     throw new Error("bad config");
@@ -196,6 +217,26 @@ export async function postDismiss(): Promise<void> {
   if (!response.ok) {
     throw new Error(`dismiss ${response.status}`);
   }
+}
+
+export async function fetchPanel(): Promise<PanelPush> {
+  const response = await fetch("/api/panel");
+  if (!response.ok) {
+    throw new Error(`panel ${response.status}`);
+  }
+  return parsePanel(await readBody(response));
+}
+
+export async function putPanel(patch: PanelPatch): Promise<PanelPush> {
+  const response = await fetch("/api/panel", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authorizationHeader() },
+    body: JSON.stringify(patch),
+  });
+  if (!response.ok) {
+    throw new Error(`panel ${response.status}`);
+  }
+  return parsePanel(await readBody(response));
 }
 
 export async function putConfig(patch: ConfigPatch): Promise<void> {

@@ -5,6 +5,7 @@ import { EventList } from "./EventList";
 import { InjectPanel } from "./InjectPanel";
 import { NeedsYouBanner } from "./NeedsYouBanner";
 import { ConfigForm } from "./ConfigForm";
+import { PanelPushForm } from "./PanelPushForm";
 import { RequestToken } from "./RequestToken";
 
 export function StatusDashboard() {
@@ -71,6 +72,7 @@ export function StatusDashboard() {
       </div>
       <InjectPanel onSent={() => void refresh()} />
       <ConfigForm />
+      <PanelPushForm />
     </div>
   );
 }

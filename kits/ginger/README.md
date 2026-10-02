@@ -55,9 +55,21 @@ curl -s -X POST http://127.0.0.1:8787/api/webhook/grok-bot \
 
 If a webhook bearer token is set, add `-H "Authorization: Bearer $GROK_DESK_WEBHOOK_TOKEN"`. `GET /api/status` stays open so the panel can poll before anyone types a token into NVS.
 
+## Panel URL and token
+
+Wi-Fi SSID and password still have to be entered on the device. After the board is joined and a status poll succeeds, the dashboard section **Panel config** (or `PUT /api/panel`) stores a companion URL and bearer token on the companion. The same `GET /api/status` the panel already polls then includes:
+
+```json
+"panel": {"url": "http://192.168.4.30:8787", "token": "desk-secret"}
+```
+
+If either value differs from NVS, the firmware writes those two fields and restarts, the same as Save. It does not open a port, and it does not change Wi-Fi. `PUT /api/panel` rejects `ssid`, `password`, and the other Wi-Fi keys. Clear removes the object. Values already stored on the panel stay until the next different push or an on-device save.
+
+A failed poll does not apply the push. While the panel shows `link down`, the dashboard has only stored the desired config. Use the browser token field when the companion has a webhook token; panel writes use that same check.
+
 ## Security
 
-Bind is `0.0.0.0:8787` so a phone or the panel on the same LAN can connect. There is no account system. Anyone on the LAN can read status. Writes (webhook, dismiss, config) require the bearer token only when one is configured. Do not port-forward this process and do not put it on a shared network you do not trust. The token is a shared LAN secret, not a user login.
+Bind is `0.0.0.0:8787` so a phone or the panel on the same LAN can connect. There is no account system. Anyone on the LAN can read status. While a panel push is stored, that status body includes the panel bearer token, because the poll is unauthenticated. Clear it after the panel restarts if you do not want the token left there. Writes (webhook, dismiss, config, panel) require the bearer token only when one is configured. Do not port-forward this process and do not put it on a shared network you do not trust. The token is a shared LAN secret, not a user login.
 
 ## Tests
 

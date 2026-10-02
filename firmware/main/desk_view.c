@@ -127,6 +127,88 @@ int desk_view_from_json(const char *json, desk_view_t *out) {
     return 0;
 }
 
+/* Top-level only. A status event can quote the word panel; that must not
+ * look like a pushed URL. */
+static const char *find_top_key(const char *json, const char *key) {
+    const char *p = json;
+    int depth = 0;
+    int in_string = 0;
+    size_t key_len = strlen(key);
+    for (; *p; p++) {
+        if (in_string) {
+            if (*p == '\\' && p[1]) {
+                p++;
+                continue;
+            }
+            if (*p == '"') {
+                in_string = 0;
+            }
+            continue;
+        }
+        if (*p == '"') {
+            if (depth == 1 && strncmp(p + 1, key, key_len) == 0 && p[1 + key_len] == '"') {
+                const char *after = skip_ws(p + key_len + 2);
+                if (*after == ':') {
+                    return p;
+                }
+            }
+            in_string = 1;
+            continue;
+        }
+        if (*p == '{' || *p == '[') {
+            depth++;
+        } else if ((*p == '}' || *p == ']') && depth > 0) {
+            depth--;
+        }
+    }
+    return NULL;
+}
+
+int desk_panel_from_json(const char *json, desk_panel_t *out) {
+    const char *key;
+    const char *value;
+    const char *end;
+    if (!json || !out) {
+        return -1;
+    }
+    memset(out, 0, sizeof(*out));
+    key = find_top_key(json, "panel");
+    if (!key) {
+        return 0;
+    }
+    value = skip_ws(key + strlen("\"panel\""));
+    if (value >= json + strlen(json) || *value != ':') {
+        return 0;
+    }
+    value = skip_ws(value + 1);
+    if (*value != '{') {
+        return 0;
+    }
+    end = object_end(value);
+    if (read_string_field(value, end, "url", out->url, sizeof(out->url)) != 0 ||
+        out->url[0] == '\0') {
+        return 0;
+    }
+    out->present = 1;
+    if (read_string_field(value, end, "token", out->token, sizeof(out->token)) == 0) {
+        out->token_set = 1;
+    }
+    return 0;
+}
+
+int desk_panel_should_apply(const desk_panel_t *panel, const char *url, const char *token) {
+    if (!panel || !panel->present || !url || !token) {
+        return 0;
+    }
+    if (strcmp(panel->url, url) != 0) {
+        return 1;
+    }
+    if (panel->token_set && strcmp(panel->token, token) != 0) {
+        return 1;
+    }
+    return 0;
+}
+
 const char *desk_phase_label(const desk_view_t *view, int consecutive_failures) {
     if (!view) {
         return "IDLE";
