@@ -37,6 +37,40 @@ def test_map_and_poll_once() -> None:
     assert len(store.status()["events"]) == 1
     poll_once(store, "", get, "2026-10-02T13:00:04Z")
     assert len(seen) == 2
+    agents = store.status()["agents"]
+    assert isinstance(agents, list)
+    assert agents[0]["color"] == ""
+    assert agents[0]["shape"] == ""
+    assert agents[0]["icon"] == ""
+
+
+def test_poll_forwards_identity_keys_when_present() -> None:
+    store = DeskStore()
+    body = json.dumps(
+        {
+            "items": [
+                {
+                    "id": "bc-1",
+                    "name": "Readme",
+                    "status": "ACTIVE",
+                    "color": "#445566",
+                    "shape": "square",
+                    "icon": "mark",
+                    "url": "https://cursor.com/agents/bc-1",
+                }
+            ]
+        }
+    ).encode()
+
+    def get(url: str, api_key: str) -> bytes:
+        return body
+
+    poll_once(store, "ck_test", get, "2026-10-02T13:00:00Z")
+    agents = store.status()["agents"]
+    assert isinstance(agents, list)
+    assert agents[0]["color"] == "#445566"
+    assert agents[0]["shape"] == "square"
+    assert agents[0]["icon"] == "mark"
 
 
 def test_poll_logs_transport_error(caplog: pytest.LogCaptureFixture) -> None:

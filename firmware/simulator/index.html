@@ -11,39 +11,109 @@
         place-items: center;
         background: #111;
         color: #efe7d6;
-        font-family: sans-serif;
+        font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
       }
       #panel {
         width: 480px;
         height: 480px;
         box-sizing: border-box;
-        padding: 36px;
+        padding: 16px;
         border-radius: 48px;
         background: #14160f;
         display: flex;
         flex-direction: column;
+        align-items: center;
       }
       #phase {
-        font-size: 42px;
+        margin-top: 8px;
+        font-size: 24px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
         text-align: center;
+        color: #a39b88;
+      }
+      #panel.running #phase {
+        color: #9bb57a;
       }
       #title,
-      #message {
+      #message,
+      #count {
+        width: 100%;
         text-align: center;
       }
+      #title {
+        margin: 8px 0 0;
+      }
       #message {
+        margin: 4px 0 0;
         color: #a39b88;
+      }
+      #agents {
         flex: 1;
+        margin: 12px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        overflow: hidden;
+      }
+      .agent {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .mark {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        background: #a39b88;
+      }
+      .mark.circle {
+        border-radius: 50%;
+      }
+      .mark.square {
+        border-radius: 2px;
+      }
+      .mark.diamond {
+        width: 12px;
+        height: 12px;
+        border-radius: 2px;
+        transform: rotate(45deg);
+      }
+      .mark.triangle {
+        clip-path: polygon(50% 0, 100% 100%, 0 100%);
+      }
+      .agent span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #count {
+        margin: 0 0 12px;
+        color: #9bb57a;
       }
       button {
-        background: #1d2016;
-        color: inherit;
-        border: 0;
-        padding: 10px 14px;
+        background: #2a2d24;
+        color: #efe7d6;
+        border: 1px solid #6d6756;
+        border-radius: 6px;
+        padding: 8px 14px;
+        font: inherit;
       }
       #panel.needs {
         background: #e2a23a;
         color: #14160f;
+      }
+      #panel.needs #phase,
+      #panel.needs #title,
+      #panel.needs #message,
+      #panel.needs #count {
+        color: #14160f;
+      }
+      #panel.needs button {
+        background: #14160f;
+        color: #efe7d6;
+        border-color: #14160f;
       }
     </style>
   </head>
@@ -52,6 +122,7 @@
       <div id="phase">IDLE</div>
       <p id="title">Waiting</p>
       <p id="message"></p>
+      <div id="agents"></div>
       <p id="count">0 running</p>
       <button id="dismiss" type="button">Dismiss</button>
     </div>
@@ -62,7 +133,22 @@
       const title = document.getElementById("title");
       const message = document.getElementById("message");
       const count = document.getElementById("count");
+      const agents = document.getElementById("agents");
+      const neutral = "#a39b88";
       let failures = 0;
+
+      function markColor(value) {
+        const match = /^#?([0-9a-fA-F]{6})$/.exec(String(value || "").trim());
+        return match ? "#" + match[1] : neutral;
+      }
+
+      function markShape(value) {
+        const key = String(value || "").trim().toLowerCase();
+        if (key === "square" || key === "diamond" || key === "triangle" || key === "circle") {
+          return key;
+        }
+        return "circle";
+      }
 
       function label(status) {
         if (failures >= 3) return "link down";
@@ -82,7 +168,23 @@
           message.textContent = (status.last_event && status.last_event.message) || "";
           const running = (status.agents || []).filter((agent) => agent.status === "running").length;
           count.textContent = running + " running";
+          agents.replaceChildren();
+          (status.agents || []).slice(0, 6).forEach((agent) => {
+            const row = document.createElement("div");
+            const mark = document.createElement("i");
+            const name = document.createElement("span");
+            row.className = "agent";
+            mark.className = "mark " + markShape(agent.shape);
+            mark.style.background = markColor(agent.color);
+            name.textContent = agent.title || agent.id || "agent";
+            row.append(mark, name);
+            agents.append(row);
+          });
           panel.classList.toggle("needs", status.needs_you === true);
+          panel.classList.toggle(
+            "running",
+            status.needs_you !== true && status.phase === "running",
+          );
         } catch (err) {
           failures = Math.min(3, failures + 1);
           phase.textContent = failures >= 3 ? "link down" : phase.textContent;

@@ -17,7 +17,14 @@ from grok_desk_buddy.config import (
     public_view,
     save_config,
 )
-from grok_desk_buddy.store import DeskStore, EventIn
+from grok_desk_buddy.store import (
+    COLOR_LIMIT,
+    ICON_LIMIT,
+    DeskStore,
+    EventIn,
+    clip_shape,
+    clip_text,
+)
 
 _TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -214,6 +221,9 @@ def _event_in(payload: dict[str, Any]) -> EventIn:
         title=str(payload.get("title", "")),
         message=str(payload.get("message", "")),
         source=str(payload.get("source", "grok-bot")),
+        color=clip_text(payload.get("color"), COLOR_LIMIT),
+        shape=clip_shape(payload.get("shape")),
+        icon=clip_text(payload.get("icon"), ICON_LIMIT),
     )
 
 

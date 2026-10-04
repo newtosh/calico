@@ -6,7 +6,7 @@ from base64 import b64encode
 from collections.abc import Callable
 from urllib.request import Request, urlopen
 
-from grok_desk_buddy.store import DeskStore
+from grok_desk_buddy.store import COLOR_LIMIT, ICON_LIMIT, DeskStore, clip_shape, clip_text
 
 AGENTS_URL = "https://api.cursor.com/v1/agents?limit=20"
 logger = logging.getLogger(__name__)
@@ -45,7 +45,15 @@ def poll_once(
         agent_id = str(item.get("id", ""))
         if mapped is None or not agent_id:
             continue
-        store.apply_cursor_item(agent_id, str(item.get("name", "")), mapped, now)
+        store.apply_cursor_item(
+            agent_id,
+            str(item.get("name", "")),
+            mapped,
+            now,
+            clip_text(item.get("color"), COLOR_LIMIT),
+            clip_shape(item.get("shape")),
+            clip_text(item.get("icon"), ICON_LIMIT),
+        )
 
 
 def urllib_get(url: str, api_key: str) -> bytes:

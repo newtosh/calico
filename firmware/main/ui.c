@@ -41,6 +41,10 @@ static lv_obj_t *s_url;
 static lv_obj_t *s_token;
 static lv_obj_t *s_keyboard;
 static lv_obj_t *s_rows[NET_SCAN_MAX];
+static lv_obj_t *s_agent_box;
+static lv_obj_t *s_agent_rows[DESK_AGENT_MAX];
+static lv_obj_t *s_agent_marks[DESK_AGENT_MAX];
+static lv_obj_t *s_agent_labels[DESK_AGENT_MAX];
 static net_ap_t s_aps[NET_SCAN_MAX];
 static int s_row_count;
 static ui_save_fn s_on_save;
@@ -94,6 +98,114 @@ static void show_endpoint_for(const char *ssid) {
 static void style_text(lv_obj_t *label) {
     lv_obj_set_style_text_color(label, lv_color_hex(INK), 0);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_16, 0);
+}
+
+static void draw_mark(lv_event_t *event) {
+    lv_obj_t *obj = lv_event_get_target(event);
+    intptr_t shape = (intptr_t)lv_obj_get_user_data(obj);
+    lv_layer_t *layer;
+    lv_area_t area;
+    lv_draw_triangle_dsc_t dsc;
+    lv_color_t color;
+    int cx;
+    int cy;
+    if (shape != DESK_SHAPE_DIAMOND && shape != DESK_SHAPE_TRIANGLE) {
+        return;
+    }
+    layer = lv_event_get_layer(event);
+    if (!layer) {
+        return;
+    }
+    lv_obj_get_coords(obj, &area);
+    color = lv_obj_get_style_bg_color(obj, LV_PART_MAIN);
+    cx = (area.x1 + area.x2) / 2;
+    cy = (area.y1 + area.y2) / 2;
+    lv_draw_triangle_dsc_init(&dsc);
+#if LVGL_VERSION_MAJOR == 9 && LVGL_VERSION_MINOR < 3
+    dsc.bg_color = color;
+    dsc.bg_opa = LV_OPA_COVER;
+#else
+    dsc.color = color;
+    dsc.opa = LV_OPA_COVER;
+#endif
+    if (shape == DESK_SHAPE_TRIANGLE) {
+        dsc.p[0].x = cx;
+        dsc.p[0].y = area.y1;
+        dsc.p[1].x = area.x1;
+        dsc.p[1].y = area.y2;
+        dsc.p[2].x = area.x2;
+        dsc.p[2].y = area.y2;
+        lv_draw_triangle(layer, &dsc);
+        return;
+    }
+    dsc.p[0].x = cx;
+    dsc.p[0].y = area.y1;
+    dsc.p[1].x = area.x2;
+    dsc.p[1].y = cy;
+    dsc.p[2].x = cx;
+    dsc.p[2].y = area.y2;
+    lv_draw_triangle(layer, &dsc);
+    dsc.p[1].x = area.x1;
+    lv_draw_triangle(layer, &dsc);
+}
+
+static void apply_mark(lv_obj_t *mark, uint32_t color, int shape) {
+    lv_obj_set_style_bg_color(mark, lv_color_hex(color), 0);
+    lv_obj_set_user_data(mark, (void *)(intptr_t)shape);
+    if (shape == DESK_SHAPE_SQUARE) {
+        lv_obj_set_style_radius(mark, 2, 0);
+        lv_obj_set_style_bg_opa(mark, LV_OPA_COVER, 0);
+    } else if (shape == DESK_SHAPE_CIRCLE) {
+        lv_obj_set_style_radius(mark, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_opa(mark, LV_OPA_COVER, 0);
+    } else {
+        lv_obj_set_style_radius(mark, 0, 0);
+        lv_obj_set_style_bg_opa(mark, LV_OPA_TRANSP, 0);
+    }
+    lv_obj_invalidate(mark);
+}
+
+static void build_agent_rows(lv_obj_t *screen) {
+    int i;
+    s_agent_box = lv_obj_create(screen);
+    lv_obj_set_size(s_agent_box, SCREEN_PX - (EDGE_PX * 2), 34 * DESK_AGENT_MAX);
+    lv_obj_align(s_agent_box, LV_ALIGN_TOP_MID, 0, EDGE_PX + 100);
+    lv_obj_set_flex_flow(s_agent_box, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_all(s_agent_box, 0, 0);
+    lv_obj_set_style_pad_row(s_agent_box, 4, 0);
+    lv_obj_set_style_bg_opa(s_agent_box, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_agent_box, 0, 0);
+    lv_obj_set_style_radius(s_agent_box, 0, 0);
+    lv_obj_set_scrollbar_mode(s_agent_box, LV_SCROLLBAR_MODE_OFF);
+    for (i = 0; i < DESK_AGENT_MAX; i++) {
+        lv_obj_t *row = lv_obj_create(s_agent_box);
+        lv_obj_t *mark = lv_obj_create(row);
+        lv_obj_t *label = lv_label_create(row);
+        s_agent_rows[i] = row;
+        s_agent_marks[i] = mark;
+        s_agent_labels[i] = label;
+        lv_obj_set_width(row, lv_pct(100));
+        lv_obj_set_height(row, 30);
+        lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_style_pad_all(row, 0, 0);
+        lv_obj_set_style_pad_column(row, 8, 0);
+        lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(row, 0, 0);
+        lv_obj_set_style_radius(row, 0, 0);
+        lv_obj_set_size(mark, 16, 16);
+        lv_obj_set_style_border_width(mark, 0, 0);
+        lv_obj_set_style_pad_all(mark, 0, 0);
+        lv_obj_set_style_shadow_width(mark, 0, 0);
+        lv_obj_add_event_cb(mark, draw_mark, LV_EVENT_DRAW_POST, NULL);
+        apply_mark(mark, DESK_MARK_NEUTRAL, DESK_SHAPE_CIRCLE);
+        lv_obj_set_flex_grow(label, 1);
+        lv_obj_set_width(label, SCREEN_PX - (EDGE_PX * 2) - 32);
+        lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+        style_text(label);
+        lv_label_set_text(label, "");
+        lv_obj_set_hidden(row, true);
+    }
 }
 
 static void layout_settings(void) {
@@ -315,6 +427,11 @@ static lv_obj_t *action_button(lv_obj_t *parent, const char *text, lv_event_cb_t
     lv_obj_set_height(btn, 36);
     lv_obj_set_style_bg_color(btn, lv_color_hex(0x3a3d32), 0);
     lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(btn, lv_color_hex(FIELD_EDGE), 0);
+    lv_obj_set_style_border_width(btn, 1, 0);
+    lv_obj_set_style_radius(btn, 6, 0);
+    lv_obj_set_style_shadow_width(btn, 0, 0);
+    lv_obj_set_style_pad_hor(btn, 10, 0);
     lv_label_set_text(label, text);
     style_text(label);
     lv_obj_center(label);
@@ -336,27 +453,27 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     s_phase = lv_label_create(screen);
     lv_obj_set_style_text_font(s_phase, &lv_font_montserrat_24, 0);
     lv_obj_set_style_text_color(s_phase, lv_color_hex(INK), 0);
-    lv_obj_align(s_phase, LV_ALIGN_TOP_MID, 0, EDGE_PX + 20);
+    lv_obj_align(s_phase, LV_ALIGN_TOP_MID, 0, EDGE_PX + 4);
     s_title = lv_label_create(screen);
-    lv_obj_set_width(s_title, 400);
+    lv_obj_set_width(s_title, SCREEN_PX - (EDGE_PX * 2));
+    lv_label_set_long_mode(s_title, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_align(s_title, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(s_title, lv_color_hex(INK), 0);
-    lv_obj_align(s_title, LV_ALIGN_CENTER, 0, -20);
+    lv_obj_align(s_title, LV_ALIGN_TOP_MID, 0, EDGE_PX + 40);
     s_message = lv_label_create(screen);
-    lv_obj_set_width(s_message, 400);
-    lv_label_set_long_mode(s_message, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(s_message, SCREEN_PX - (EDGE_PX * 2));
+    lv_label_set_long_mode(s_message, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_align(s_message, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(s_message, lv_color_hex(INK_DIM), 0);
-    lv_obj_align(s_message, LV_ALIGN_CENTER, 0, 40);
+    lv_obj_align(s_message, LV_ALIGN_TOP_MID, 0, EDGE_PX + 68);
+    build_agent_rows(screen);
     s_count = lv_label_create(screen);
     lv_obj_set_style_text_color(s_count, lv_color_hex(ROW_MARK), 0);
     lv_obj_align(s_count, LV_ALIGN_BOTTOM_MID, 0, -(EDGE_PX + 32));
-    mic = lv_button_create(screen);
+    mic = action_button(screen, "Mic", on_mic);
     lv_obj_align(mic, LV_ALIGN_BOTTOM_LEFT, EDGE_PX + 8, -(EDGE_PX + 8));
-    lv_obj_add_event_cb(mic, on_mic, LV_EVENT_CLICKED, NULL);
-    lv_label_set_text(lv_label_create(mic), "Mic");
-    settings_btn = lv_button_create(screen);
+    settings_btn = action_button(screen, "Settings", on_open_settings);
     lv_obj_align(settings_btn, LV_ALIGN_BOTTOM_RIGHT, -(EDGE_PX + 8), -(EDGE_PX + 8));
-    lv_obj_add_event_cb(settings_btn, on_open_settings, LV_EVENT_CLICKED, NULL);
-    lv_label_set_text(lv_label_create(settings_btn), "Settings");
 
     s_alert = lv_obj_create(screen);
     lv_obj_set_size(s_alert, SCREEN_PX, SCREEN_PX);
@@ -367,6 +484,7 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_t *alert_label = lv_label_create(s_alert);
     lv_label_set_text(alert_label, "NEEDS YOU");
     lv_obj_set_style_text_font(alert_label, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_color(alert_label, lv_color_hex(BG), 0);
     lv_obj_center(alert_label);
 
     s_settings = lv_obj_create(screen);
@@ -542,12 +660,40 @@ void ui_show_networks(const net_ap_t *aps, int count) {
 
 void ui_apply(const desk_view_t *view, int failures) {
     char count[32];
+    int i;
+    uint32_t phase = INK_DIM;
     lv_label_set_text(s_phase, desk_phase_label(view, failures));
+    if (failures < 3) {
+        if (view->needs_you || strcmp(view->phase, "needs_you") == 0) {
+            phase = 0xe2a23a;
+        } else if (strcmp(view->phase, "running") == 0) {
+            phase = ROW_MARK;
+        }
+    }
+    lv_obj_set_style_text_color(s_phase, lv_color_hex(phase), 0);
     lv_label_set_text(s_title, view->title[0] ? view->title : "Waiting");
     if (s_mic_hold > 0) {
         s_mic_hold--;
     } else {
         lv_label_set_text(s_message, view->message);
+    }
+    for (i = 0; i < DESK_AGENT_MAX; i++) {
+        const desk_agent_t *agent;
+        uint32_t color = DESK_MARK_NEUTRAL;
+        uint32_t parsed;
+        const char *label;
+        if (i >= view->agent_count) {
+            lv_obj_set_hidden(s_agent_rows[i], true);
+            continue;
+        }
+        agent = &view->agents[i];
+        if (desk_mark_color(agent->color, &parsed) == 0) {
+            color = parsed;
+        }
+        apply_mark(s_agent_marks[i], color, desk_mark_shape(agent->shape));
+        label = agent->title[0] ? agent->title : agent->id;
+        lv_label_set_text(s_agent_labels[i], label[0] ? label : "agent");
+        lv_obj_set_hidden(s_agent_rows[i], false);
     }
     snprintf(count, sizeof(count), "%d running", view->running_count);
     lv_label_set_text(s_count, count);

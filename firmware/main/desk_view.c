@@ -1,6 +1,7 @@
 #include "desk_view.h"
 
 #include <string.h>
+#include <strings.h>
 
 static const char *skip_ws(const char *p) {
     while (*p == ' ' || *p == '\n' || *p == '\r' || *p == '\t') {
@@ -78,6 +79,8 @@ static const char *object_end(const char *open) {
     return p;
 }
 
+static void read_agents(const char *json, desk_view_t *out);
+
 static int count_running(const char *json) {
     const char *p = json;
     int count = 0;
@@ -124,6 +127,7 @@ int desk_view_from_json(const char *json, desk_view_t *out) {
         }
     }
     out->running_count = count_running(json);
+    read_agents(json, out);
     return 0;
 }
 
@@ -207,6 +211,90 @@ int desk_panel_should_apply(const desk_panel_t *panel, const char *url, const ch
         return 1;
     }
     return 0;
+}
+
+static void read_agents(const char *json, desk_view_t *out) {
+    const char *p = find_key(json, json + strlen(json), "agents");
+    if (!p) {
+        return;
+    }
+    p = skip_ws(p + strlen("agents") + 2);
+    if (*p != ':') {
+        return;
+    }
+    p = skip_ws(p + 1);
+    if (*p != '[') {
+        return;
+    }
+    p++;
+    while (*p && out->agent_count < DESK_AGENT_MAX) {
+        const char *end;
+        desk_agent_t *agent;
+        p = skip_ws(p);
+        if (*p == ']') {
+            break;
+        }
+        if (*p == ',') {
+            p++;
+            continue;
+        }
+        if (*p != '{') {
+            break;
+        }
+        end = object_end(p);
+        agent = &out->agents[out->agent_count];
+        read_string_field(p, end, "id", agent->id, sizeof(agent->id));
+        read_string_field(p, end, "title", agent->title, sizeof(agent->title));
+        read_string_field(p, end, "color", agent->color, sizeof(agent->color));
+        read_string_field(p, end, "shape", agent->shape, sizeof(agent->shape));
+        out->agent_count++;
+        p = end;
+    }
+}
+
+int desk_mark_color(const char *color, uint32_t *out) {
+    const char *p;
+    uint32_t value = 0;
+    int i;
+    if (!color || !out) {
+        return -1;
+    }
+    p = color;
+    if (*p == '#') {
+        p++;
+    }
+    for (i = 0; i < 6; i++) {
+        char c = p[i];
+        int nibble;
+        if (c >= '0' && c <= '9') {
+            nibble = c - '0';
+        } else if (c >= 'a' && c <= 'f') {
+            nibble = c - 'a' + 10;
+        } else if (c >= 'A' && c <= 'F') {
+            nibble = c - 'A' + 10;
+        } else {
+            return -1;
+        }
+        value = (value << 4) | (uint32_t)nibble;
+    }
+    if (p[6] != '\0') {
+        return -1;
+    }
+    *out = value;
+    return 0;
+}
+
+int desk_mark_shape(const char *shape) {
+    if (shape && strcasecmp(shape, "square") == 0) {
+        return DESK_SHAPE_SQUARE;
+    }
+    if (shape && strcasecmp(shape, "diamond") == 0) {
+        return DESK_SHAPE_DIAMOND;
+    }
+    if (shape && strcasecmp(shape, "triangle") == 0) {
+        return DESK_SHAPE_TRIANGLE;
+    }
+    return DESK_SHAPE_CIRCLE;
 }
 
 const char *desk_phase_label(const desk_view_t *view, int consecutive_failures) {

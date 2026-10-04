@@ -71,6 +71,42 @@ def test_webhook_updates_status_and_auth() -> None:
         server.shutdown()
 
 
+def test_webhook_passes_identity_and_ignores_non_strings() -> None:
+    store = DeskStore()
+    server, base = serve_in_thread(store, token="", web_dist=None)
+    try:
+        ok = post(
+            base + "/api/webhook/grok-bot",
+            {
+                "type": "agent.launched",
+                "agent_id": "a1",
+                "title": "Scaffold",
+                "color": "#C45C26",
+                "shape": "triangle",
+                "icon": "bolt",
+            },
+        )
+        assert ok.status == 201
+        stored = json.loads(ok.body)
+        assert stored["color"] == "#C45C26"
+        assert stored["shape"] == "triangle"
+        assert stored["icon"] == "bolt"
+        seen = json.loads(urlopen(base + "/api/status").read())
+        assert seen["agents"][0]["color"] == "#C45C26"
+        assert seen["agents"][0]["shape"] == "triangle"
+        assert seen["agents"][0]["icon"] == "bolt"
+        post(
+            base + "/api/webhook/grok-bot",
+            {"type": "agent.finished", "agent_id": "a1", "color": 12, "shape": None, "icon": {}},
+        )
+        kept = json.loads(urlopen(base + "/api/status").read())["agents"][0]
+        assert kept["color"] == "#C45C26"
+        assert kept["shape"] == "triangle"
+        assert kept["icon"] == "bolt"
+    finally:
+        server.shutdown()
+
+
 def test_parallel_launches_both_land() -> None:
     store = DeskStore()
     server, base = serve_in_thread(store, token="", web_dist=None)

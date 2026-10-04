@@ -1,5 +1,6 @@
 #include "desk_view.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -91,6 +92,39 @@ int main(void) {
 
     check(desk_panel_from_json(NULL, &panel) == -1, "null panel json");
     check(desk_panel_from_json("{\"panel\":null}", &panel) == 0 && panel.present == 0, "null panel");
+
+    const char *marked =
+        "{\"phase\":\"running\",\"needs_you\":false,\"agents\":["
+        "{\"id\":\"a1\",\"title\":\"Scaffold\",\"color\":\"#C45C26\",\"shape\":\"diamond\"},"
+        "{\"id\":\"a2\",\"title\":\"\",\"color\":\"\",\"shape\":\"\"},"
+        "{\"id\":\"a3\",\"title\":\"Hex\",\"color\":\"coral\",\"shape\":\"hexagon\"},"
+        "{\"id\":\"a4\",\"title\":\"Sq\",\"color\":\"224466\",\"shape\":\"square\"},"
+        "{\"id\":\"a5\",\"title\":\"Tri\",\"color\":\"#112233\",\"shape\":\"triangle\"},"
+        "{\"id\":\"a6\",\"title\":\"Circ\",\"color\":\"#abcdef\",\"shape\":\"circle\"},"
+        "{\"id\":\"a7\",\"title\":\"Drop\",\"color\":\"#010101\",\"shape\":\"square\"}"
+        "],\"last_event\":null,\"events\":[]}";
+    uint32_t color = 0;
+    check(desk_view_from_json(marked, &view) == 0, "marked parse");
+    check(view.agent_count == 6, "agent cap");
+    check(strcmp(view.agents[0].title, "Scaffold") == 0, "agent title");
+    check(strcmp(view.agents[0].color, "#C45C26") == 0, "agent color");
+    check(strcmp(view.agents[0].shape, "diamond") == 0, "agent shape");
+    check(desk_mark_shape(view.agents[0].shape) == DESK_SHAPE_DIAMOND, "diamond kind");
+    check(desk_mark_color(view.agents[0].color, &color) == 0, "hex color");
+    check(color == 0xc45c26u, "hex value");
+    check(view.agents[1].color[0] == '\0', "omitted color");
+    check(view.agents[1].shape[0] == '\0', "omitted shape");
+    check(desk_mark_color(view.agents[1].color, &color) == -1, "empty color rejected");
+    check(desk_mark_shape(view.agents[1].shape) == DESK_SHAPE_CIRCLE, "neutral shape");
+    check(desk_mark_color(view.agents[2].color, &color) == -1, "named color rejected");
+    check(desk_mark_shape(view.agents[2].shape) == DESK_SHAPE_CIRCLE, "unknown shape");
+    check(desk_mark_color(view.agents[3].color, &color) == 0 && color == 0x224466u, "bare hex");
+    check(desk_mark_shape(view.agents[4].shape) == DESK_SHAPE_TRIANGLE, "triangle kind");
+    check(desk_mark_shape(view.agents[5].shape) == DESK_SHAPE_CIRCLE, "explicit circle");
+    check(strcmp(view.agents[5].id, "a6") == 0, "sixth kept");
+    check(desk_mark_color(NULL, &color) == -1, "null color");
+    check(desk_mark_shape(NULL) == DESK_SHAPE_CIRCLE, "null shape");
+    check(desk_mark_shape("Diamond") == DESK_SHAPE_DIAMOND, "shape case");
 
     if (g_failed) {
         return 1;

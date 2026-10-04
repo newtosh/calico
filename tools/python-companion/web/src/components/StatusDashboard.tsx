@@ -6,7 +6,6 @@ import { InjectPanel } from "./InjectPanel";
 import { NeedsYouBanner } from "./NeedsYouBanner";
 import { ConfigForm } from "./ConfigForm";
 import { PanelPushForm } from "./PanelPushForm";
-import { RequestToken } from "./RequestToken";
 
 export function StatusDashboard() {
   const [status, setStatus] = useState<DeskStatus | null>(null);
@@ -47,32 +46,41 @@ export function StatusDashboard() {
         : "text-muted";
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <NeedsYouBanner status={status} onDismiss={() => void dismiss()} />
       {dismissError ? (
         <p className="text-sm text-alert">{dismissError}</p>
       ) : null}
-      <RequestToken />
-      <section className="rounded-lg bg-panel p-4">
-        <p className="text-sm tracking-[0.16em] text-muted uppercase">Phase</p>
-        <p className={`mt-1 text-4xl font-semibold ${phaseClass}`}>
-          {phase.replace("_", " ")}
-        </p>
-        <p className="mt-4 text-sm text-muted">Last event</p>
-        <p className="text-lg">
-          {status?.last_event?.title ||
-            status?.last_event?.message ||
-            "Nothing yet."}
-        </p>
-        {error ? <p className="mt-2 text-sm text-alert">{error}</p> : null}
+      <section className="desk-card">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="desk-kicker">Phase</p>
+            <p
+              className={`mt-1 text-4xl font-medium tracking-tight uppercase ${phaseClass}`}
+            >
+              {phase.replace("_", " ")}
+            </p>
+          </div>
+          <div className="min-w-0 sm:max-w-sm sm:text-right">
+            <p className="desk-kicker">Last event</p>
+            <p className="mt-1 text-base">
+              {status?.last_event?.title ||
+                status?.last_event?.message ||
+                "Nothing yet."}
+            </p>
+          </div>
+        </div>
+        {error ? <p className="mt-3 text-sm text-alert">{error}</p> : null}
       </section>
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         <AgentList agents={status?.agents ?? []} />
         <EventList events={status?.events ?? []} />
       </div>
       <InjectPanel onSent={() => void refresh()} />
-      <ConfigForm />
-      <PanelPushForm />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ConfigForm />
+        <PanelPushForm />
+      </div>
     </div>
   );
 }

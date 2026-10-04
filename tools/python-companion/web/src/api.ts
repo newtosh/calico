@@ -3,6 +3,9 @@ export interface DeskAgent {
   title: string;
   status: string;
   updated_at: string;
+  color: string;
+  shape: string;
+  icon: string;
 }
 
 export interface DeskEvent {
@@ -13,6 +16,9 @@ export interface DeskEvent {
   message: string;
   source: string;
   at: string;
+  color: string;
+  shape: string;
+  icon: string;
 }
 
 export interface DeskStatus {
@@ -29,6 +35,36 @@ export interface WebhookBody {
   title: string;
   message: string;
   source: string;
+  color?: string;
+  shape?: string;
+  icon?: string;
+}
+
+export const NEUTRAL_MARK = "#a39b88";
+
+export type MarkShape = "circle" | "square" | "diamond" | "triangle";
+
+export function agentMark(
+  color: string,
+  shape: string,
+): { color: string; shape: MarkShape } {
+  const hex = /^#?([0-9a-fA-F]{6})$/.exec(color.trim());
+  const key = shape.trim().toLowerCase();
+  const known: MarkShape | null =
+    key === "square" ||
+    key === "diamond" ||
+    key === "triangle" ||
+    key === "circle"
+      ? key
+      : null;
+  return {
+    color: hex ? `#${hex[1]}` : NEUTRAL_MARK,
+    shape: known ?? "circle",
+  };
+}
+
+export function agentIconUrl(icon: string): string {
+  return /^https?:\/\/\S+$/.test(icon) ? icon : "";
 }
 
 export interface PublicConfig {
@@ -66,14 +102,28 @@ export function injectBody(
   type: string,
   agentId: string,
   message: string,
+  identity?: { color?: string; shape?: string; icon?: string },
 ): WebhookBody {
-  return {
+  const body: WebhookBody = {
     type,
     agent_id: agentId,
     title: agentId,
     message,
     source: "manual",
   };
+  const color = identity?.color?.trim() ?? "";
+  const shape = identity?.shape?.trim() ?? "";
+  const icon = identity?.icon?.trim() ?? "";
+  if (color) {
+    body.color = color;
+  }
+  if (shape) {
+    body.shape = shape;
+  }
+  if (icon) {
+    body.icon = icon;
+  }
+  return body;
 }
 
 export function rememberToken(token: string): void {
@@ -109,6 +159,9 @@ function eventFrom(value: unknown): DeskEvent | null {
     message: readString(value.message),
     source: readString(value.source),
     at: readString(value.at),
+    color: readString(value.color),
+    shape: readString(value.shape),
+    icon: readString(value.icon),
   };
 }
 
@@ -121,6 +174,9 @@ function agentFrom(value: unknown): DeskAgent | null {
     title: readString(value.title),
     status: readString(value.status),
     updated_at: readString(value.updated_at),
+    color: readString(value.color),
+    shape: readString(value.shape),
+    icon: readString(value.icon),
   };
 }
 

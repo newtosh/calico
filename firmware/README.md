@@ -1,6 +1,6 @@
 # Firmware
 
-ESP-IDF app for the Waveshare ESP32-S3-Touch-AMOLED-2.16. It polls `GET {companion}/api/status` and draws IDLE / RUNNING / NEEDS YOU. A tap on the alert POSTs `/api/dismiss`. Settings are stored in NVS namespace `desk`: a list of known networks plus a global companion URL and bearer token. The Mic button only shows `Voice not in this PoC`.
+ESP-IDF app for the Waveshare ESP32-S3-Touch-AMOLED-2.16. It polls `GET {companion}/api/status` and draws IDLE / RUNNING / NEEDS YOU. Up to six agents are rows under that header. Each row is a 16px mark: `color` (`#RRGGBB`) and `shape` (`circle`, `square`, `diamond`, `triangle`) from the status JSON. A missing or unusable value is one neutral circle, `#a39b88`. Icons are not drawn on the panel. A tap on the alert POSTs `/api/dismiss`. Settings are stored in NVS namespace `desk`: a list of known networks plus a global companion URL and bearer token. The Mic button only shows `Voice not in this PoC`.
 
 ## Flash
 

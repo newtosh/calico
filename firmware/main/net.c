@@ -182,7 +182,8 @@ int net_wifi_scan(net_ap_t *out, int max_out) {
         .show_hidden = true,
     };
     wifi_ap_record_t *recs = NULL;
-    net_ap_t found[48];
+    net_ap_t *found = NULL;
+    const int found_cap = 48;
     uint16_t count = 48;
     uint16_t got = 0;
     int n = 0;
@@ -215,6 +216,11 @@ int net_wifi_scan(net_ap_t *out, int max_out) {
         free(recs);
         return -1;
     }
+    found = calloc((size_t)found_cap, sizeof(*found));
+    if (!found) {
+        free(recs);
+        return -1;
+    }
     for (i = 0; i < (int)count; i++) {
         const char *ssid = (const char *)recs[i].ssid;
         if (!ssid[0]) {
@@ -231,7 +237,7 @@ int net_wifi_scan(net_ap_t *out, int max_out) {
             }
             continue;
         }
-        if (n >= (int)(sizeof(found) / sizeof(found[0]))) {
+        if (n >= found_cap) {
             continue;
         }
         copy_field(found[n].ssid, sizeof(found[n].ssid), ssid);
@@ -254,13 +260,14 @@ int net_wifi_scan(net_ap_t *out, int max_out) {
     for (i = 0; i < n; i++) {
         out[i] = found[i];
     }
+    free(found);
     ESP_LOGI(TAG, "scan found %d", n);
     return n;
 }
 
 static int scan_one(const char *ssid, int *rssi_out) {
     wifi_scan_config_t scan = {0};
-    wifi_ap_record_t recs[8];
+    wifi_ap_record_t *recs;
     uint8_t ssid_buf[33];
     uint16_t count = 8;
     int i;
@@ -273,7 +280,12 @@ static int scan_one(const char *ssid, int *rssi_out) {
     if (esp_wifi_scan_start(&scan, true) != ESP_OK) {
         return 0;
     }
+    recs = calloc(count, sizeof(*recs));
+    if (!recs) {
+        return 0;
+    }
     if (esp_wifi_scan_get_ap_records(&count, recs) != ESP_OK) {
+        free(recs);
         return 0;
     }
     for (i = 0; i < (int)count; i++) {
@@ -282,6 +294,7 @@ static int scan_one(const char *ssid, int *rssi_out) {
             found = 1;
         }
     }
+    free(recs);
     if (found && rssi_out) {
         *rssi_out = rssi;
     }

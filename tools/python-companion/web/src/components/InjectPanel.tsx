@@ -15,12 +15,17 @@ const ACTIONS: Array<{ type: string; label: string }> = [
 export function InjectPanel({ onSent }: InjectPanelProps) {
   const [agentId, setAgentId] = useState("demo");
   const [message, setMessage] = useState("Check the desk");
+  const [color, setColor] = useState("");
+  const [shape, setShape] = useState("");
+  const [icon, setIcon] = useState("");
   const [error, setError] = useState("");
 
   async function send(type: string): Promise<void> {
     setError("");
     try {
-      await postWebhook(injectBody(type, agentId, message));
+      await postWebhook(
+        injectBody(type, agentId, message, { color, shape, icon }),
+      );
       onSent();
     } catch (err) {
       setError(err instanceof Error ? err.message : "inject failed");
@@ -28,25 +33,50 @@ export function InjectPanel({ onSent }: InjectPanelProps) {
   }
 
   return (
-    <section className="rounded-lg bg-panel p-4">
-      <h2 className="text-sm tracking-[0.16em] text-muted uppercase">
-        Inject test event
-      </h2>
+    <section className="desk-card">
+      <h2 className="desk-kicker">Inject test event</h2>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <label className="text-sm text-muted">
+        <label className="desk-label">
           Agent id
           <input
-            className="mt-1 w-full rounded bg-ink px-3 py-2 text-paper"
+            className="desk-field"
             value={agentId}
             onChange={(event) => setAgentId(event.target.value)}
           />
         </label>
-        <label className="text-sm text-muted">
+        <label className="desk-label">
           Message
           <input
-            className="mt-1 w-full rounded bg-ink px-3 py-2 text-paper"
+            className="desk-field"
             value={message}
             onChange={(event) => setMessage(event.target.value)}
+          />
+        </label>
+        <label className="desk-label">
+          Color
+          <input
+            className="desk-field"
+            value={color}
+            placeholder="#c45c26"
+            onChange={(event) => setColor(event.target.value)}
+          />
+        </label>
+        <label className="desk-label">
+          Shape
+          <input
+            className="desk-field"
+            value={shape}
+            placeholder="circle, square, diamond, triangle"
+            onChange={(event) => setShape(event.target.value)}
+          />
+        </label>
+        <label className="desk-label">
+          Icon
+          <input
+            className="desk-field"
+            value={icon}
+            placeholder="name or https://…"
+            onChange={(event) => setIcon(event.target.value)}
           />
         </label>
       </div>
@@ -55,7 +85,7 @@ export function InjectPanel({ onSent }: InjectPanelProps) {
           <button
             key={action.type}
             type="button"
-            className="rounded bg-ink px-3 py-2 text-sm"
+            className={`desk-button ${action.type === "agent.needs_you" ? "text-alert" : ""}`}
             onClick={() => void send(action.type)}
           >
             {action.label}

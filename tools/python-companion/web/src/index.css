@@ -7,4 +7,39 @@
   --color-run: #9bb57a;
   --color-alert: #e2a23a;
   --color-panel: #1d2016;
+  --color-field: #2a2d24;
+  --color-edge: #6d6756;
+}
+
+@layer base {
+  html {
+    font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+    font-feature-settings: "tnum" 1;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer components {
+  .desk-shell {
+    @apply mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-5 sm:px-6;
+  }
+  .desk-kicker {
+    @apply text-xs font-medium tracking-[0.08em] text-muted uppercase;
+  }
+  .desk-card {
+    @apply rounded-lg border border-edge bg-panel p-4;
+  }
+  .desk-label {
+    @apply block text-sm text-muted;
+  }
+  .desk-field {
+    @apply mt-1.5 w-full rounded-md border border-edge bg-field px-3 py-2 text-sm text-paper outline-none placeholder:text-muted focus:border-paper;
+  }
+  .desk-button {
+    @apply rounded-md border border-edge bg-field px-3 py-2 text-sm text-paper hover:border-paper;
+  }
+}
+
+.mark-triangle {
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }

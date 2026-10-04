@@ -64,30 +64,28 @@ export function PanelPushForm() {
   }
 
   return (
-    <section className="rounded-lg bg-panel p-4">
-      <h2 className="text-sm tracking-[0.16em] text-muted uppercase">
-        Panel config
-      </h2>
+    <section className="desk-card">
+      <h2 className="desk-kicker">Panel config</h2>
       <p className="mt-2 text-sm text-muted">
         LAN path for the companion URL and bearer token after the board is on
         Wi-Fi. The panel picks this up from the status poll it already makes.
         SSID and Wi-Fi password stay on the device.
       </p>
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <label className="text-sm text-muted">
+      <div className="mt-3 grid gap-3">
+        <label className="desk-label">
           Companion URL
           <input
-            className="mt-1 w-full rounded bg-ink px-3 py-2 text-paper"
+            className="desk-field"
             value={url}
             placeholder="http://192.168.4.30:8787"
             onChange={(event) => setUrl(event.target.value)}
           />
         </label>
-        <label className="text-sm text-muted">
+        <label className="desk-label">
           Panel bearer token
           <input
             type="password"
-            className="mt-1 w-full rounded bg-ink px-3 py-2 text-paper"
+            className="desk-field"
             value={token}
             placeholder={panel?.token_set ? "Token is set" : "Not set"}
             onChange={(event) => {
@@ -97,17 +95,17 @@ export function PanelPushForm() {
           />
         </label>
       </div>
-      <div className="mt-3 flex gap-3">
+      <div className="mt-3 flex gap-2">
         <button
           type="button"
-          className="rounded bg-ink px-3 py-2 text-sm"
+          className="desk-button"
           onClick={() => void save()}
         >
           Save to panel
         </button>
         <button
           type="button"
-          className="rounded bg-ink px-3 py-2 text-sm"
+          className="desk-button"
           onClick={() => void clear()}
         >
           Clear

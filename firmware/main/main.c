@@ -142,10 +142,30 @@ static void poll_task(void *arg) {
     }
 }
 
+/* Off app_main. A stack net_ap_t found[48] in net_wifi_scan overflowed
+ * the main task before esp_wifi_scan_start, so abort() ran before any
+ * scan. Same 12KB stack as wifi-scan. */
+static void join_task(void *arg) {
+    int selected;
+    (void)arg;
+    selected = net_wifi_select(&s_store, &s_active);
+    if (selected == 0) {
+        net_wifi_start(&s_active);
+        xTaskCreate(poll_task, "poll", 16384, NULL, 5, NULL);
+    } else if (lock_lvgl()) {
+        if (selected < 0) {
+            ui_show_panel_note("SCAN FAILED", "Could not scan for Wi-Fi.");
+        } else {
+            ui_show_panel_note("NO NETWORK", "No saved network in range");
+        }
+        unlock_lvgl();
+    }
+    vTaskDelete(NULL);
+}
+
 void app_main(void) {
     esp_err_t err = nvs_flash_init();
     desk_settings_t fields;
-    int selected;
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ESP_ERROR_CHECK(nvs_flash_init());
@@ -167,18 +187,10 @@ void app_main(void) {
     if (s_store.count == 0) {
         return;
     }
-    selected = net_wifi_select(&s_store, &s_active);
-    if (selected == 0) {
-        net_wifi_start(&s_active);
-        xTaskCreate(poll_task, "poll", 16384, NULL, 5, NULL);
-        return;
-    }
-    if (lock_lvgl()) {
-        if (selected < 0) {
+    if (xTaskCreate(join_task, "wifi-join", 12288, NULL, 4, NULL) != pdPASS) {
+        if (lock_lvgl()) {
             ui_show_panel_note("SCAN FAILED", "Could not scan for Wi-Fi.");
-        } else {
-            ui_show_panel_note("NO NETWORK", "No saved network in range");
+            unlock_lvgl();
         }
-        unlock_lvgl();
     }
 }

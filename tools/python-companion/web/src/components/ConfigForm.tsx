@@ -59,48 +59,46 @@ export function ConfigForm() {
   }
 
   return (
-    <section className="rounded-lg bg-panel p-4">
-      <h2 className="text-sm tracking-[0.16em] text-muted uppercase">
-        Companion config
-      </h2>
+    <section className="desk-card">
+      <h2 className="desk-kicker">Companion config</h2>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <label className="text-sm text-muted">
+        <label className="desk-label">
           Bind host
           <input
-            className="mt-1 w-full rounded bg-ink px-3 py-2 text-paper"
+            className="desk-field"
             value={host}
             onChange={(event) => setHost(event.target.value)}
           />
         </label>
-        <label className="text-sm text-muted">
+        <label className="desk-label">
           Bind port
           <input
-            className="mt-1 w-full rounded bg-ink px-3 py-2 text-paper"
+            className="desk-field"
             value={port}
             onChange={(event) => setPort(event.target.value)}
           />
         </label>
-        <label className="text-sm text-muted">
+        <label className="desk-label">
           SQLite path
           <input
-            className="mt-1 w-full rounded bg-ink px-3 py-2 text-paper"
+            className="desk-field"
             value={sqlitePath}
             onChange={(event) => setSqlitePath(event.target.value)}
           />
         </label>
-        <label className="text-sm text-muted">
+        <label className="desk-label">
           Cursor poll seconds
           <input
-            className="mt-1 w-full rounded bg-ink px-3 py-2 text-paper"
+            className="desk-field"
             value={pollSeconds}
             onChange={(event) => setPollSeconds(event.target.value)}
           />
         </label>
-        <label className="text-sm text-muted">
+        <label className="desk-label">
           Webhook bearer token
           <input
             type="password"
-            className="mt-1 w-full rounded bg-ink px-3 py-2 text-paper"
+            className="desk-field"
             value={token}
             placeholder={config?.webhook_token_set ? "Token is set" : "Not set"}
             onChange={(event) => {
@@ -109,11 +107,11 @@ export function ConfigForm() {
             }}
           />
         </label>
-        <label className="text-sm text-muted">
+        <label className="desk-label">
           Cursor API key
           <input
             type="password"
-            className="mt-1 w-full rounded bg-ink px-3 py-2 text-paper"
+            className="desk-field"
             value={apiKey}
             placeholder={config?.cursor_api_key_set ? "Key is set" : "Not set"}
             onChange={(event) => {
@@ -125,7 +123,7 @@ export function ConfigForm() {
       </div>
       <button
         type="button"
-        className="mt-3 rounded bg-ink px-3 py-2 text-sm"
+        className="desk-button mt-3"
         onClick={() => void save()}
       >
         Save
