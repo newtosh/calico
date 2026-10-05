@@ -39,7 +39,7 @@ enum {
     ROW_MARK = 0x9bb57a,
     LAMP_AMBER = 0xe2a23a,
     LAMP_RED = 0xc4544a,
-    /* One step under the olive face so the bottom chrome reads as a strip. */
+    /* One step under the olive face. Top status bar and bottom dock. */
     DOCK = 0x0c0e09
 };
 
@@ -743,6 +743,8 @@ static void build_status_bar(lv_obj_t *screen) {
     lv_obj_set_size(bar, SCREEN_PX - (EDGE_PX * 2), BAR_H);
     lv_obj_align(bar, LV_ALIGN_TOP_MID, 0, EDGE_PX);
     flatten(bar);
+    lv_obj_set_style_bg_color(bar, lv_color_hex(DOCK), 0);
+    lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
     lv_obj_add_flag(bar, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
     lv_obj_clear_flag(bar, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
@@ -1088,7 +1090,7 @@ void ui_apply(const desk_view_t *view, int failures) {
     char count[32];
     int i;
     int lamp = present_status(desk_phase_label(view, failures), failures);
-    lv_label_set_text(s_title, view->title[0] ? view->title : "Waiting");
+    lv_label_set_text(s_title, desk_face_title(view));
     if (s_mic_hold > 0) {
         s_mic_hold--;
     } else {

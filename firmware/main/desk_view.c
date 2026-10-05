@@ -297,6 +297,14 @@ int desk_mark_shape(const char *shape) {
     return DESK_SHAPE_CIRCLE;
 }
 
+const char *desk_face_title(const desk_view_t *view) {
+    if (!view || view->title[0] == '\0' ||
+        (strcmp(view->title, "Dismissed") == 0 && view->message[0] == '\0')) {
+        return "Waiting";
+    }
+    return view->title;
+}
+
 const char *desk_phase_label(const desk_view_t *view, int consecutive_failures) {
     if (!view) {
         return "IDLE";

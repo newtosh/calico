@@ -32,6 +32,7 @@
         align-items: center;
         justify-content: space-between;
         position: relative;
+        background: #0c0e09;
       }
       #lamp {
         width: 14px;
@@ -404,6 +405,11 @@
         return "circle";
       }
 
+      function faceTitle(event) {
+        if (!event || (event.title === "Dismissed" && !event.message)) return "Waiting";
+        return event.title || event.message || "Waiting";
+      }
+
       function label(status) {
         if (failures >= 3) return "link down";
         if (status.needs_you || status.phase === "needs_you") return "NEEDS YOU";
@@ -419,7 +425,7 @@
           failures = 0;
           face = label(status);
           paintLink(face, failures);
-          title.textContent = (status.last_event && (status.last_event.title || status.last_event.message)) || "Waiting";
+          title.textContent = faceTitle(status.last_event);
           message.textContent = (status.last_event && status.last_event.message) || "";
           const running = (status.agents || []).filter((agent) => agent.status === "running").length;
           const quiet = label(status) === "IDLE" && running === 0;

@@ -66,6 +66,19 @@ def clip_shape(value: object) -> str:
     return clip_text(value, SHAPE_LIMIT).lower()
 
 
+def face_event_title(title: str, message: str = "") -> str:
+    """Panel headline. A dismiss acknowledgement is not one."""
+    if title == "Dismissed" and not message:
+        return ""
+    return title
+
+
+def _public_event(event: Event) -> dict[str, object]:
+    data = asdict(event)
+    data["title"] = face_event_title(event.title, event.message)
+    return data
+
+
 def _now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -123,7 +136,7 @@ class DeskStore:
                     id=str(uuid.uuid4()),
                     type="note",
                     agent_id="",
-                    title="Dismissed",
+                    title="",
                     message="",
                     source="manual",
                     at=at,
@@ -152,13 +165,13 @@ class DeskStore:
                 phase = "running"
             else:
                 phase = "idle"
-            last = asdict(self._events[0]) if self._events else None
+            last = _public_event(self._events[0]) if self._events else None
             return {
                 "phase": phase,
                 "needs_you": phase == "needs_you",
                 "agents": agents,
                 "last_event": last,
-                "events": [asdict(event) for event in self._events],
+                "events": [_public_event(event) for event in self._events],
             }
 
     def apply_cursor_item(

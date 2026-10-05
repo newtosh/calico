@@ -37,6 +37,8 @@ typedef struct {
 } desk_panel_t;
 
 int desk_view_from_json(const char *json, desk_view_t *out);
+/* Face headline. A dismiss acknowledgement is not one; that line is Waiting. */
+const char *desk_face_title(const desk_view_t *view);
 int desk_panel_from_json(const char *json, desk_panel_t *out);
 int desk_panel_should_apply(const desk_panel_t *panel, const char *url, const char *token);
 const char *desk_phase_label(const desk_view_t *view, int consecutive_failures);

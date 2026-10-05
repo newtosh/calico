@@ -37,7 +37,7 @@ At boot the panel scans and joins whichever saved SSID is actually in range. If 
 
 ## Status bar
 
-A 32px bar sits inside the 16px bezel. Its center reads `grokbot-buddy` until a status toast replaces that label, then the name comes back. Title and agent rows start just below the bar. Mic, the running count, and Settings sit on a darker strip (`#0c0e09`) inside the same bezel. Mic stays 148×64 and Settings stays 204×64, both Montserrat 24. The running count stays Montserrat 28. Agent titles and marks stay 24px.
+A 32px bar sits inside the 16px bezel, on the same darker strip (`#0c0e09`) as the bottom dock. Its center reads `grokbot-buddy` until a status toast replaces that label, then the name comes back. Title and agent rows start just below the bar. That title is the last event's title, or `Waiting` when the event is a dismiss acknowledgement. A note, a launch, and a needs-you question keep theirs. Mic, the running count, and Settings sit on that same strip inside the same bezel. Mic stays 148×64 and Settings stays 204×64, both Montserrat 24. The running count stays Montserrat 28. Agent titles and marks stay 24px.
 
 The left lamp uses the phase label plus the poll-failure count and the Wi-Fi facts the STA path already tracks:
 

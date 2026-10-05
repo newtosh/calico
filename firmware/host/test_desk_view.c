@@ -21,6 +21,7 @@ int main(void) {
     check(desk_view_from_json(sample, &view) == 0, "sample parse");
     check(strcmp(view.title, "Scaffold") == 0, "title");
     check(strcmp(view.message, "Pick one") == 0, "message");
+    check(strcmp(desk_face_title(&view), "Scaffold") == 0, "launch stays the headline");
     check(view.running_count == 1, "running count");
     check(strcmp(desk_phase_label(&view, 0), "RUNNING") == 0, "running label");
     check(desk_quiet_idle(&view, 0) == 0, "running is not quiet");
@@ -47,6 +48,8 @@ int main(void) {
         "{\"phase\":\"idle\",\"needs_you\":false,\"agents\":[],\"last_event\":null,\"events\":[]}";
     check(desk_view_from_json(idle, &view) == 0, "idle parse");
     check(view.title[0] == '\0', "empty title");
+    check(strcmp(desk_face_title(&view), "Waiting") == 0, "empty headline");
+    check(strcmp(desk_face_title(NULL), "Waiting") == 0, "null headline");
     check(strcmp(desk_phase_label(&view, 0), "IDLE") == 0, "idle label");
     check(desk_quiet_idle(&view, 0) == 1, "idle is quiet");
     check(desk_quiet_idle(&view, 2) == 1, "two misses still quiet");
@@ -142,6 +145,28 @@ int main(void) {
     check(desk_mark_color(NULL, &color) == -1, "null color");
     check(desk_mark_shape(NULL) == DESK_SHAPE_CIRCLE, "null shape");
     check(desk_mark_shape("Diamond") == DESK_SHAPE_DIAMOND, "shape case");
+
+    const char *dismissed =
+        "{\"phase\":\"running\",\"needs_you\":false,\"agents\":["
+        "{\"id\":\"a1\",\"title\":\"Scaffold\",\"status\":\"running\"}],"
+        "\"last_event\":{\"type\":\"note\",\"source\":\"manual\",\"title\":\"Dismissed\","
+        "\"message\":\"\"},\"events\":[]}";
+    check(desk_view_from_json(dismissed, &view) == 0, "dismiss parse");
+    check(strcmp(view.title, "Dismissed") == 0, "raw dismiss title");
+    check(strcmp(desk_face_title(&view), "Waiting") == 0, "dismiss is not the headline");
+    check(view.message[0] == '\0', "dismiss has no message");
+
+    const char *note =
+        "{\"phase\":\"idle\",\"last_event\":{\"type\":\"note\",\"source\":\"grok-bot\","
+        "\"title\":\"Remember\",\"message\":\"milk\"}}";
+    check(desk_view_from_json(note, &view) == 0, "note parse");
+    check(strcmp(desk_face_title(&view), "Remember") == 0, "note title stays");
+
+    const char *question =
+        "{\"phase\":\"needs_you\",\"needs_you\":true,\"last_event\":{\"type\":\"agent.needs_you\","
+        "\"source\":\"grok-bot\",\"title\":\"Scaffold\",\"message\":\"Pick one\"}}";
+    check(desk_view_from_json(question, &view) == 0, "question parse");
+    check(strcmp(desk_face_title(&view), "Scaffold") == 0, "question title stays");
 
     if (g_failed) {
         return 1;

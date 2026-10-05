@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from grok_desk_buddy.store import DeskStore, EventIn
+from grok_desk_buddy.store import DeskStore, EventIn, face_event_title
 
 
 def test_launch_then_needs_you_then_dismiss(tmp_path: Path) -> None:
@@ -18,6 +18,38 @@ def test_launch_then_needs_you_then_dismiss(tmp_path: Path) -> None:
     after = store.status()
     assert after["phase"] == "running"
     assert after["needs_you"] is False
+    last = after["last_event"]
+    assert isinstance(last, dict)
+    assert last["type"] == "note"
+    assert last["source"] == "manual"
+    assert last["title"] == ""
+    assert last["message"] == ""
+
+
+def test_face_title_keeps_real_events_and_drops_dismiss() -> None:
+    assert face_event_title("Dismissed", "") == ""
+    assert face_event_title("Remember", "milk") == "Remember"
+    assert face_event_title("Scaffold", "") == "Scaffold"
+    assert face_event_title("Scaffold", "Pick one") == "Scaffold"
+
+
+def test_old_dismiss_title_is_not_served(tmp_path: Path) -> None:
+    path = tmp_path / "desk.sqlite"
+    with sqlite3.connect(path) as conn:
+        conn.execute(
+            "CREATE TABLE events ("
+            "seq INTEGER PRIMARY KEY, id TEXT, type TEXT, agent_id TEXT, title TEXT, "
+            "message TEXT, source TEXT, at TEXT)"
+        )
+        conn.execute(
+            "INSERT INTO events (seq, id, type, agent_id, title, message, source, at) "
+            "VALUES (0, 'e1', 'note', '', 'Dismissed', '', 'manual', 't')"
+        )
+    store = DeskStore(sqlite_path=str(path))
+    last = store.status()["last_event"]
+    assert isinstance(last, dict)
+    assert last["title"] == ""
+    assert last["type"] == "note"
 
 
 def test_note_does_not_create_agent_and_finish_goes_idle() -> None:
