@@ -1,7 +1,6 @@
 #include "ui.h"
 
 #include "desk_status.h"
-#include "esp_heap_caps.h"
 #include "icons.h"
 #include "lvgl.h"
 
@@ -61,14 +60,6 @@ static lv_obj_t *s_token;
 static lv_obj_t *s_keyboard;
 static lv_obj_t *s_rows[NET_SCAN_MAX];
 static lv_obj_t *s_agent_box;
-#if LV_USE_SNAPSHOT
-static lv_obj_t *s_agent_view;
-static lv_obj_t *s_agent_img;
-static lv_draw_buf_t s_agent_buf;
-static lv_draw_buf_t *s_agent_pixels;
-static uint32_t s_roster_sig;
-static int s_roster_have;
-#endif
 static lv_obj_t *s_agent_rows[DESK_AGENT_MAX];
 static lv_obj_t *s_agent_marks[DESK_AGENT_MAX];
 static lv_obj_t *s_agent_labels[DESK_AGENT_MAX];
@@ -956,96 +947,6 @@ static void build_status_bar(lv_obj_t *screen) {
     paint_bars(0);
 }
 
-#if LV_USE_SNAPSHOT
-/* On-screen list is one image. A swipe blits it. The flex column stays
- * off-screen and is snapshotted only when the roster changes, so the 2s
- * poll does not redraw Montserrat under the LVGL lock. */
-static uint32_t roster_sig(const desk_view_t *view) {
-    uint32_t h = 2166136261u ^ (uint32_t)view->agent_count;
-    int i;
-    for (i = 0; i < view->agent_count; i++) {
-        const char *p = view->agents[i].color;
-        const char *shape = view->agents[i].shape;
-        const char *label = view->agents[i].title[0] ? view->agents[i].title : view->agents[i].id;
-        while (*p) {
-            h = (h ^ (uint8_t)(*p++)) * 16777619u;
-        }
-        h *= 16777619u;
-        while (*shape) {
-            h = (h ^ (uint8_t)(*shape++)) * 16777619u;
-        }
-        h *= 16777619u;
-        while (*label) {
-            h = (h ^ (uint8_t)(*label++)) * 16777619u;
-        }
-        h *= 16777619u;
-    }
-    return h;
-}
-
-static void publish_roster(const desk_view_t *view) {
-    uint32_t sig;
-    int32_t y;
-    if (!s_agent_pixels || !s_agent_img || !s_agent_view) {
-        return;
-    }
-    sig = roster_sig(view);
-    if (s_roster_have && sig == s_roster_sig) {
-        return;
-    }
-    lv_obj_update_layout(s_agent_box);
-    if (lv_obj_get_height(s_agent_box) <= 0) {
-        lv_obj_set_hidden(s_agent_img, true);
-        s_roster_sig = sig;
-        s_roster_have = 1;
-        return;
-    }
-    y = lv_obj_get_scroll_y(s_agent_view);
-    if (lv_snapshot_take_to_draw_buf(s_agent_box, LV_COLOR_FORMAT_RGB565, s_agent_pixels) != LV_RESULT_OK) {
-        return;
-    }
-    s_roster_sig = sig;
-    s_roster_have = 1;
-    lv_image_set_src(s_agent_img, s_agent_pixels);
-    lv_obj_set_size(s_agent_img, (int32_t)s_agent_pixels->header.w, (int32_t)s_agent_pixels->header.h);
-    lv_obj_set_hidden(s_agent_img, false);
-    lv_obj_scroll_to_y(s_agent_view, y, LV_ANIM_OFF);
-}
-
-static void park_agent_source(lv_obj_t *screen) {
-    uint32_t w = SCREEN_PX - (EDGE_PX * 2);
-    uint32_t rows = DESK_AGENT_MAX * AGENT_STRIDE;
-    uint32_t stride = lv_draw_buf_width_to_stride(w, LV_COLOR_FORMAT_RGB565);
-    uint32_t bytes = stride * rows;
-    void *raw = heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!raw ||
-        lv_draw_buf_init(&s_agent_buf, w, rows, LV_COLOR_FORMAT_RGB565, stride, raw, bytes) != LV_RESULT_OK) {
-        if (raw) {
-            heap_caps_free(raw);
-        }
-        return;
-    }
-    s_agent_pixels = &s_agent_buf;
-    lv_obj_set_height(s_agent_box, LV_SIZE_CONTENT);
-    lv_obj_set_style_bg_color(s_agent_box, lv_color_hex(BG), 0);
-    lv_obj_set_style_bg_opa(s_agent_box, LV_OPA_COVER, 0);
-    lv_obj_set_style_shadow_width(s_agent_box, 0, 0);
-    lv_obj_set_style_outline_width(s_agent_box, 0, 0);
-    lv_obj_clear_flag(s_agent_box, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_align(s_agent_box, LV_ALIGN_TOP_MID, 0, SCREEN_PX);
-    s_agent_view = lv_obj_create(screen);
-    lv_obj_set_size(s_agent_view, SCREEN_PX - (EDGE_PX * 2), DOCK_TOP - AGENT_Y);
-    lv_obj_align(s_agent_view, LV_ALIGN_TOP_MID, 0, AGENT_Y);
-    flatten(s_agent_view);
-    lv_obj_set_scrollbar_mode(s_agent_view, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_set_scroll_dir(s_agent_view, LV_DIR_VER);
-    lv_obj_clear_flag(s_agent_view, LV_OBJ_FLAG_SCROLL_ELASTIC);
-    s_agent_img = lv_image_create(s_agent_view);
-    lv_obj_clear_flag(s_agent_img, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_hidden(s_agent_img, true);
-}
-#endif
-
 void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_t *screen = lv_screen_active();
     static const desk_view_t blank;
@@ -1077,9 +978,6 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_set_style_text_color(s_message, lv_color_hex(INK_DIM), 0);
     lv_obj_align(s_message, LV_ALIGN_TOP_MID, 0, MESSAGE_Y);
     build_agent_rows(screen);
-#if LV_USE_SNAPSHOT
-    park_agent_source(screen);
-#endif
     build_sleep(screen);
     dock = lv_obj_create(screen);
     lv_obj_set_size(dock, SCREEN_PX, BTN_H + EDGE_PX);
@@ -1337,9 +1235,6 @@ void ui_apply(const desk_view_t *view, int failures) {
         lv_label_set_text(s_agent_labels[i], label[0] ? label : "agent");
         lv_obj_set_hidden(s_agent_rows[i], false);
     }
-#if LV_USE_SNAPSHOT
-    publish_roster(view);
-#endif
     desk_count_text(view, count, sizeof(count));
     lv_label_set_text(s_count, count);
     lv_obj_set_style_text_color(s_count, lv_color_hex(view->running_count > 0 ? ROW_MARK : INK_DIM),
