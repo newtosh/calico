@@ -26,9 +26,8 @@ enum {
     MARK_PX = 24,
     BTN_H = 64,
     BTN_W = 80,
-    COUNT_H = 28,
-    COUNT_GAP = 8,
-    COUNT_TOP = SCREEN_PX - EDGE_PX - BTN_H - COUNT_GAP - COUNT_H,
+    /* Top of the button row. The count sits in that row. */
+    DOCK_TOP = SCREEN_PX - EDGE_PX - BTN_H,
     INK = 0xefe7d6,
     INK_DIM = 0xa39b88,
     BG = 0x14160f,
@@ -549,10 +548,10 @@ static void start_anim(lv_obj_t *obj, lv_anim_exec_xcb_t exec, int32_t from, int
 }
 
 /* Large face when the middle of the 480 panel is empty. Shrink to stay under
- * the agent rows and above the running count. 16px bezel stays. */
+ * the agent rows and above the dock. 16px bezel stays. */
 static int place_sleep(int agents) {
     int below = agents > 0 ? AGENT_Y + agents * AGENT_STRIDE : MESSAGE_Y + 28;
-    int limit = COUNT_TOP;
+    int limit = DOCK_TOP;
     int head = 96;
     int span = head + 36;
     int y = (below + limit - span) / 2;
@@ -886,22 +885,24 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     build_agent_rows(screen);
     build_sleep(screen);
     dock = lv_obj_create(screen);
-    lv_obj_set_size(dock, SCREEN_PX, COUNT_H + COUNT_GAP + BTN_H + EDGE_PX);
+    lv_obj_set_size(dock, SCREEN_PX, BTN_H + EDGE_PX);
     lv_obj_align(dock, LV_ALIGN_BOTTOM_MID, 0, 0);
     flatten(dock);
     lv_obj_set_style_bg_color(dock, lv_color_hex(DOCK), 0);
     lv_obj_set_style_bg_opa(dock, LV_OPA_COVER, 0);
+    lv_obj_set_style_pad_hor(dock, EDGE_PX, 0);
+    lv_obj_set_style_pad_bottom(dock, EDGE_PX, 0);
+    lv_obj_set_flex_flow(dock, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(dock, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+                          LV_FLEX_ALIGN_CENTER);
     lv_obj_clear_flag(dock, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    s_count = lv_label_create(screen);
-    lv_obj_set_style_text_font(s_count, &lv_font_montserrat_28, 0);
-    lv_obj_set_style_text_color(s_count, lv_color_hex(ROW_MARK), 0);
-    lv_obj_align(s_count, LV_ALIGN_BOTTOM_MID, 0, -(EDGE_PX + BTN_H + COUNT_GAP));
-    mic = icon_button(screen, &desk_icon_mic, on_mic, 1);
+    mic = icon_button(dock, &desk_icon_mic, on_mic, 1);
     lv_obj_set_size(mic, BTN_W, BTN_H);
-    lv_obj_align(mic, LV_ALIGN_BOTTOM_LEFT, EDGE_PX, -EDGE_PX);
-    settings_btn = icon_button(screen, &desk_icon_settings, on_open_settings, 0);
+    s_count = lv_label_create(dock);
+    lv_obj_set_style_text_font(s_count, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_color(s_count, lv_color_hex(INK_DIM), 0);
+    settings_btn = icon_button(dock, &desk_icon_settings, on_open_settings, 0);
     lv_obj_set_size(settings_btn, BTN_W, BTN_H);
-    lv_obj_align(settings_btn, LV_ALIGN_BOTTOM_RIGHT, -EDGE_PX, -EDGE_PX);
 
     s_alert = lv_obj_create(screen);
     lv_obj_set_size(s_alert, SCREEN_PX, SCREEN_PX);
