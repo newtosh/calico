@@ -92,6 +92,68 @@
         margin: 0 0 12px;
         color: #9bb57a;
       }
+      #sleeper {
+        display: none;
+        align-items: flex-end;
+        gap: 10px;
+        margin-top: 36px;
+        color: #a39b88;
+        pointer-events: none;
+      }
+      #panel.asleep #sleeper {
+        display: flex;
+      }
+      #sleeper .face {
+        width: 96px;
+        height: 96px;
+        box-sizing: border-box;
+        border: 3px solid #a39b88;
+        border-radius: 50%;
+        background: #a39b8833;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 16px;
+        animation: bob 4.4s ease-in-out infinite;
+      }
+      #sleeper .face i {
+        width: 22px;
+        height: 4px;
+        border-radius: 2px;
+        background: #a39b88;
+      }
+      #sleeper b {
+        font-size: 24px;
+        font-weight: 500;
+        animation: zzz 4.2s linear infinite;
+      }
+      @keyframes bob {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(10px);
+        }
+      }
+      @keyframes zzz {
+        0% {
+          opacity: 0;
+          transform: translateY(4px);
+        }
+        20% {
+          opacity: 0.9;
+          transform: translateY(4px);
+        }
+        80% {
+          opacity: 0.9;
+          transform: translateY(-12px);
+        }
+        100% {
+          opacity: 0;
+          transform: translateY(-12px);
+        }
+      }
       button {
         background: #2a2d24;
         color: #efe7d6;
@@ -118,10 +180,14 @@
     </style>
   </head>
   <body>
-    <div id="panel">
+    <div id="panel" class="asleep">
       <div id="phase">IDLE</div>
       <p id="title">Waiting</p>
       <p id="message"></p>
+      <div id="sleeper" aria-hidden="true">
+        <div class="face"><i></i><i></i></div>
+        <b>Zzz</b>
+      </div>
       <div id="agents"></div>
       <p id="count">0 running</p>
       <button id="dismiss" type="button">Dismiss</button>
@@ -167,7 +233,9 @@
           title.textContent = (status.last_event && (status.last_event.title || status.last_event.message)) || "Waiting";
           message.textContent = (status.last_event && status.last_event.message) || "";
           const running = (status.agents || []).filter((agent) => agent.status === "running").length;
+          const quiet = label(status) === "IDLE" && running === 0;
           count.textContent = running + " running";
+          panel.classList.toggle("asleep", quiet);
           agents.replaceChildren();
           (status.agents || []).slice(0, 6).forEach((agent) => {
             const row = document.createElement("div");
@@ -188,6 +256,9 @@
         } catch (err) {
           failures = Math.min(3, failures + 1);
           phase.textContent = failures >= 3 ? "link down" : phase.textContent;
+          if (failures >= 3) {
+            panel.classList.remove("asleep");
+          }
         }
       }
 

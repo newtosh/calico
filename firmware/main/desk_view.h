@@ -40,5 +40,6 @@ int desk_view_from_json(const char *json, desk_view_t *out);
 int desk_panel_from_json(const char *json, desk_panel_t *out);
 int desk_panel_should_apply(const desk_panel_t *panel, const char *url, const char *token);
 const char *desk_phase_label(const desk_view_t *view, int consecutive_failures);
+int desk_quiet_idle(const desk_view_t *view, int consecutive_failures);
 int desk_mark_color(const char *color, uint32_t *out);
 int desk_mark_shape(const char *shape);

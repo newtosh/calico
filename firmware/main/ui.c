@@ -56,6 +56,13 @@ static wifi_net_t s_known[WIFI_NET_MAX];
 static int s_known_count;
 static char s_global_url[128];
 static char s_global_token[128];
+static lv_obj_t *s_sleep;
+static lv_obj_t *s_head;
+static lv_obj_t *s_eye_l;
+static lv_obj_t *s_eye_r;
+static lv_obj_t *s_zzz;
+static int s_asleep;
+static int s_sleep_agents = -1;
 
 static void copy_text(char *dest, size_t dest_len, const char *src) {
     size_t i;
@@ -439,6 +446,144 @@ static lv_obj_t *action_button(lv_obj_t *parent, const char *text, lv_event_cb_t
     return btn;
 }
 
+static void anim_delete(void *var) {
+#if LVGL_VERSION_MAJOR == 9 && LVGL_VERSION_MINOR < 3
+    lv_anim_del(var, NULL);
+#else
+    lv_anim_delete(var, NULL);
+#endif
+}
+
+static void sleep_bob(void *obj, int32_t v) {
+    lv_obj_set_style_translate_y(obj, v, 0);
+}
+
+/* v is 0..100. Opacity is 0 at both ends so the repeat does not pop. */
+static void sleep_zzz(void *obj, int32_t v) {
+    int opa = LV_OPA_COVER;
+    int rise = 0;
+    if (v < 20) {
+        opa = v * LV_OPA_COVER / 20;
+    } else if (v > 80) {
+        opa = (100 - v) * LV_OPA_COVER / 20;
+        rise = 12;
+    } else {
+        rise = ((v - 20) * 12) / 60;
+    }
+    lv_obj_set_style_translate_y(obj, -rise, 0);
+    lv_obj_set_style_opa(obj, (lv_opa_t)opa, 0);
+}
+
+static void start_anim(lv_obj_t *obj, lv_anim_exec_xcb_t exec, int32_t from, int32_t to, uint32_t time,
+                       int playback) {
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, obj);
+    lv_anim_set_exec_cb(&a, exec);
+    lv_anim_set_values(&a, from, to);
+    lv_anim_set_duration(&a, time);
+    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+    if (playback) {
+        lv_anim_set_playback_duration(&a, time);
+        lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
+    }
+    lv_anim_start(&a);
+}
+
+/* Large face when the middle of the 480 panel is empty. Shrink to stay under
+ * the agent rows and above the running count. 16px bezel stays. */
+static void place_sleep(int agents) {
+    int below = agents > 0 ? EDGE_PX + 100 + agents * 34 : EDGE_PX + 88;
+    int limit = SCREEN_PX - 80;
+    int head = 96;
+    int span = head + 36;
+    int y = (below + limit - span) / 2;
+    int eye = 22;
+    int gap = 16;
+    const lv_font_t *font = &lv_font_montserrat_24;
+    if (y < below + 4) {
+        head = 48;
+        span = head + 28;
+        y = below + 4;
+        eye = 12;
+        gap = 8;
+        font = &lv_font_montserrat_16;
+    }
+    lv_obj_set_size(s_sleep, head + 56, span);
+    lv_obj_set_size(s_head, head, head);
+    lv_obj_set_size(s_eye_l, eye, 4);
+    lv_obj_set_size(s_eye_r, eye, 4);
+    lv_obj_align(s_eye_l, LV_ALIGN_CENTER, -gap, 3);
+    lv_obj_align(s_eye_r, LV_ALIGN_CENTER, gap, 3);
+    lv_obj_set_style_text_font(s_zzz, font, 0);
+    lv_obj_align(s_head, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    lv_obj_align(s_zzz, LV_ALIGN_TOP_LEFT, head - 4, 4);
+    lv_obj_align(s_sleep, LV_ALIGN_TOP_MID, 0, y);
+}
+
+static void sleep_stop(void) {
+    if (!s_sleep || !s_asleep) {
+        return;
+    }
+    s_asleep = 0;
+    s_sleep_agents = -1;
+    anim_delete(s_sleep);
+    anim_delete(s_zzz);
+    lv_obj_set_hidden(s_sleep, true);
+}
+
+static void sleep_show(int agents) {
+    if (!s_asleep || s_sleep_agents != agents) {
+        place_sleep(agents);
+        s_sleep_agents = agents;
+    }
+    lv_obj_set_hidden(s_sleep, false);
+    if (s_asleep) {
+        return;
+    }
+    s_asleep = 1;
+    lv_obj_set_style_translate_y(s_sleep, 0, 0);
+    lv_obj_set_style_translate_y(s_zzz, 0, 0);
+    lv_obj_set_style_opa(s_zzz, LV_OPA_TRANSP, 0);
+    start_anim(s_sleep, sleep_bob, 0, 10, 2200, 1);
+    start_anim(s_zzz, sleep_zzz, 0, 100, 4200, 0);
+}
+
+static lv_obj_t *sleep_eye(lv_obj_t *parent) {
+    lv_obj_t *bar = lv_obj_create(parent);
+    lv_obj_set_style_bg_color(bar, lv_color_hex(INK_DIM), 0);
+    lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(bar, 0, 0);
+    lv_obj_set_style_radius(bar, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_pad_all(bar, 0, 0);
+    lv_obj_set_style_shadow_width(bar, 0, 0);
+    lv_obj_clear_flag(bar, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    return bar;
+}
+
+static void build_sleep(lv_obj_t *screen) {
+    s_sleep = lv_obj_create(screen);
+    s_head = lv_obj_create(s_sleep);
+    s_eye_l = sleep_eye(s_head);
+    s_eye_r = sleep_eye(s_head);
+    s_zzz = lv_label_create(s_sleep);
+    flatten(s_sleep);
+    lv_obj_add_flag(s_sleep, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+    lv_obj_clear_flag(s_sleep, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_style_radius(s_head, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(s_head, lv_color_hex(INK_DIM), 0);
+    lv_obj_set_style_bg_opa(s_head, LV_OPA_20, 0);
+    lv_obj_set_style_border_color(s_head, lv_color_hex(INK_DIM), 0);
+    lv_obj_set_style_border_width(s_head, 3, 0);
+    lv_obj_set_style_pad_all(s_head, 0, 0);
+    lv_obj_set_style_shadow_width(s_head, 0, 0);
+    lv_obj_clear_flag(s_head, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_label_set_text(s_zzz, "Zzz");
+    lv_obj_set_style_text_color(s_zzz, lv_color_hex(INK_DIM), 0);
+    lv_obj_clear_flag(s_zzz, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_hidden(s_sleep, true);
+}
+
 void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_t *screen = lv_screen_active();
     lv_obj_t *settings_btn;
@@ -467,6 +612,7 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_set_style_text_color(s_message, lv_color_hex(INK_DIM), 0);
     lv_obj_align(s_message, LV_ALIGN_TOP_MID, 0, EDGE_PX + 68);
     build_agent_rows(screen);
+    build_sleep(screen);
     s_count = lv_label_create(screen);
     lv_obj_set_style_text_color(s_count, lv_color_hex(ROW_MARK), 0);
     lv_obj_align(s_count, LV_ALIGN_BOTTOM_MID, 0, -(EDGE_PX + 32));
@@ -569,6 +715,7 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
 }
 
 void ui_open_settings(void) {
+    sleep_stop();
     lv_obj_set_hidden(s_settings, false);
     lv_obj_move_foreground(s_settings);
     if (!lv_obj_is_hidden(s_keyboard)) {
@@ -617,6 +764,7 @@ void ui_set_settings_status(const char *text) {
 }
 
 void ui_show_panel_note(const char *phase, const char *message) {
+    sleep_stop();
     if (!s_phase || !s_message) {
         return;
     }
@@ -701,5 +849,10 @@ void ui_apply(const desk_view_t *view, int failures) {
         lv_obj_set_hidden(s_alert, false);
     } else {
         lv_obj_set_hidden(s_alert, true);
+    }
+    if (!lv_obj_is_hidden(s_settings) || !desk_quiet_idle(view, failures)) {
+        sleep_stop();
+    } else {
+        sleep_show(view->agent_count);
     }
 }

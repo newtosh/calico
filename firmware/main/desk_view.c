@@ -312,3 +312,10 @@ const char *desk_phase_label(const desk_view_t *view, int consecutive_failures) 
     }
     return "IDLE";
 }
+
+int desk_quiet_idle(const desk_view_t *view, int consecutive_failures) {
+    if (!view || view->running_count > 0) {
+        return 0;
+    }
+    return strcmp(desk_phase_label(view, consecutive_failures), "IDLE") == 0;
+}

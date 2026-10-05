@@ -23,6 +23,7 @@ int main(void) {
     check(strcmp(view.message, "Pick one") == 0, "message");
     check(view.running_count == 1, "running count");
     check(strcmp(desk_phase_label(&view, 0), "RUNNING") == 0, "running label");
+    check(desk_quiet_idle(&view, 0) == 0, "running is not quiet");
 
     const char *spaced =
         "{ \"phase\": \"running\", \"needs_you\": false, \"agents\": ["
@@ -40,14 +41,30 @@ int main(void) {
     check(view.needs_you == 1, "needs flag");
     check(strcmp(view.phase, "needs_you") == 0, "needs phase");
     check(strcmp(desk_phase_label(&view, 0), "NEEDS YOU") == 0, "needs label");
+    check(desk_quiet_idle(&view, 0) == 0, "needs you is not quiet");
 
     const char *idle =
         "{\"phase\":\"idle\",\"needs_you\":false,\"agents\":[],\"last_event\":null,\"events\":[]}";
     check(desk_view_from_json(idle, &view) == 0, "idle parse");
     check(view.title[0] == '\0', "empty title");
     check(strcmp(desk_phase_label(&view, 0), "IDLE") == 0, "idle label");
+    check(desk_quiet_idle(&view, 0) == 1, "idle is quiet");
+    check(desk_quiet_idle(&view, 2) == 1, "two misses still quiet");
     check(strcmp(desk_phase_label(&view, 3), "link down") == 0, "link down");
+    check(desk_quiet_idle(&view, 3) == 0, "link down is not quiet");
+    check(desk_quiet_idle(NULL, 0) == 0, "null view is not quiet");
     check(desk_view_from_json(NULL, &view) == -1, "null json");
+
+    const char *napping =
+        "{\"phase\":\"idle\",\"needs_you\":false,\"agents\":[{\"id\":\"a1\",\"status\":\"idle\"}]}";
+    check(desk_view_from_json(napping, &view) == 0, "napping parse");
+    check(view.running_count == 0 && view.agent_count == 1, "idle agent");
+    check(desk_quiet_idle(&view, 0) == 1, "idle agent still quiet");
+
+    const char *busy =
+        "{\"phase\":\"idle\",\"needs_you\":false,\"agents\":[{\"id\":\"a1\",\"status\":\"running\"}]}";
+    check(desk_view_from_json(busy, &view) == 0, "busy phase idle parse");
+    check(desk_quiet_idle(&view, 0) == 0, "running agent is not quiet");
 
     desk_panel_t panel;
     const char *pushed =
