@@ -5,6 +5,7 @@
 #include "bsp/esp-bsp.h"
 #include "esp_check.h"
 #include "esp_err.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_lv_adapter.h"
 #include "esp_system.h"
@@ -260,6 +261,52 @@ static void load_rotlock(void) {
     apply_quarter(quarter);
 }
 
+/* CO5300 leaves a bright line on the last row of each RAMWR window.
+ * Copy that row twice and extend the window so the line sits past the
+ * stripe; the next stripe starts at the old end and overwrites it.
+ * The last flush of a frame stays put, and so does anything shorter
+ * than the BSP 50-line stripe (the 48px status bar). */
+static uint8_t *s_join_pad;
+static size_t s_join_pad_bytes;
+
+static esp_err_t draw_without_join(lv_display_t *disp, esp_lcd_panel_handle_t panel, int x0, int y0,
+                                   int x1, int y1, const void *color, void *user) {
+    const uint8_t *src = color;
+    int w = x1 - x0;
+    int h = y1 - y0;
+    int y_end = y1;
+    (void)user;
+    if (s_join_pad && disp && src && w > 0 && h >= 50 && (h % 2) == 0 && (y0 % 2) == 0 &&
+        !lv_display_flush_is_last(disp) && y1 + 2 <= BSP_LCD_V_RES) {
+        size_t row = (size_t)w * 2u;
+        size_t need = row * (size_t)(h + 2);
+        if (need <= s_join_pad_bytes) {
+            uint8_t *dst = s_join_pad;
+            uint8_t *last;
+            memcpy(dst, src, row * (size_t)h);
+            last = dst + row * (size_t)(h - 1);
+            memcpy(last + row, last, row);
+            memcpy(last + (row * 2), last, row);
+            src = dst;
+            y_end = y1 + 2;
+        }
+    }
+    return esp_lcd_panel_draw_bitmap(panel, x0, y0, x1, y_end, src);
+}
+
+static void hook_join_pad(void) {
+    lv_display_t *disp = lv_display_get_default();
+    static const esp_lv_adapter_draw_bitmap_callbacks_t cbs = {
+        .custom_draw_bitmap = draw_without_join,
+    };
+    s_join_pad_bytes = (size_t)(BSP_LCD_H_RES * 52) * 2u;
+    s_join_pad = heap_caps_aligned_alloc(64, s_join_pad_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!disp || !s_join_pad ||
+        esp_lv_adapter_set_draw_bitmap_callbacks(disp, &cbs, NULL) != ESP_OK) {
+        ESP_LOGE("panel", "join pad not installed");
+    }
+}
+
 static void hook_touch(void) {
     lv_indev_t *indev = bsp_display_get_input_dev();
     if (!indev) {
@@ -308,6 +355,7 @@ void app_main(void) {
     }
     bsp_display_start();
     if (lock_lvgl()) {
+        hook_join_pad();
         hook_touch();
         load_rotlock();
         unlock_lvgl();
