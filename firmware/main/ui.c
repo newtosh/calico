@@ -1,5 +1,6 @@
 #include "ui.h"
 
+#include "desk_status.h"
 #include "lvgl.h"
 
 #include <stdint.h>
@@ -13,13 +14,14 @@ enum {
     KEYBOARD_PX = 200,
     HEADER_PX = 48,
     PAD_PX = EDGE_PX,
-    /* Desk face, inside the 16px bezel. Six agent rows still clear the count. */
-    PHASE_Y = EDGE_PX,
-    TITLE_Y = 68,
-    MESSAGE_Y = 96,
-    AGENT_Y = 120,
-    AGENT_ROW_H = 34,
-    AGENT_GAP = 4,
+    /* 32px status bar under the 16px bezel, then the same face gaps as before. */
+    BAR_H = 32,
+    PHASE_Y = 50,
+    TITLE_Y = 100,
+    MESSAGE_Y = 124,
+    AGENT_Y = 148,
+    AGENT_ROW_H = 32,
+    AGENT_GAP = 2,
     AGENT_STRIDE = AGENT_ROW_H + AGENT_GAP,
     MARK_PX = 24,
     BTN_H = 64,
@@ -35,7 +37,9 @@ enum {
     FIELD_EDGE = 0x6d6756,
     ROW = 0x2a2d24,
     ROW_ON = 0x3d4f32,
-    ROW_MARK = 0x9bb57a
+    ROW_MARK = 0x9bb57a,
+    LAMP_AMBER = 0xe2a23a,
+    LAMP_RED = 0xc4544a
 };
 
 static lv_obj_t *s_phase;
@@ -78,6 +82,23 @@ static lv_obj_t *s_eye_r;
 static lv_obj_t *s_zzz;
 static int s_asleep;
 static int s_sleep_agents = -1;
+static lv_obj_t *s_lamp;
+static lv_obj_t *s_toast_label;
+static lv_obj_t *s_wifi_bars[3];
+static lv_obj_t *s_lock;
+static lv_obj_t *s_lock_label;
+static lv_timer_t *s_toast_timer;
+static desk_toast_t s_toast_state;
+static ui_rotlock_fn s_on_rotlock;
+static int s_rot_locked;
+static int s_wifi_ip;
+static int s_wifi_rssi;
+static int s_wifi_retries;
+static int s_wifi_gave_up;
+static int s_fail_count;
+static int s_status_seen_ok;
+static char s_phase_text[24];
+static char s_status_seen[24];
 
 static void copy_text(char *dest, size_t dest_len, const char *src) {
     size_t i;
@@ -608,6 +629,204 @@ static void build_sleep(lv_obj_t *screen) {
     lv_obj_set_hidden(s_sleep, true);
 }
 
+static void paint_rotlock(void) {
+    if (!s_lock || !s_lock_label) {
+        return;
+    }
+    lv_label_set_text(s_lock_label, s_rot_locked ? "Lock" : "Auto");
+    lv_obj_set_style_bg_color(s_lock, lv_color_hex(s_rot_locked ? ROW_ON : 0x3a3d32), 0);
+    lv_obj_set_style_border_color(s_lock, lv_color_hex(s_rot_locked ? ROW_MARK : FIELD_EDGE), 0);
+}
+
+static void on_rotlock(lv_event_t *event) {
+    (void)event;
+    s_rot_locked = !s_rot_locked;
+    paint_rotlock();
+    if (s_on_rotlock) {
+        s_on_rotlock(s_rot_locked);
+    }
+}
+
+static void toast_apply(int opacity, int shift) {
+    if (!s_toast_label) {
+        return;
+    }
+    if (s_toast_state.stage == DESK_TOAST_HIDDEN || opacity <= 0) {
+        lv_obj_set_hidden(s_toast_label, true);
+        return;
+    }
+    lv_label_set_text(s_toast_label, s_toast_state.showing);
+    lv_obj_set_hidden(s_toast_label, false);
+    lv_obj_set_style_opa(s_toast_label, (lv_opa_t)opacity, 0);
+    lv_obj_set_style_translate_y(s_toast_label, shift, 0);
+}
+
+static void toast_cb(lv_timer_t *timer) {
+    int opacity = 0;
+    int shift = 0;
+    int stage;
+    (void)timer;
+    stage = desk_toast_tick(&s_toast_state, 50, &opacity, &shift);
+    toast_apply(opacity, shift);
+    if (stage == DESK_TOAST_HIDDEN && s_toast_timer) {
+        lv_timer_t *done = s_toast_timer;
+        s_toast_timer = NULL;
+#if LVGL_VERSION_MAJOR == 9 && LVGL_VERSION_MINOR < 3
+        lv_timer_del(done);
+#else
+        lv_timer_delete(done);
+#endif
+    }
+}
+
+static void toast_kick(void) {
+    if (!s_toast_timer) {
+        s_toast_timer = lv_timer_create(toast_cb, 50, NULL);
+    }
+}
+
+static void paint_bars(int bars) {
+    int i;
+    for (i = 0; i < 3; i++) {
+        int on = i < bars;
+        lv_obj_set_style_bg_color(s_wifi_bars[i], lv_color_hex(on ? INK : INK_DIM), 0);
+        lv_obj_set_style_bg_opa(s_wifi_bars[i], on ? LV_OPA_COVER : LV_OPA_30, 0);
+    }
+}
+
+static int present_status(const char *phase, int failures) {
+    desk_glance_t glance;
+    const char *text;
+    uint32_t color = LAMP_AMBER;
+    if (!s_lamp) {
+        return DESK_LAMP_AMBER;
+    }
+    copy_text(s_phase_text, sizeof(s_phase_text), phase);
+    s_fail_count = failures;
+    glance = desk_glance(s_phase_text, failures, s_wifi_ip, s_wifi_retries, s_wifi_gave_up);
+    if (glance.lamp == DESK_LAMP_GREEN) {
+        color = ROW_MARK;
+    } else if (glance.lamp == DESK_LAMP_RED) {
+        color = LAMP_RED;
+    }
+    lv_obj_set_style_bg_color(s_lamp, lv_color_hex(color), 0);
+    paint_bars(desk_wifi_bars(s_wifi_ip, s_wifi_rssi));
+    text = glance.text ? glance.text : "IDLE";
+    if (!s_status_seen_ok) {
+        copy_text(s_status_seen, sizeof(s_status_seen), text);
+        s_status_seen_ok = 1;
+        return glance.lamp;
+    }
+    if (strcmp(s_status_seen, text) != 0) {
+        copy_text(s_status_seen, sizeof(s_status_seen), text);
+        if (desk_toast_push(&s_toast_state, text)) {
+            toast_kick();
+        }
+    }
+    return glance.lamp;
+}
+
+/* Bluetooth is drawn struck through. The controller is not started. */
+static void build_status_bar(lv_obj_t *screen) {
+    lv_obj_t *cluster;
+    lv_obj_t *wifi;
+    lv_obj_t *bt;
+    lv_obj_t *bt_label;
+    lv_obj_t *strike;
+    int i;
+    lv_obj_t *bar;
+    static const int heights[3] = {6, 10, 14};
+    bar = lv_obj_create(screen);
+    lv_obj_set_size(bar, SCREEN_PX - (EDGE_PX * 2), BAR_H);
+    lv_obj_align(bar, LV_ALIGN_TOP_MID, 0, EDGE_PX);
+    flatten(bar);
+    lv_obj_add_flag(bar, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
+    lv_obj_clear_flag(bar, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+
+    s_lamp = lv_obj_create(bar);
+    lv_obj_set_size(s_lamp, 14, 14);
+    lv_obj_align(s_lamp, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_set_style_radius(s_lamp, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(s_lamp, lv_color_hex(LAMP_AMBER), 0);
+    lv_obj_set_style_bg_opa(s_lamp, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(s_lamp, 0, 0);
+    lv_obj_set_style_pad_all(s_lamp, 0, 0);
+    lv_obj_set_style_shadow_width(s_lamp, 0, 0);
+    lv_obj_clear_flag(s_lamp, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+
+    s_toast_label = lv_label_create(bar);
+    lv_obj_set_width(s_toast_label, 168);
+    lv_label_set_long_mode(s_toast_label, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_font(s_toast_label, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(s_toast_label, lv_color_hex(INK), 0);
+    lv_obj_set_style_text_align(s_toast_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(s_toast_label, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_clear_flag(s_toast_label, LV_OBJ_FLAG_CLICKABLE);
+    lv_label_set_text(s_toast_label, "");
+    lv_obj_set_hidden(s_toast_label, true);
+
+    cluster = lv_obj_create(bar);
+    lv_obj_set_height(cluster, BAR_H);
+    lv_obj_set_width(cluster, LV_SIZE_CONTENT);
+    lv_obj_align(cluster, LV_ALIGN_RIGHT_MID, 0, 0);
+    lv_obj_set_flex_flow(cluster, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(cluster, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(cluster, 8, 0);
+    flatten(cluster);
+    lv_obj_clear_flag(cluster, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+
+    wifi = lv_obj_create(cluster);
+    lv_obj_set_size(wifi, 16, 14);
+    flatten(wifi);
+    lv_obj_clear_flag(wifi, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    for (i = 0; i < 3; i++) {
+        s_wifi_bars[i] = lv_obj_create(wifi);
+        lv_obj_set_size(s_wifi_bars[i], 4, heights[i]);
+        lv_obj_align(s_wifi_bars[i], LV_ALIGN_BOTTOM_LEFT, i * 6, 0);
+        lv_obj_set_style_radius(s_wifi_bars[i], 1, 0);
+        lv_obj_set_style_border_width(s_wifi_bars[i], 0, 0);
+        lv_obj_set_style_pad_all(s_wifi_bars[i], 0, 0);
+        lv_obj_set_style_shadow_width(s_wifi_bars[i], 0, 0);
+        lv_obj_clear_flag(s_wifi_bars[i], LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    }
+
+    bt = lv_obj_create(cluster);
+    lv_obj_set_size(bt, 28, 18);
+    flatten(bt);
+    lv_obj_clear_flag(bt, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    bt_label = lv_label_create(bt);
+    lv_label_set_text(bt_label, "BT");
+    lv_obj_set_style_text_font(bt_label, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(bt_label, lv_color_hex(INK_DIM), 0);
+    lv_obj_set_style_opa(bt_label, LV_OPA_40, 0);
+    lv_obj_center(bt_label);
+    lv_obj_clear_flag(bt_label, LV_OBJ_FLAG_CLICKABLE);
+    strike = lv_obj_create(bt);
+    lv_obj_set_size(strike, 22, 1);
+    lv_obj_set_style_bg_color(strike, lv_color_hex(INK_DIM), 0);
+    lv_obj_set_style_bg_opa(strike, LV_OPA_50, 0);
+    lv_obj_set_style_border_width(strike, 0, 0);
+    lv_obj_set_style_radius(strike, 0, 0);
+    lv_obj_set_style_pad_all(strike, 0, 0);
+    lv_obj_align(strike, LV_ALIGN_CENTER, 0, 1);
+    lv_obj_clear_flag(strike, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+
+    s_lock = lv_button_create(cluster);
+    s_lock_label = lv_label_create(s_lock);
+    lv_obj_set_size(s_lock, 64, 28);
+    lv_obj_set_style_bg_opa(s_lock, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(s_lock, 1, 0);
+    lv_obj_set_style_radius(s_lock, 6, 0);
+    lv_obj_set_style_shadow_width(s_lock, 0, 0);
+    lv_obj_set_style_pad_hor(s_lock, 6, 0);
+    lv_obj_set_style_text_font(s_lock_label, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(s_lock_label, lv_color_hex(INK), 0);
+    lv_obj_center(s_lock_label);
+    lv_obj_add_event_cb(s_lock, on_rotlock, LV_EVENT_CLICKED, NULL);
+    paint_rotlock();
+    paint_bars(0);
+}
+
 void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_t *screen = lv_screen_active();
     lv_obj_t *settings_btn;
@@ -619,6 +838,8 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     s_on_dismiss = on_dismiss;
     s_on_scan = on_scan;
     lv_obj_set_style_bg_color(screen, lv_color_hex(BG), 0);
+    desk_toast_init(&s_toast_state);
+    build_status_bar(screen);
     s_phase = lv_label_create(screen);
     lv_obj_set_style_text_font(s_phase, &lv_font_montserrat_48, 0);
     lv_obj_set_style_text_color(s_phase, lv_color_hex(INK), 0);
@@ -745,6 +966,22 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     ui_apply(&(desk_view_t){0}, 0);
 }
 
+void ui_bind_rotlock(int locked, ui_rotlock_fn on_toggle) {
+    s_rot_locked = locked ? 1 : 0;
+    s_on_rotlock = on_toggle;
+    paint_rotlock();
+}
+
+void ui_set_link(int has_ip, int rssi, int retries, int gave_up) {
+    s_wifi_ip = has_ip ? 1 : 0;
+    s_wifi_rssi = rssi;
+    s_wifi_retries = retries;
+    s_wifi_gave_up = gave_up ? 1 : 0;
+    if (s_lamp) {
+        present_status(s_phase_text[0] ? s_phase_text : "IDLE", s_fail_count);
+    }
+}
+
 int ui_settings_is_open(void) {
     return s_settings && !lv_obj_has_flag(s_settings, LV_OBJ_FLAG_HIDDEN);
 }
@@ -805,6 +1042,7 @@ void ui_show_panel_note(const char *phase, const char *message) {
     }
     lv_label_set_text(s_phase, phase && phase[0] ? phase : "IDLE");
     lv_label_set_text(s_message, message ? message : "");
+    present_status(phase && phase[0] ? phase : "IDLE", s_fail_count);
 }
 
 void ui_show_scanning(void) {
@@ -844,9 +1082,15 @@ void ui_show_networks(const net_ap_t *aps, int count) {
 void ui_apply(const desk_view_t *view, int failures) {
     char count[32];
     int i;
+    int lamp;
     uint32_t phase = INK_DIM;
-    lv_label_set_text(s_phase, desk_phase_label(view, failures));
-    if (failures < 3) {
+    const char *label = desk_phase_label(view, failures);
+    lamp = present_status(label, failures);
+    if (lamp == DESK_LAMP_RED && strcmp(label, "link down") != 0) {
+        label = "link down";
+    }
+    lv_label_set_text(s_phase, label);
+    if (lamp != DESK_LAMP_RED && failures < 3) {
         if (view->needs_you || strcmp(view->phase, "needs_you") == 0) {
             phase = 0xe2a23a;
         } else if (strcmp(view->phase, "running") == 0) {
@@ -885,7 +1129,7 @@ void ui_apply(const desk_view_t *view, int failures) {
     } else {
         lv_obj_set_hidden(s_alert, true);
     }
-    if (!lv_obj_is_hidden(s_settings) || !desk_quiet_idle(view, failures)) {
+    if (!lv_obj_is_hidden(s_settings) || !desk_quiet_idle(view, failures) || lamp == DESK_LAMP_RED) {
         sleep_stop();
     } else {
         sleep_show(view->agent_count);

@@ -24,8 +24,118 @@
         flex-direction: column;
         align-items: center;
       }
+      #bar {
+        width: 100%;
+        height: 32px;
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        position: relative;
+      }
+      #lamp {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: #e2a23a;
+        flex: none;
+      }
+      #lamp.green {
+        background: #9bb57a;
+      }
+      #lamp.red {
+        background: #c4544a;
+      }
+      #toast {
+        position: absolute;
+        left: 50%;
+        top: 0;
+        max-width: 168px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 16px;
+        line-height: 32px;
+        opacity: 0;
+        pointer-events: none;
+        transform: translate(-50%, -8px);
+      }
+      #toast.show {
+        animation: toast 3.2s ease forwards;
+      }
+      @keyframes toast {
+        0% {
+          opacity: 0;
+          transform: translate(-50%, -10px);
+        }
+        8% {
+          opacity: 1;
+          transform: translate(-50%, 0);
+        }
+        82% {
+          opacity: 1;
+          transform: translate(-50%, 0);
+        }
+        100% {
+          opacity: 0;
+          transform: translate(-50%, -6px);
+        }
+      }
+      #glance {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: none;
+      }
+      #wifi {
+        display: flex;
+        align-items: flex-end;
+        gap: 2px;
+        height: 14px;
+      }
+      #wifi i {
+        width: 4px;
+        display: block;
+        background: #a39b88;
+        opacity: 0.35;
+      }
+      #wifi i:nth-child(1) {
+        height: 6px;
+      }
+      #wifi i:nth-child(2) {
+        height: 10px;
+      }
+      #wifi i:nth-child(3) {
+        height: 14px;
+      }
+      #wifi[data-bars="1"] i:nth-child(1),
+      #wifi[data-bars="2"] i:nth-child(-n + 2),
+      #wifi[data-bars="3"] i {
+        background: #efe7d6;
+        opacity: 1;
+      }
+      #bt {
+        color: #a39b88;
+        opacity: 0.45;
+        font-size: 14px;
+        line-height: 1;
+        text-decoration: line-through;
+      }
+      #rotlock {
+        height: 28px;
+        min-width: 64px;
+        font-size: 16px;
+        padding: 0 8px;
+      }
+      #rotlock[aria-pressed="true"] {
+        border-color: #9bb57a;
+        background: #3d4f32;
+      }
+      #panel.needs #bar {
+        visibility: hidden;
+      }
       #phase {
-        margin-top: 0;
+        margin-top: 2px;
         font-size: 48px;
         line-height: 1;
         font-weight: 600;
@@ -211,6 +321,15 @@
   </head>
   <body>
     <div id="panel" class="asleep">
+      <div id="bar">
+        <i id="lamp" class="amber"></i>
+        <div id="toast"></div>
+        <div id="glance">
+          <span id="wifi" data-bars="0" title="Wi-Fi"><i></i><i></i><i></i></span>
+          <span id="bt" title="Bluetooth off">BT</span>
+          <button id="rotlock" type="button" aria-pressed="false">Auto</button>
+        </div>
+      </div>
       <div id="phase">IDLE</div>
       <p id="title">Waiting</p>
       <p id="message"></p>
@@ -233,8 +352,38 @@
       const message = document.getElementById("message");
       const count = document.getElementById("count");
       const agents = document.getElementById("agents");
+      const lamp = document.getElementById("lamp");
+      const toast = document.getElementById("toast");
+      const wifi = document.getElementById("wifi");
+      const rotlock = document.getElementById("rotlock");
       const neutral = "#a39b88";
       let failures = 0;
+      let statusSeen = "IDLE";
+
+      function statusText(phaseLabel, fail) {
+        if (phaseLabel === "NO NETWORK" || phaseLabel === "SCAN FAILED") return phaseLabel;
+        if (fail >= 3 || phaseLabel === "link down") return "link down";
+        if (fail > 0) return "reconnecting";
+        return phaseLabel || "IDLE";
+      }
+
+      function showToast(text) {
+        if (!text || text === statusSeen) return;
+        statusSeen = text;
+        toast.textContent = text;
+        toast.classList.remove("show");
+        void toast.offsetWidth;
+        toast.classList.add("show");
+      }
+
+      function paintLink(phaseLabel, fail) {
+        const text = statusText(phaseLabel, fail);
+        const down = text === "link down" || text === "NO NETWORK" || text === "SCAN FAILED";
+        const degraded = !down && (fail > 0 || text === "reconnecting");
+        lamp.className = down ? "red" : degraded ? "amber" : "green";
+        wifi.dataset.bars = down ? "0" : degraded ? "1" : "3";
+        showToast(text);
+      }
 
       function markColor(value) {
         const match = /^#?([0-9a-fA-F]{6})$/.exec(String(value || "").trim());
@@ -263,6 +412,7 @@
           const status = await response.json();
           failures = 0;
           phase.textContent = label(status);
+          paintLink(label(status), failures);
           title.textContent = (status.last_event && (status.last_event.title || status.last_event.message)) || "Waiting";
           message.textContent = (status.last_event && status.last_event.message) || "";
           const running = (status.agents || []).filter((agent) => agent.status === "running").length;
@@ -289,12 +439,19 @@
         } catch (err) {
           failures = Math.min(3, failures + 1);
           phase.textContent = failures >= 3 ? "link down" : phase.textContent;
+          paintLink(phase.textContent, failures);
           if (failures >= 3) {
             panel.classList.remove("asleep");
           }
         }
       }
 
+      rotlock.addEventListener("click", (event) => {
+        const locked = rotlock.getAttribute("aria-pressed") !== "true";
+        event.stopPropagation();
+        rotlock.setAttribute("aria-pressed", locked ? "true" : "false");
+        rotlock.textContent = locked ? "Lock" : "Auto";
+      });
       document.getElementById("mic").addEventListener("click", () => {
         message.textContent = "Voice not in this PoC";
       });

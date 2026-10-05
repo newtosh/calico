@@ -19,7 +19,7 @@ The managed BSP is `waveshare/esp32_s3_touch_amoled_2_16` `^2.0.1` with LVGL 9, 
 
 This SKU has a QMI8658 on the shared I2C bus (SDA GPIO15, SCL GPIO14, address `0x6B` on the schematic). BSP 2.0.1 sets `BSP_CAPS_IMU` to 0 and its I2C comment still names a QMA7981, so the firmware reads the chip with `waveshare/qmi8658` on `bsp_i2c_get_handle()`.
 
-Gravity snaps the UI to 0/90/180/270. The panel boots with MADCTL `0xA0`; that picture is quarter 0. Flat (Z wins), a weak reading, or a near-diagonal holds the last quarter. Four matching samples, 100 ms apart, have to agree before the picture turns. Settings open freezes the angle so the keyboard stays put.
+Gravity snaps the UI to 0/90/180/270. The panel boots with MADCTL `0xA0`; that picture is quarter 0. Flat (Z wins), a weak reading, or a near-diagonal holds the last quarter. Four matching samples, 100 ms apart, have to agree before the picture turns. Settings open freezes the angle so the keyboard stays put. The status-bar lock does the same and stores the quarter.
 
 Chip +Y is treated as the top edge of that boot picture. The schematic names the part and `0x6B`; it does not mark the chip's X arrow on the glass.
 
@@ -29,11 +29,35 @@ Chip +Y is treated as the top edge of that boot picture. The schematic names the
 idf.py -p /dev/ttyACM0 app-flash
 ```
 
-`app-flash` writes the application only. It does not erase NVS.
+`app-flash` writes the application only. It does not erase flash and it does not rewrite the NVS partition. Do not erase.
 
 On first boot no network is saved, so the settings screen is up and scans for networks. Tap a row to select an SSID (Scan repeats the scan). Password, a companion URL for that network, and a bearer token for that network are labeled fields under the list. Type SSID is only for a hidden network. Saving adds that network to the known list (up to 8) and restarts. It does not erase the others. The default companion URL is `http://192.168.4.30:8787`. A network with no URL of its own uses the global URL, then that default.
 
 At boot the panel scans and joins whichever saved SSID is actually in range. If more than one is in range, it uses the strongest RSSI. A saved SSID that does not show up in the broadcast scan is probed once, so a hidden network typed by hand can still be joined. If none of the saved networks are in range, the panel shows `NO NETWORK` / `No saved network in range` and does not keep retrying one missing SSID. Association of the network it did pick still stops after 10 disconnects.
+
+## Status bar
+
+A 32px bar sits inside the 16px bezel. The phase word, title, and agent rows start just below it. Mic stays 148×64 and Settings stays 204×64, both Montserrat 24. Phase stays Montserrat 48.
+
+The left lamp uses the phase label already on the face plus the poll-failure count and the Wi-Fi facts the STA path already tracks:
+
+| State | Lamp |
+| --- | --- |
+| `IDLE`, `RUNNING`, or `NEEDS YOU`, Wi-Fi has an IP, no retries, zero missed polls | Green `#9bb57a` |
+| Still joining, STA reconnecting (retries before the existing cap), or 1–2 missed polls | Amber `#e2a23a` |
+| `NO NETWORK`, `SCAN FAILED`, `link down` (3 missed polls), or Wi-Fi gave up after that cap | Red `#c4544a` |
+
+`NEEDS YOU` is green. The companion answered; the full-screen alert still covers the bar. A short toast slides in when that status text changes (`IDLE` → `RUNNING`, `reconnecting`, `link down`, and the panel notes). One line is on screen and one can wait. A newer one replaces the waiter. It does not cover the alert.
+
+Wi-Fi is three bars from the associated AP's RSSI (`esp_wifi_sta_get_ap_info`): 3 at -60 dBm and up, 2 at -75 dBm and up, 1 if associated but weaker, none if there is no IP. Bluetooth is a dim struck-through `BT`. The ESP32-S3 and this board's 2.4 GHz antenna can do Bluetooth 5 LE, and the BSP does not start it. `sdkconfig.defaults` does not enable a controller, and the app never opens one. The mark means off.
+
+`Auto` / `Lock` toggles the QMI8658 snap. Locked writes NVS namespace `desk` key `rotlock` as `0`, `1`, `2`, or `3` (the quarter on screen) and ignores the IMU until unlock, including across reboot. Unlock erases that key. It does not use `ssid`, `pass`, `url`, `token`, or `n{i}*`.
+
+Ship this UI with app-flash only:
+
+```bash
+idf.py -p PORT app-flash
+```
 
 ## Provision Wi-Fi over USB
 
@@ -80,6 +104,8 @@ gcc -Wall -Werror -I firmware/main firmware/host/test_wifi_store.c firmware/main
 /tmp/test_wifi_store
 gcc -Wall -Werror -I firmware/main firmware/host/test_orient.c firmware/main/orient.c -o /tmp/test_orient
 /tmp/test_orient
+gcc -Wall -Werror -I firmware/main firmware/host/test_desk_status.c firmware/main/desk_status.c -o /tmp/test_desk_status
+/tmp/test_desk_status
 ```
 
 Open `firmware/simulator/index.html` in a browser. It polls `http://127.0.0.1:8787` unless you pass `?base=http://192.168.1.20:8787`.

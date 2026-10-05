@@ -23,6 +23,7 @@ static int s_failures;
 static char s_status_body[8192];
 static volatile int s_scan_busy;
 static int s_quarter;
+static volatile int s_rot_locked;
 static lv_indev_read_cb_t s_touch_read;
 
 /* Panel init writes MADCTL 0xA0. bsp_display_rotation_set calls that value
@@ -149,6 +150,7 @@ static void poll_task(void *arg) {
             s_failures++;
         }
         if (lock_lvgl()) {
+            publish_link();
             ui_apply(&view, s_failures);
             unlock_lvgl();
         }
@@ -167,6 +169,7 @@ static void join_task(void *arg) {
         net_wifi_start(&s_active);
         xTaskCreate(poll_task, "poll", 16384, NULL, 5, NULL);
     } else if (lock_lvgl()) {
+        publish_link();
         if (selected < 0) {
             ui_show_panel_note("SCAN FAILED", "Could not scan for Wi-Fi.");
         } else {
@@ -205,6 +208,35 @@ static void apply_quarter(int quarter) {
     ESP_LOGI("orient", "quarter %d", quarter);
 }
 
+static void publish_link(void) {
+    net_link_t link;
+    net_link(&link);
+    ui_set_link(link.has_ip, link.rssi, link.retries, link.gave_up);
+}
+
+static void on_rotlock(int locked) {
+    char stored[4];
+    if (locked) {
+        orient_rotlock_format(s_quarter, stored, sizeof(stored));
+        net_rotlock_save(stored);
+        s_rot_locked = 1;
+        return;
+    }
+    net_rotlock_save("");
+    s_rot_locked = 0;
+}
+
+static void load_rotlock(void) {
+    char stored[8];
+    int quarter = 0;
+    net_rotlock_load(stored, sizeof(stored));
+    if (!orient_rotlock_parse(stored, &quarter)) {
+        return;
+    }
+    s_rot_locked = 1;
+    apply_quarter(quarter);
+}
+
 static void hook_touch(void) {
     lv_indev_t *indev = bsp_display_get_input_dev();
     if (!indev) {
@@ -234,7 +266,7 @@ static void imu_task(void *arg) {
         if (qmi8658_read_accel(&dev, &ax, &ay, &az) == ESP_OK) {
             shown = orient_debounce_feed(&deb, orient_from_accel((int)ax, (int)ay, (int)az));
             if (shown != s_quarter && lock_lvgl()) {
-                if (!ui_settings_is_open()) {
+                if (!orient_frozen(s_rot_locked, ui_settings_is_open())) {
                     apply_quarter(shown);
                 }
                 unlock_lvgl();
@@ -254,6 +286,7 @@ void app_main(void) {
     bsp_display_start();
     if (lock_lvgl()) {
         hook_touch();
+        load_rotlock();
         unlock_lvgl();
     }
     if (xTaskCreate(imu_task, "imu", 4096, NULL, 3, NULL) != pdPASS) {
@@ -265,6 +298,7 @@ void app_main(void) {
     copy_setting(fields.token, sizeof(fields.token), s_store.token);
     if (lock_lvgl()) {
         ui_init(save_and_restart, dismiss_alert, request_scan);
+        ui_bind_rotlock(s_rot_locked, on_rotlock);
         ui_set_fields(&fields);
         ui_set_known(&s_store);
         if (s_store.count == 0) {
@@ -277,6 +311,7 @@ void app_main(void) {
     }
     if (xTaskCreate(join_task, "wifi-join", 12288, NULL, 4, NULL) != pdPASS) {
         if (lock_lvgl()) {
+            publish_link();
             ui_show_panel_note("SCAN FAILED", "Could not scan for Wi-Fi.");
             unlock_lvgl();
         }

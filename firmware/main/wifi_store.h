@@ -8,6 +8,7 @@
  * Legacy single network, loaded only when no indexed SSID exists: "ssid", "pass".
  * Known network i (0 .. WIFI_NET_MAX-1): "n{i}ssid", "n{i}pass",
  * and optional "n{i}url", "n{i}token". The password key stays "pass".
+ * Rotate lock: "rotlock" ("0".."3" while held, absent when auto). Not a slot.
  * An empty per-network url uses the global url, then WIFI_DEFAULT_URL.
  */
 

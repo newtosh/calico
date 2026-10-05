@@ -1,6 +1,7 @@
 #include "orient.h"
 
 #include <stdio.h>
+#include <string.h>
 
 static int g_failed;
 
@@ -51,6 +52,30 @@ int main(void) {
     y = 20;
     orient_touch_point(3, &x, &y);
     check(x == 459 && y == 10, "touch 270");
+
+    check(orient_rotlock_parse(NULL, &i) == 0, "missing lock");
+    check(orient_rotlock_parse("", &i) == 0, "empty lock");
+    check(orient_rotlock_parse("off", &i) == 0, "off lock");
+    check(orient_rotlock_parse("4", &i) == 0, "quarter 4");
+    check(orient_rotlock_parse("90", &i) == 0, "degrees are not a quarter");
+    check(orient_rotlock_parse("ssid", &i) == 0, "ssid is not the lock");
+    check(orient_rotlock_parse("n0ssid", &i) == 0, "slot key is not the lock");
+    check(strcmp(ORIENT_ROTLOCK_KEY, "ssid") != 0, "key not ssid");
+    check(strcmp(ORIENT_ROTLOCK_KEY, "pass") != 0, "key not pass");
+    check(strcmp(ORIENT_ROTLOCK_KEY, "url") != 0, "key not url");
+    check(strcmp(ORIENT_ROTLOCK_KEY, "token") != 0, "key not token");
+    check(strcmp(ORIENT_ROTLOCK_KEY, "rotlock") == 0, "key name");
+    for (i = 0; i < 4; i++) {
+        char stored[4];
+        int quarter = -1;
+        orient_rotlock_format(i, stored, sizeof(stored));
+        check(orient_rotlock_parse(stored, &quarter) == 1, "round trip");
+        check(quarter == i, "round trip quarter");
+    }
+    check(orient_frozen(0, 0) == 0, "auto turns");
+    check(orient_frozen(1, 0) == 1, "lock holds");
+    check(orient_frozen(0, 1) == 1, "settings holds");
+    check(orient_frozen(1, 1) == 1, "both hold");
 
     return g_failed;
 }

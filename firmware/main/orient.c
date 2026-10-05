@@ -69,3 +69,28 @@ void orient_touch_point(int quarter, int *x, int *y) {
     *x = nx;
     *y = ny;
 }
+
+int orient_rotlock_parse(const char *stored, int *quarter) {
+    if (!stored || stored[0] < '0' || stored[0] > '3' || stored[1] != '\0') {
+        return 0;
+    }
+    if (quarter) {
+        *quarter = stored[0] - '0';
+    }
+    return 1;
+}
+
+void orient_rotlock_format(int quarter, char *out, size_t out_len) {
+    if (!out || out_len < 2) {
+        return;
+    }
+    if (quarter < 0 || quarter > 3) {
+        quarter = 0;
+    }
+    out[0] = (char)('0' + quarter);
+    out[1] = '\0';
+}
+
+int orient_frozen(int locked, int settings_open) {
+    return locked || settings_open;
+}

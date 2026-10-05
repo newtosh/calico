@@ -19,9 +19,19 @@ typedef struct {
     int8_t rssi;
 } net_ap_t;
 
+typedef struct {
+    int has_ip;
+    int rssi;
+    int retries;
+    int gave_up;
+} net_link_t;
+
 void net_load(wifi_store_t *out);
 void net_save(const wifi_store_t *in);
 void net_save_globals(const char *url, const char *token);
+void net_rotlock_load(char *out, size_t out_len);
+void net_rotlock_save(const char *value);
+void net_link(net_link_t *out);
 void net_wifi_start(const desk_settings_t *in);
 int net_wifi_scan(net_ap_t *out, int max_out);
 /* 0 and fills chosen, 1 if no saved network is in range, -1 if the scan failed. */

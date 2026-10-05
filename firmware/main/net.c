@@ -1,4 +1,5 @@
 #include "net.h"
+#include "orient.h"
 
 #include "esp_check.h"
 #include "esp_event.h"
@@ -14,7 +15,9 @@
 #include <string.h>
 
 static const char *TAG = "desk-net";
-static int s_wifi_retries;
+static volatile int s_wifi_retries;
+static volatile int s_wifi_has_ip;
+static volatile int s_wifi_gave_up;
 static int s_wifi_up;
 
 typedef struct {
@@ -132,13 +135,40 @@ void net_save_globals(const char *url, const char *token) {
     nvs_close(handle);
 }
 
+void net_rotlock_load(char *out, size_t out_len) {
+    nvs_handle_t handle;
+    if (!out || out_len == 0) {
+        return;
+    }
+    out[0] = '\0';
+    if (nvs_open("desk", NVS_READONLY, &handle) != ESP_OK) {
+        return;
+    }
+    read_str(handle, ORIENT_ROTLOCK_KEY, out, out_len);
+    nvs_close(handle);
+}
+
+void net_rotlock_save(const char *value) {
+    nvs_handle_t handle;
+    ESP_ERROR_CHECK(nvs_open("desk", NVS_READWRITE, &handle));
+    set_or_erase(handle, ORIENT_ROTLOCK_KEY, value, 0);
+    ESP_ERROR_CHECK(nvs_commit(handle));
+    nvs_close(handle);
+}
+
 static void on_wifi(void *arg, esp_event_base_t base, int32_t id, void *data) {
     (void)arg;
     (void)data;
-    if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED && s_wifi_retries < 10) {
+    if (base != WIFI_EVENT || id != WIFI_EVENT_STA_DISCONNECTED) {
+        return;
+    }
+    s_wifi_has_ip = 0;
+    if (s_wifi_retries < 10) {
         s_wifi_retries++;
         esp_wifi_connect();
+        return;
     }
+    s_wifi_gave_up = 1;
 }
 
 static void on_ip(void *arg, esp_event_base_t base, int32_t id, void *data) {
@@ -147,6 +177,22 @@ static void on_ip(void *arg, esp_event_base_t base, int32_t id, void *data) {
     (void)id;
     (void)data;
     s_wifi_retries = 0;
+    s_wifi_has_ip = 1;
+    s_wifi_gave_up = 0;
+}
+
+void net_link(net_link_t *out) {
+    wifi_ap_record_t ap;
+    if (!out) {
+        return;
+    }
+    out->has_ip = s_wifi_has_ip;
+    out->rssi = 0;
+    out->retries = s_wifi_retries;
+    out->gave_up = s_wifi_gave_up;
+    if (s_wifi_has_ip && esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
+        out->rssi = ap.rssi;
+    }
 }
 
 static void wifi_bringup(void) {
