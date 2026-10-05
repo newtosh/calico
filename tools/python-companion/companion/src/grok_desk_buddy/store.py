@@ -161,6 +161,10 @@ class DeskStore:
 
     def status(self) -> dict[str, object]:
         with self._lock:
+            # needs_you, then newest updated_at, then id. Stable sorts keep the earlier key.
+            ordered = sorted(self._agents.values(), key=lambda agent: agent.id)
+            ordered.sort(key=lambda agent: agent.updated_at, reverse=True)
+            ordered.sort(key=lambda agent: agent.status != "needs_you")
             agents = [
                 {
                     "id": agent.id,
@@ -171,7 +175,7 @@ class DeskStore:
                     "shape": agent.shape,
                     "icon": agent.icon,
                 }
-                for agent in sorted(self._agents.values(), key=lambda item: item.id)
+                for agent in ordered
             ]
             statuses = {str(item["status"]) for item in agents}
             if "needs_you" in statuses:

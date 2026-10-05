@@ -95,6 +95,9 @@ static int s_wifi_rssi;
 static int s_wifi_retries;
 static int s_wifi_gave_up;
 static int s_fail_count;
+static int s_applied;
+static int s_applied_failures;
+static desk_view_t s_applied_view;
 static int s_status_seen_ok;
 static char s_phase_text[24];
 static char s_status_seen[24];
@@ -1209,41 +1212,50 @@ void ui_apply(const desk_view_t *view, int failures) {
     int i;
     const char *headline;
     int lamp = present_status(desk_phase_label(view, failures), failures);
-    headline = desk_face_title(view);
-    lv_label_set_text(s_title, headline);
-    lv_obj_set_hidden(s_title, headline[0] == '\0');
+    int fresh;
+    fresh = !s_applied || s_applied_failures != failures || !desk_view_same(&s_applied_view, view);
+    /* Hold counts down for three polls, then one later poll puts the face line back. */
     if (s_mic_hold > 0) {
         s_mic_hold--;
-    } else {
+    } else if (fresh || strcmp(lv_label_get_text(s_message), view->message) != 0) {
         lv_label_set_text(s_message, view->message);
     }
-    for (i = 0; i < DESK_AGENT_MAX; i++) {
-        const desk_agent_t *agent;
-        uint32_t color = DESK_MARK_NEUTRAL;
-        uint32_t parsed;
-        const char *label;
-        if (i >= view->agent_count) {
-            lv_obj_set_hidden(s_agent_rows[i], true);
-            continue;
+    if (fresh) {
+        headline = desk_face_title(view);
+        lv_label_set_text(s_title, headline);
+        lv_obj_set_hidden(s_title, headline[0] == '\0');
+        for (i = 0; i < DESK_AGENT_MAX; i++) {
+            const desk_agent_t *agent;
+            uint32_t color = DESK_MARK_NEUTRAL;
+            uint32_t parsed;
+            const char *label;
+            if (i >= view->agent_count) {
+                lv_obj_set_hidden(s_agent_rows[i], true);
+                continue;
+            }
+            agent = &view->agents[i];
+            if (desk_mark_color(agent->color, &parsed) == 0) {
+                color = parsed;
+            }
+            apply_mark(s_agent_marks[i], color, desk_mark_shape(agent->shape));
+            label = agent->title[0] ? agent->title : agent->id;
+            lv_label_set_text(s_agent_labels[i], label[0] ? label : "agent");
+            lv_obj_set_hidden(s_agent_rows[i], false);
         }
-        agent = &view->agents[i];
-        if (desk_mark_color(agent->color, &parsed) == 0) {
-            color = parsed;
+        desk_count_text(view, count, sizeof(count));
+        lv_label_set_text(s_count, count);
+        lv_obj_set_style_text_color(
+            s_count, lv_color_hex(view->running_count > 0 ? ROW_MARK : INK_DIM), 0);
+        if (view->needs_you && failures < 3) {
+            lv_obj_set_hidden(s_alert, false);
+        } else {
+            lv_obj_set_hidden(s_alert, true);
         }
-        apply_mark(s_agent_marks[i], color, desk_mark_shape(agent->shape));
-        label = agent->title[0] ? agent->title : agent->id;
-        lv_label_set_text(s_agent_labels[i], label[0] ? label : "agent");
-        lv_obj_set_hidden(s_agent_rows[i], false);
+        s_applied_view = *view;
+        s_applied_failures = failures;
+        s_applied = 1;
     }
-    desk_count_text(view, count, sizeof(count));
-    lv_label_set_text(s_count, count);
-    lv_obj_set_style_text_color(s_count, lv_color_hex(view->running_count > 0 ? ROW_MARK : INK_DIM),
-                                0);
-    if (view->needs_you && failures < 3) {
-        lv_obj_set_hidden(s_alert, false);
-    } else {
-        lv_obj_set_hidden(s_alert, true);
-    }
+    /* Settings and the lamp sit outside the parsed view, so sleep still runs every poll. */
     if (!lv_obj_is_hidden(s_settings) || !desk_quiet_idle(view, failures) || lamp == DESK_LAMP_RED) {
         sleep_stop();
     } else {

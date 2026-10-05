@@ -29,6 +29,7 @@ typedef struct {
     char title[64];
     char color[32];
     char shape[16];
+    char status[16];
 } desk_agent_t;
 
 typedef struct {
@@ -50,6 +51,7 @@ typedef struct {
 } desk_panel_t;
 
 int desk_view_from_json(const char *json, desk_view_t *out);
+int desk_view_same(const desk_view_t *a, const desk_view_t *b);
 /* Face headline. Empty when last_event has no useful title. A dismiss
  * acknowledgement is not one. Notes, launches, and needs-you questions keep theirs. */
 const char *desk_face_title(const desk_view_t *view);

@@ -290,6 +290,32 @@ int main(void) {
         check(strcmp(label, "1/25 running") == 0, "dock counts past the rows");
     }
 
+    {
+        desk_view_t again;
+        const char *roster =
+            "{\"phase\":\"running\",\"needs_you\":false,\"agents\":["
+            "{\"id\":\"a\",\"title\":\"Aye\",\"status\":\"running\",\"color\":\"#112233\",\"shape\":\"circle\"},"
+            "{\"id\":\"b\",\"title\":\"Bee\",\"status\":\"idle\"}]}";
+        const char *needs_row =
+            "{\"phase\":\"running\",\"needs_you\":false,\"agents\":["
+            "{\"id\":\"a\",\"title\":\"Aye\",\"status\":\"running\",\"color\":\"#112233\",\"shape\":\"circle\"},"
+            "{\"id\":\"b\",\"title\":\"Bee\",\"status\":\"needs_you\"}]}";
+        const char *flipped =
+            "{\"phase\":\"running\",\"needs_you\":false,\"agents\":["
+            "{\"id\":\"b\",\"title\":\"Bee\",\"status\":\"idle\"},"
+            "{\"id\":\"a\",\"title\":\"Aye\",\"status\":\"running\",\"color\":\"#112233\",\"shape\":\"circle\"}]}";
+        check(desk_view_from_json(roster, &view) == 0, "same roster");
+        check(desk_view_from_json(roster, &again) == 0, "same roster again");
+        check(desk_view_same(&view, &again) == 1, "repeat parse is the same view");
+        check(strcmp(view.agents[1].status, "idle") == 0, "idle status kept");
+        check(desk_view_from_json(needs_row, &again) == 0, "status row parse");
+        check(again.running_count == view.running_count, "status swap keeps the running count");
+        check(again.needs_you == view.needs_you, "top flag stays");
+        check(desk_view_same(&view, &again) == 0, "agent status is a view change");
+        check(desk_view_from_json(flipped, &again) == 0, "flipped parse");
+        check(desk_view_same(&view, &again) == 0, "agent order is a view change");
+    }
+
     if (g_failed) {
         return 1;
     }

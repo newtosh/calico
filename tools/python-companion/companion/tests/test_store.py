@@ -26,6 +26,26 @@ def test_launch_then_needs_you_then_dismiss(tmp_path: Path) -> None:
     assert last["message"] == ""
 
 
+def test_status_orders_needs_you_then_recent(tmp_path: Path) -> None:
+    path = tmp_path / "desk.sqlite"
+    with sqlite3.connect(path) as conn:
+        conn.execute(
+            "CREATE TABLE agents (id TEXT PRIMARY KEY, title TEXT, status TEXT, updated_at TEXT)"
+        )
+        conn.executemany(
+            "INSERT INTO agents (id, title, status, updated_at) VALUES (?, ?, ?, ?)",
+            [
+                ("m", "M", "running", "2026-10-05T12:00:00Z"),
+                ("z", "Z", "needs_you", "2026-10-05T09:00:00Z"),
+                ("a", "A", "running", "2026-10-05T12:00:00Z"),
+                ("b", "B", "idle", "2026-10-05T15:00:00Z"),
+                ("n", "N", "needs_you", "2026-10-05T10:00:00Z"),
+            ],
+        )
+    ids = [item["id"] for item in DeskStore(sqlite_path=str(path)).status()["agents"]]
+    assert ids == ["n", "z", "b", "a", "m"]
+
+
 def test_status_returns_every_stored_agent() -> None:
     store = DeskStore()
     for i in range(17):

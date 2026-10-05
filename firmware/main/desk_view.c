@@ -115,6 +115,10 @@ int desk_view_from_json(const char *json, desk_view_t *out) {
     return 0;
 }
 
+int desk_view_same(const desk_view_t *a, const desk_view_t *b) {
+    return a && b && memcmp(a, b, sizeof(*a)) == 0;
+}
+
 void desk_count_text(const desk_view_t *view, char *out, size_t out_len) {
     if (!out || out_len == 0) {
         return;
@@ -260,6 +264,7 @@ static void read_agents(const char *json, desk_view_t *out) {
             read_string_field(p, end, "title", agent->title, sizeof(agent->title));
             read_string_field(p, end, "color", agent->color, sizeof(agent->color));
             read_string_field(p, end, "shape", agent->shape, sizeof(agent->shape));
+            copy_string(status, agent->status, sizeof(agent->status));
             out->agent_count++;
         }
         p = end;
