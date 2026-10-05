@@ -37,10 +37,14 @@ typedef struct {
 } desk_panel_t;
 
 int desk_view_from_json(const char *json, desk_view_t *out);
-/* Face headline. A dismiss acknowledgement is not one; that line is Waiting. */
+/* Face headline. Empty when last_event has no useful title. A dismiss
+ * acknowledgement is not one. Notes, launches, and needs-you questions keep theirs. */
 const char *desk_face_title(const desk_view_t *view);
 int desk_panel_from_json(const char *json, desk_panel_t *out);
 int desk_panel_should_apply(const desk_panel_t *panel, const char *url, const char *token);
+/* 1 when the push should be stored. A different URL is stored only if that
+ * host answered (probed_ok). A token change on the same URL does not need a probe. */
+int desk_panel_adopt(const desk_panel_t *panel, const char *url, const char *token, int probed_ok);
 const char *desk_phase_label(const desk_view_t *view, int consecutive_failures);
 int desk_quiet_idle(const desk_view_t *view, int consecutive_failures);
 int desk_mark_color(const char *color, uint32_t *out);

@@ -33,6 +33,9 @@ int main(void) {
     glance("IDLE", 0, 1, 0, 0, DESK_LAMP_GREEN, "IDLE", "idle");
     glance("RUNNING", 0, 1, 0, 0, DESK_LAMP_GREEN, "RUNNING", "running");
     glance("NEEDS YOU", 0, 1, 0, 0, DESK_LAMP_GREEN, "NEEDS YOU", "needs you still reachable");
+    glance("IDLE", 0, 1, 0, 1, DESK_LAMP_GREEN, "IDLE", "stale give-up with a live idle poll");
+    glance("RUNNING", 0, 1, 4, 1, DESK_LAMP_GREEN, "RUNNING", "stale retries with a live poll");
+    glance("NEEDS YOU", 0, 1, 10, 1, DESK_LAMP_GREEN, "NEEDS YOU", "needs you beats the latch");
     glance("IDLE", 0, 0, 0, 0, DESK_LAMP_AMBER, "IDLE", "joining keeps the phase word");
     glance("RUNNING", 0, 0, 3, 0, DESK_LAMP_AMBER, "reconnecting", "reconnecting");
     glance("RUNNING", 1, 1, 0, 0, DESK_LAMP_AMBER, "reconnecting", "one miss");

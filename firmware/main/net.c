@@ -159,7 +159,17 @@ void net_rotlock_save(const char *value) {
 static void on_wifi(void *arg, esp_event_base_t base, int32_t id, void *data) {
     (void)arg;
     (void)data;
-    if (base != WIFI_EVENT || id != WIFI_EVENT_STA_DISCONNECTED) {
+    if (base != WIFI_EVENT) {
+        return;
+    }
+    /* Same DHCP lease does not post IP_EVENT_STA_GOT_IP again. Association
+     * is the event that means the retry storm is over. */
+    if (id == WIFI_EVENT_STA_CONNECTED) {
+        s_wifi_retries = 0;
+        s_wifi_gave_up = 0;
+        return;
+    }
+    if (id != WIFI_EVENT_STA_DISCONNECTED) {
         return;
     }
     s_wifi_has_ip = 0;
@@ -181,16 +191,34 @@ static void on_ip(void *arg, esp_event_base_t base, int32_t id, void *data) {
     s_wifi_gave_up = 0;
 }
 
+static int sta_has_address(void) {
+    esp_netif_ip_info_t info;
+    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (!netif || esp_netif_get_ip_info(netif, &info) != ESP_OK) {
+        return 0;
+    }
+    return info.ip.addr != 0;
+}
+
+void net_mark_reachable(void) {
+    s_wifi_has_ip = 1;
+    s_wifi_retries = 0;
+    s_wifi_gave_up = 0;
+}
+
 void net_link(net_link_t *out) {
     wifi_ap_record_t ap;
     if (!out) {
         return;
     }
+    if (sta_has_address()) {
+        s_wifi_has_ip = 1;
+    }
     out->has_ip = s_wifi_has_ip;
     out->rssi = 0;
     out->retries = s_wifi_retries;
     out->gave_up = s_wifi_gave_up;
-    if (s_wifi_has_ip && esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
+    if (out->has_ip && esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
         out->rssi = ap.rssi;
     }
 }
@@ -202,6 +230,8 @@ static void wifi_bringup(void) {
     }
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(
+        WIFI_EVENT, WIFI_EVENT_STA_CONNECTED, on_wifi, NULL, NULL));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
         WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, on_wifi, NULL, NULL));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, on_ip, NULL, NULL));

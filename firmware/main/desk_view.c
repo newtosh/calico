@@ -213,6 +213,16 @@ int desk_panel_should_apply(const desk_panel_t *panel, const char *url, const ch
     return 0;
 }
 
+int desk_panel_adopt(const desk_panel_t *panel, const char *url, const char *token, int probed_ok) {
+    if (!desk_panel_should_apply(panel, url, token)) {
+        return 0;
+    }
+    if (strcmp(panel->url, url) == 0) {
+        return 1;
+    }
+    return probed_ok ? 1 : 0;
+}
+
 static void read_agents(const char *json, desk_view_t *out) {
     const char *p = find_key(json, json + strlen(json), "agents");
     if (!p) {
@@ -300,7 +310,7 @@ int desk_mark_shape(const char *shape) {
 const char *desk_face_title(const desk_view_t *view) {
     if (!view || view->title[0] == '\0' ||
         (strcmp(view->title, "Dismissed") == 0 && view->message[0] == '\0')) {
-        return "Waiting";
+        return "";
     }
     return view->title;
 }

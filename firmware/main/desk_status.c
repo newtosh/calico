@@ -34,7 +34,16 @@ desk_glance_t desk_glance(const char *phase, int failures, int wifi_has_ip, int 
         out.text = phase;
         return out;
     }
-    if (failures >= 3 || same_text(phase, "link down") || wifi_gave_up) {
+    if (failures >= 3 || same_text(phase, "link down")) {
+        out.lamp = DESK_LAMP_RED;
+        out.text = "link down";
+        return out;
+    }
+    /* Give-up stays set when the lease is kept: GOT_IP does not fire again. */
+    if (wifi_has_ip && failures == 0) {
+        return out;
+    }
+    if (wifi_gave_up && !wifi_has_ip) {
         out.lamp = DESK_LAMP_RED;
         out.text = "link down";
         return out;
@@ -44,7 +53,7 @@ desk_glance_t desk_glance(const char *phase, int failures, int wifi_has_ip, int 
         out.text = "reconnecting";
         return out;
     }
-    if (!wifi_has_ip || wifi_retries > 0) {
+    if (!wifi_has_ip) {
         out.lamp = DESK_LAMP_AMBER;
     }
     return out;

@@ -1,6 +1,6 @@
 # Firmware
 
-ESP-IDF app for the Waveshare ESP32-S3-Touch-AMOLED-2.16. It polls `GET {companion}/api/status`. Up to six agents are rows under the title. IDLE / RUNNING / NEEDS YOU show as the status-bar lamp and a short toast. NEEDS YOU still takes the whole screen. Each row is a 24px mark: `color` (`#RRGGBB`) and `shape` (`circle`, `square`, `diamond`, `triangle`) from the status JSON. A missing or unusable value is one neutral circle, `#a39b88`. Icons are not drawn on the panel. A tap on the alert POSTs `/api/dismiss`. Settings are stored in NVS namespace `desk`: a list of known networks plus a global companion URL and bearer token. The Mic button only shows `Voice not in this PoC`.
+ESP-IDF app for the Waveshare ESP32-S3-Touch-AMOLED-2.16. It polls `GET {companion}/api/status`. Up to six agents are rows under the title. IDLE / RUNNING / NEEDS YOU show as the status-bar lamp and a short toast. NEEDS YOU still takes the whole screen. Each row is a 24px mark: `color` (`#RRGGBB`) and `shape` (`circle`, `square`, `diamond`, `triangle`) from the status JSON. A missing or unusable value is one neutral circle, `#a39b88`. Agent icons are not drawn on the panel. A tap on the alert POSTs `/api/dismiss`. Settings are stored in NVS namespace `desk`: a list of known networks plus a global companion URL and bearer token. The Mic button is a dimmed icon and only shows `Voice not in this PoC`.
 
 ## Flash
 
@@ -37,15 +37,17 @@ At boot the panel scans and joins whichever saved SSID is actually in range. If 
 
 ## Status bar
 
-A 32px bar sits inside the 16px bezel, on the same darker strip (`#0c0e09`) as the bottom dock. Its center reads `grokbot-buddy` until a status toast replaces that label, then the name comes back. Title and agent rows start just below the bar. That title is the last event's title, or `Waiting` when the event is a dismiss acknowledgement. A note, a launch, and a needs-you question keep theirs. Mic, the running count, and Settings sit on that same strip inside the same bezel. Mic stays 148×64 and Settings stays 204×64, both Montserrat 24. The running count stays Montserrat 28. Agent titles and marks stay 24px.
+The top strip and the bottom strip are `#0c0e09` and run to the 480px edges of the glass. Lamp, toast, the resting `grokbot-buddy` label, Wi-Fi, struck-through BT, Auto, the running count, Mic, and Settings stay inside the 16px bezel. The center of the bar reads `grokbot-buddy` until a status toast replaces that label, then the name comes back. Title and agent rows start just below the bar. That title is the last event's title. With no useful title, including a dismiss acknowledgement, the headline is empty. A note, a launch, and a needs-you question keep theirs. Mic and Settings are icon buttons, Lucide `mic` and `settings` as 40px alpha bitmaps. Mic stays 148×64 and is dimmed; it still only shows `Voice not in this PoC`. Settings stays 204×64 and opens settings. The running count stays Montserrat 28. Agent titles and marks stay 24px.
 
 The left lamp uses the phase label plus the poll-failure count and the Wi-Fi facts the STA path already tracks:
 
 | State | Lamp |
 | --- | --- |
-| `IDLE`, `RUNNING`, or `NEEDS YOU`, Wi-Fi has an IP, no retries, zero missed polls | Green `#9bb57a` |
-| Still joining, STA reconnecting (retries before the existing cap), or 1–2 missed polls | Amber `#e2a23a` |
-| `NO NETWORK`, `SCAN FAILED`, `link down` (3 missed polls), or Wi-Fi gave up after that cap | Red `#c4544a` |
+| IP is up, zero missed polls, phase `IDLE`, `RUNNING`, or `NEEDS YOU` | Green `#9bb57a` |
+| Still joining, STA reconnecting before the cap, or 1–2 missed polls | Amber `#e2a23a` |
+| `NO NETWORK`, `SCAN FAILED`, 3 missed polls, or Wi-Fi gave up with no address | Red `#c4544a` |
+
+A stale STA give-up does not override a poll that just succeeded while the station still has an address. Misses before a DHCP lease are not counted. A pushed panel URL is stored only when that URL answers, so a stale address does not replace the host the panel just reached.
 
 `NEEDS YOU` is green. The companion answered; the full-screen alert still covers the bar. A short toast slides into the center of the bar when that status text changes (`IDLE` → `RUNNING`, `reconnecting`, `link down`, and the panel notes). One line is on screen and one can wait. A newer one replaces the waiter. It does not cover the alert.
 

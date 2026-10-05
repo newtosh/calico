@@ -1,6 +1,7 @@
 #include "ui.h"
 
 #include "desk_status.h"
+#include "icons.h"
 #include "lvgl.h"
 
 #include <stdint.h>
@@ -466,6 +467,26 @@ static lv_obj_t *make_field(lv_obj_t *parent, const char *name, const char *plac
     return ta;
 }
 
+static lv_obj_t *icon_button(lv_obj_t *parent, const lv_image_dsc_t *icon, lv_event_cb_t cb, int dim) {
+    lv_obj_t *btn = lv_button_create(parent);
+    lv_obj_t *img = lv_image_create(btn);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(dim ? 0x24261f : 0x3a3d32), 0);
+    lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(btn, lv_color_hex(FIELD_EDGE), 0);
+    lv_obj_set_style_border_width(btn, 1, 0);
+    lv_obj_set_style_border_opa(btn, dim ? LV_OPA_40 : LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(btn, 6, 0);
+    lv_obj_set_style_shadow_width(btn, 0, 0);
+    lv_obj_set_style_pad_all(btn, 0, 0);
+    lv_image_set_src(img, icon);
+    lv_obj_set_style_image_recolor(img, lv_color_hex(INK), 0);
+    lv_obj_set_style_image_recolor_opa(img, dim ? LV_OPA_50 : LV_OPA_COVER, 0);
+    lv_obj_center(img);
+    lv_obj_clear_flag(img, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
+    return btn;
+}
+
 static lv_obj_t *action_button(lv_obj_t *parent, const char *text, lv_event_cb_t cb) {
     lv_obj_t *btn = lv_button_create(parent);
     lv_obj_t *label = lv_label_create(btn);
@@ -740,9 +761,13 @@ static void build_status_bar(lv_obj_t *screen) {
     lv_obj_t *bar;
     static const int heights[3] = {6, 10, 14};
     bar = lv_obj_create(screen);
-    lv_obj_set_size(bar, SCREEN_PX - (EDGE_PX * 2), BAR_H);
-    lv_obj_align(bar, LV_ALIGN_TOP_MID, 0, EDGE_PX);
+    /* Strip meets the glass. Lamp and labels stay inside the 16px bezel. */
+    lv_obj_set_size(bar, SCREEN_PX, EDGE_PX + BAR_H);
+    lv_obj_align(bar, LV_ALIGN_TOP_MID, 0, 0);
     flatten(bar);
+    lv_obj_set_style_pad_top(bar, EDGE_PX, 0);
+    lv_obj_set_style_pad_left(bar, EDGE_PX, 0);
+    lv_obj_set_style_pad_right(bar, EDGE_PX, 0);
     lv_obj_set_style_bg_color(bar, lv_color_hex(DOCK), 0);
     lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
     lv_obj_add_flag(bar, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
@@ -862,8 +887,8 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     build_agent_rows(screen);
     build_sleep(screen);
     dock = lv_obj_create(screen);
-    lv_obj_set_size(dock, SCREEN_PX - (EDGE_PX * 2), COUNT_H + COUNT_GAP + BTN_H);
-    lv_obj_align(dock, LV_ALIGN_BOTTOM_MID, 0, -EDGE_PX);
+    lv_obj_set_size(dock, SCREEN_PX, COUNT_H + COUNT_GAP + BTN_H + EDGE_PX);
+    lv_obj_align(dock, LV_ALIGN_BOTTOM_MID, 0, 0);
     flatten(dock);
     lv_obj_set_style_bg_color(dock, lv_color_hex(DOCK), 0);
     lv_obj_set_style_bg_opa(dock, LV_OPA_COVER, 0);
@@ -872,13 +897,11 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_set_style_text_font(s_count, &lv_font_montserrat_28, 0);
     lv_obj_set_style_text_color(s_count, lv_color_hex(ROW_MARK), 0);
     lv_obj_align(s_count, LV_ALIGN_BOTTOM_MID, 0, -(EDGE_PX + BTN_H + COUNT_GAP));
-    mic = action_button(screen, "Mic", on_mic);
+    mic = icon_button(screen, &desk_icon_mic, on_mic, 1);
     lv_obj_set_size(mic, BTN_MIC_W, BTN_H);
-    lv_obj_set_style_text_font(lv_obj_get_child(mic, 0), &lv_font_montserrat_24, 0);
     lv_obj_align(mic, LV_ALIGN_BOTTOM_LEFT, EDGE_PX, -EDGE_PX);
-    settings_btn = action_button(screen, "Settings", on_open_settings);
+    settings_btn = icon_button(screen, &desk_icon_settings, on_open_settings, 0);
     lv_obj_set_size(settings_btn, BTN_SET_W, BTN_H);
-    lv_obj_set_style_text_font(lv_obj_get_child(settings_btn, 0), &lv_font_montserrat_24, 0);
     lv_obj_align(settings_btn, LV_ALIGN_BOTTOM_RIGHT, -EDGE_PX, -EDGE_PX);
 
     s_alert = lv_obj_create(screen);
@@ -1089,8 +1112,11 @@ void ui_show_networks(const net_ap_t *aps, int count) {
 void ui_apply(const desk_view_t *view, int failures) {
     char count[32];
     int i;
+    const char *headline;
     int lamp = present_status(desk_phase_label(view, failures), failures);
-    lv_label_set_text(s_title, desk_face_title(view));
+    headline = desk_face_title(view);
+    lv_label_set_text(s_title, headline);
+    lv_obj_set_hidden(s_title, headline[0] == '\0');
     if (s_mic_hold > 0) {
         s_mic_hold--;
     } else {

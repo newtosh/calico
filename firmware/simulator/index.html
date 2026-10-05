@@ -17,16 +17,19 @@
         width: 480px;
         height: 480px;
         box-sizing: border-box;
-        padding: 16px;
+        padding: 0;
         border-radius: 48px;
+        overflow: hidden;
         background: #14160f;
         display: flex;
         flex-direction: column;
-        align-items: center;
+        align-items: stretch;
       }
       #bar {
         width: 100%;
-        height: 32px;
+        height: 48px;
+        box-sizing: border-box;
+        padding: 16px 16px 0;
         flex: none;
         display: flex;
         align-items: center;
@@ -143,6 +146,16 @@
       #panel.needs #bar {
         visibility: hidden;
       }
+      #face {
+        flex: 1;
+        min-height: 0;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0 16px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
       #title,
       #message,
       #count {
@@ -151,8 +164,12 @@
       }
       #title {
         margin: 4px 0 0;
+        min-height: 24px;
         font-size: 24px;
         line-height: 1;
+      }
+      #title:empty {
+        visibility: hidden;
       }
       #message {
         margin: 4px 0 0;
@@ -206,6 +223,8 @@
       }
       #chrome {
         width: 100%;
+        box-sizing: border-box;
+        padding: 0 16px 16px;
         background: #0c0e09;
       }
       #panel.needs #chrome {
@@ -226,15 +245,24 @@
       #mic,
       #settings {
         height: 64px;
-        font-size: 24px;
-        line-height: 1;
-        padding: 0 16px;
+        padding: 0;
+        display: grid;
+        place-items: center;
+        color: #efe7d6;
+      }
+      #mic svg,
+      #settings svg {
+        width: 40px;
+        height: 40px;
       }
       #mic {
-        min-width: 148px;
+        width: 148px;
+        background: #24261f;
+        border-color: rgba(109, 103, 86, 0.4);
+        color: rgba(239, 231, 214, 0.5);
       }
       #settings {
-        min-width: 204px;
+        width: 204px;
       }
       #sleeper {
         display: none;
@@ -334,18 +362,31 @@
           <button id="rotlock" type="button" aria-pressed="false">Auto</button>
         </div>
       </div>
-      <p id="title">Waiting</p>
+      <div id="face">
+      <p id="title"></p>
       <p id="message"></p>
       <div id="sleeper" aria-hidden="true">
         <div class="face"><i></i><i></i></div>
         <b>Zzz</b>
       </div>
       <div id="agents"></div>
+      </div>
       <div id="chrome">
         <p id="count">0 running</p>
         <div id="dock">
-          <button id="mic" type="button">Mic</button>
-          <button id="settings" type="button">Settings</button>
+          <button id="mic" type="button" aria-label="Mic">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" x2="12" y1="19" y2="22" />
+            </svg>
+          </button>
+          <button id="settings" type="button" aria-label="Settings">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
         </div>
       </div>
     </div>
@@ -406,8 +447,8 @@
       }
 
       function faceTitle(event) {
-        if (!event || (event.title === "Dismissed" && !event.message)) return "Waiting";
-        return event.title || event.message || "Waiting";
+        if (!event || !event.title || (event.title === "Dismissed" && !event.message)) return "";
+        return event.title;
       }
 
       function label(status) {

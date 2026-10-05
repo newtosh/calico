@@ -116,12 +116,26 @@ static void request_scan(void) {
 /* URL and token ride the status poll the panel already makes. This writes
  * only the global url and token. Wi-Fi passwords are not on this path.
  * A failed poll never gets here. */
+static int probe_url(const char *url, const char *token) {
+    desk_settings_t trial;
+    char scratch[8];
+    memset(&trial, 0, sizeof(trial));
+    copy_setting(trial.url, sizeof(trial.url), url);
+    copy_setting(trial.token, sizeof(trial.token), token);
+    return net_fetch_status(&trial, scratch, sizeof(scratch)) == 0;
+}
+
 static void apply_panel_push(const char *body) {
     desk_panel_t panel;
-    if (desk_panel_from_json(body, &panel) != 0) {
+    int answers = 1;
+    if (desk_panel_from_json(body, &panel) != 0 || !panel.present) {
         return;
     }
-    if (!desk_panel_should_apply(&panel, s_store.url, s_store.token)) {
+    /* A pushed URL on another host is stored only if that host answers. */
+    if (strcmp(panel.url, s_store.url) != 0) {
+        answers = probe_url(panel.url, panel.token_set ? panel.token : s_store.token);
+    }
+    if (!desk_panel_adopt(&panel, s_store.url, s_store.token, answers)) {
         return;
     }
     copy_setting(s_store.url, sizeof(s_store.url), panel.url);
@@ -141,6 +155,7 @@ static void poll_task(void *arg) {
     while (1) {
         desk_view_t next;
         if (net_fetch_status(&s_active, s_status_body, sizeof(s_status_body)) == 0) {
+            net_mark_reachable();
             apply_panel_push(s_status_body);
             if (desk_view_from_json(s_status_body, &next) == 0) {
                 s_failures = 0;
@@ -148,8 +163,13 @@ static void poll_task(void *arg) {
             } else if (s_failures < 3) {
                 s_failures++;
             }
-        } else if (s_failures < 3) {
-            s_failures++;
+        } else {
+            net_link_t link;
+            net_link(&link);
+            /* Misses before a lease are the join, not a dead companion. */
+            if (link.has_ip && s_failures < 3) {
+                s_failures++;
+            }
         }
         if (lock_lvgl()) {
             publish_link();

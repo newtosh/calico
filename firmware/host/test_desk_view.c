@@ -48,8 +48,8 @@ int main(void) {
         "{\"phase\":\"idle\",\"needs_you\":false,\"agents\":[],\"last_event\":null,\"events\":[]}";
     check(desk_view_from_json(idle, &view) == 0, "idle parse");
     check(view.title[0] == '\0', "empty title");
-    check(strcmp(desk_face_title(&view), "Waiting") == 0, "empty headline");
-    check(strcmp(desk_face_title(NULL), "Waiting") == 0, "null headline");
+    check(desk_face_title(&view)[0] == '\0', "empty headline");
+    check(desk_face_title(NULL)[0] == '\0', "null headline");
     check(strcmp(desk_phase_label(&view, 0), "IDLE") == 0, "idle label");
     check(desk_quiet_idle(&view, 0) == 1, "idle is quiet");
     check(desk_quiet_idle(&view, 2) == 1, "two misses still quiet");
@@ -103,6 +103,11 @@ int main(void) {
     check(desk_panel_from_json(cleared, &panel) == 0, "clear token parse");
     check(panel.token_set == 1 && panel.token[0] == '\0', "empty token");
     check(desk_panel_should_apply(&panel, "http://192.168.4.30:8787", "desk-secret") == 1, "clear token");
+    check(desk_panel_adopt(&panel, "http://192.168.4.30:8787", "desk-secret", 0) == 1, "same host needs no probe");
+    check(desk_panel_from_json(pushed, &panel) == 0, "adopt panel again");
+    check(desk_panel_adopt(&panel, "http://10.0.0.8:8787", "desk-secret", 0) == 0, "dead push stays put");
+    check(desk_panel_adopt(&panel, "http://10.0.0.8:8787", "desk-secret", 1) == 1, "live push is stored");
+    check(desk_panel_adopt(&panel, "http://192.168.4.30:8787", "desk-secret", 0) == 0, "same pair is not a push");
 
     const char *decoy =
         "{\"phase\":\"idle\",\"last_event\":{\"message\":\"see \\\"panel\\\": "
@@ -153,7 +158,7 @@ int main(void) {
         "\"message\":\"\"},\"events\":[]}";
     check(desk_view_from_json(dismissed, &view) == 0, "dismiss parse");
     check(strcmp(view.title, "Dismissed") == 0, "raw dismiss title");
-    check(strcmp(desk_face_title(&view), "Waiting") == 0, "dismiss is not the headline");
+    check(desk_face_title(&view)[0] == '\0', "dismiss is not the headline");
     check(view.message[0] == '\0', "dismiss has no message");
 
     const char *note =

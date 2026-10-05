@@ -6,11 +6,14 @@
  * face, the poll-failure count, and the Wi-Fi facts net.c already tracks.
  * First match wins:
  *   NO NETWORK / SCAN FAILED                         red, that label
- *   failures >= 3, label "link down", or Wi-Fi gave up   red, "link down"
+ *   failures >= 3, or label "link down"              red, "link down"
+ *   IP up and zero misses                            green, that label
+ *   Wi-Fi gave up and there is no IP                 red, "link down"
  *   STA retries in progress, or failures 1-2         amber, "reconnecting"
  *   no IP yet                                        amber, phase label kept
- *   IP up and a clean IDLE / RUNNING / NEEDS YOU     green, that label
- * NEEDS YOU is green: the companion answered.
+ * A STA give-up or a leftover retry count does not override a poll that
+ * just succeeded while the station still has an address. NEEDS YOU is
+ * green: the companion answered.
  */
 
 enum {

@@ -32,6 +32,8 @@ void net_save_globals(const char *url, const char *token);
 void net_rotlock_load(char *out, size_t out_len);
 void net_rotlock_save(const char *value);
 void net_link(net_link_t *out);
+/* A status poll completed. The STA give-up latch is stale. */
+void net_mark_reachable(void);
 void net_wifi_start(const desk_settings_t *in);
 int net_wifi_scan(net_ap_t *out, int max_out);
 /* 0 and fills chosen, 1 if no saved network is in range, -1 if the scan failed. */
