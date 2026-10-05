@@ -299,14 +299,41 @@ int desk_mark_color(const char *color, uint32_t *out) {
 }
 
 int desk_mark_shape(const char *shape) {
-    if (shape && strcasecmp(shape, "square") == 0) {
-        return DESK_SHAPE_SQUARE;
+    static const struct {
+        const char *name;
+        int kind;
+    } names[] = {
+        {"blob", DESK_SHAPE_BLOB},
+        {"capsule", DESK_SHAPE_PILL},
+        {"cloud", DESK_SHAPE_CLOUD},
+        {"clover", DESK_SHAPE_FLOWER},
+        {"diamond", DESK_SHAPE_DIAMOND},
+        {"drop", DESK_SHAPE_DROP},
+        {"flower", DESK_SHAPE_FLOWER},
+        {"gear", DESK_SHAPE_SUN},
+        {"heart", DESK_SHAPE_HEART},
+        {"hex", DESK_SHAPE_HEXAGON},
+        {"hexagon", DESK_SHAPE_HEXAGON},
+        {"pentagon", DESK_SHAPE_PENTAGON},
+        {"pill", DESK_SHAPE_PILL},
+        {"rounded", DESK_SHAPE_ROUNDED},
+        {"rounded_square", DESK_SHAPE_ROUNDED},
+        {"shield", DESK_SHAPE_PENTAGON},
+        {"splatter", DESK_SHAPE_BLOB},
+        {"square", DESK_SHAPE_SQUARE},
+        {"star", DESK_SHAPE_STAR},
+        {"sun", DESK_SHAPE_SUN},
+        {"teardrop", DESK_SHAPE_DROP},
+        {"triangle", DESK_SHAPE_TRIANGLE},
+    };
+    size_t i;
+    if (!shape) {
+        return DESK_SHAPE_CIRCLE;
     }
-    if (shape && strcasecmp(shape, "diamond") == 0) {
-        return DESK_SHAPE_DIAMOND;
-    }
-    if (shape && strcasecmp(shape, "triangle") == 0) {
-        return DESK_SHAPE_TRIANGLE;
+    for (i = 0; i < sizeof(names) / sizeof(names[0]); i++) {
+        if (strcasecmp(shape, names[i].name) == 0) {
+            return names[i].kind;
+        }
     }
     return DESK_SHAPE_CIRCLE;
 }

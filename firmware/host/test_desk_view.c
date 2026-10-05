@@ -131,7 +131,7 @@ int main(void) {
         "{\"phase\":\"running\",\"needs_you\":false,\"agents\":["
         "{\"id\":\"a1\",\"title\":\"Scaffold\",\"color\":\"#C45C26\",\"shape\":\"diamond\"},"
         "{\"id\":\"a2\",\"title\":\"\",\"color\":\"\",\"shape\":\"\"},"
-        "{\"id\":\"a3\",\"title\":\"Hex\",\"color\":\"coral\",\"shape\":\"hexagon\"},"
+        "{\"id\":\"a3\",\"title\":\"Hex\",\"color\":\"coral\",\"shape\":\"nope\"},"
         "{\"id\":\"a4\",\"title\":\"Sq\",\"color\":\"224466\",\"shape\":\"square\"},"
         "{\"id\":\"a5\",\"title\":\"Tri\",\"color\":\"#112233\",\"shape\":\"triangle\"},"
         "{\"id\":\"a6\",\"title\":\"Circ\",\"color\":\"#abcdef\",\"shape\":\"circle\"},"
@@ -162,6 +162,46 @@ int main(void) {
     check(desk_mark_color(NULL, &color) == -1, "null color");
     check(desk_mark_shape(NULL) == DESK_SHAPE_CIRCLE, "null shape");
     check(desk_mark_shape("Diamond") == DESK_SHAPE_DIAMOND, "shape case");
+    {
+        static const struct {
+            const char *name;
+            int kind;
+        } shapes[] = {
+            {"cloud", DESK_SHAPE_CLOUD},
+            {"rounded", DESK_SHAPE_ROUNDED},
+            {"rounded_square", DESK_SHAPE_ROUNDED},
+            {"Rounded_Square", DESK_SHAPE_ROUNDED},
+            {"star", DESK_SHAPE_STAR},
+            {"flower", DESK_SHAPE_FLOWER},
+            {"clover", DESK_SHAPE_FLOWER},
+            {"heart", DESK_SHAPE_HEART},
+            {"blob", DESK_SHAPE_BLOB},
+            {"splatter", DESK_SHAPE_BLOB},
+            {"drop", DESK_SHAPE_DROP},
+            {"teardrop", DESK_SHAPE_DROP},
+            {"pill", DESK_SHAPE_PILL},
+            {"capsule", DESK_SHAPE_PILL},
+            {"pentagon", DESK_SHAPE_PENTAGON},
+            {"shield", DESK_SHAPE_PENTAGON},
+            {"sun", DESK_SHAPE_SUN},
+            {"gear", DESK_SHAPE_SUN},
+            {"hex", DESK_SHAPE_HEXAGON},
+            {"hexagon", DESK_SHAPE_HEXAGON},
+            {"circle", DESK_SHAPE_CIRCLE},
+            {"nope", DESK_SHAPE_CIRCLE},
+        };
+        int i;
+        for (i = 0; i < (int)(sizeof(shapes) / sizeof(shapes[0])); i++) {
+            char msg[48];
+            snprintf(msg, sizeof(msg), "shape %s", shapes[i].name);
+            check(desk_mark_shape(shapes[i].name) == shapes[i].kind, msg);
+        }
+    }
+    const char *rounded =
+        "{\"phase\":\"idle\",\"agents\":[{\"id\":\"r\",\"title\":\"Round\",\"shape\":\"rounded_square\"}]}";
+    check(desk_view_from_json(rounded, &view) == 0, "rounded parse");
+    check(strcmp(view.agents[0].shape, "rounded_square") == 0, "rounded square kept");
+    check(desk_mark_shape(view.agents[0].shape) == DESK_SHAPE_ROUNDED, "rounded square kind");
 
     const char *dismissed =
         "{\"phase\":\"running\",\"needs_you\":false,\"agents\":["

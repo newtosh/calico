@@ -142,6 +142,63 @@ static void style_text(lv_obj_t *label) {
     lv_obj_set_style_text_font(label, &lv_font_montserrat_16, 0);
 }
 
+static void paint_triangle(lv_draw_triangle_dsc_t *dsc, lv_color_t color) {
+    lv_draw_triangle_dsc_init(dsc);
+#if LVGL_VERSION_MAJOR == 9 && LVGL_VERSION_MINOR < 3
+    dsc->bg_color = color;
+    dsc->bg_opa = LV_OPA_COVER;
+#else
+    dsc->color = color;
+    dsc->opa = LV_OPA_COVER;
+#endif
+}
+
+static void fill_tri(lv_layer_t *layer, lv_draw_triangle_dsc_t *dsc, int x0, int y0, int x1, int y1,
+                     int x2, int y2) {
+    dsc->p[0].x = x0;
+    dsc->p[0].y = y0;
+    dsc->p[1].x = x1;
+    dsc->p[1].y = y1;
+    dsc->p[2].x = x2;
+    dsc->p[2].y = y2;
+    lv_draw_triangle(layer, dsc);
+}
+
+/* Fan from the box center. Every polygon here is visible from that point. */
+static void fill_poly(lv_layer_t *layer, lv_draw_triangle_dsc_t *dsc, const lv_area_t *box,
+                      const int8_t *xy, int n) {
+    int i;
+    int cx = (box->x1 + box->x2) / 2;
+    int cy = (box->y1 + box->y2) / 2;
+    for (i = 0; i < n; i++) {
+        int j = (i + 1) % n;
+        fill_tri(layer, dsc, cx, cy, box->x1 + xy[2 * i], box->y1 + xy[2 * i + 1],
+                 box->x1 + xy[2 * j], box->y1 + xy[2 * j + 1]);
+    }
+}
+
+static void fill_round(lv_layer_t *layer, lv_color_t color, int x, int y, int w, int h) {
+    lv_draw_rect_dsc_t dsc;
+    lv_area_t area;
+    lv_draw_rect_dsc_init(&dsc);
+    dsc.bg_color = color;
+    dsc.bg_opa = LV_OPA_COVER;
+    dsc.radius = LV_RADIUS_CIRCLE;
+    area.x1 = x;
+    area.y1 = y;
+    area.x2 = x + w - 1;
+    area.y2 = y + h - 1;
+    lv_draw_rect(layer, &dsc, &area);
+}
+
+static const int8_t k_star[] = {12, 0, 14, 9, 22, 12, 14, 14, 12, 22, 9, 14, 0, 12, 9, 9};
+static const int8_t k_blob[] = {12, 0,  16, 4,  20, 6,  18, 12, 21, 17, 16, 18,
+                                12, 18, 7,  20, 5,  15, 0,  12, 4,  7,  8,  5};
+static const int8_t k_pentagon[] = {12, 0, 22, 8, 18, 20, 5, 20, 1, 8};
+static const int8_t k_sun[] = {12, 0,  14, 5,  19, 4,  18, 9,  22, 12, 18, 14, 19, 19, 14, 18,
+                               12, 22, 9,  18, 4,  19, 5,  14, 0,  12, 5,  9,  4,  4,  9,  5};
+static const int8_t k_hexagon[] = {12, 0, 21, 6, 21, 17, 12, 22, 2, 17, 2, 6};
+
 static void draw_mark(lv_event_t *event) {
     lv_obj_t *obj = lv_event_get_target(event);
     intptr_t shape = (intptr_t)lv_obj_get_user_data(obj);
@@ -149,9 +206,11 @@ static void draw_mark(lv_event_t *event) {
     lv_area_t area;
     lv_draw_triangle_dsc_t dsc;
     lv_color_t color;
+    int x;
+    int y;
     int cx;
     int cy;
-    if (shape != DESK_SHAPE_DIAMOND && shape != DESK_SHAPE_TRIANGLE) {
+    if (shape == DESK_SHAPE_CIRCLE || shape == DESK_SHAPE_SQUARE || shape == DESK_SHAPE_ROUNDED) {
         return;
     }
     layer = lv_event_get_layer(event);
@@ -160,50 +219,79 @@ static void draw_mark(lv_event_t *event) {
     }
     lv_obj_get_coords(obj, &area);
     color = lv_obj_get_style_bg_color(obj, LV_PART_MAIN);
+    paint_triangle(&dsc, color);
+    x = area.x1;
+    y = area.y1;
     cx = (area.x1 + area.x2) / 2;
     cy = (area.y1 + area.y2) / 2;
-    lv_draw_triangle_dsc_init(&dsc);
-#if LVGL_VERSION_MAJOR == 9 && LVGL_VERSION_MINOR < 3
-    dsc.bg_color = color;
-    dsc.bg_opa = LV_OPA_COVER;
-#else
-    dsc.color = color;
-    dsc.opa = LV_OPA_COVER;
-#endif
     if (shape == DESK_SHAPE_TRIANGLE) {
-        dsc.p[0].x = cx;
-        dsc.p[0].y = area.y1;
-        dsc.p[1].x = area.x1;
-        dsc.p[1].y = area.y2;
-        dsc.p[2].x = area.x2;
-        dsc.p[2].y = area.y2;
-        lv_draw_triangle(layer, &dsc);
+        fill_tri(layer, &dsc, cx, area.y1, area.x1, area.y2, area.x2, area.y2);
         return;
     }
-    dsc.p[0].x = cx;
-    dsc.p[0].y = area.y1;
-    dsc.p[1].x = area.x2;
-    dsc.p[1].y = cy;
-    dsc.p[2].x = cx;
-    dsc.p[2].y = area.y2;
-    lv_draw_triangle(layer, &dsc);
-    dsc.p[1].x = area.x1;
-    lv_draw_triangle(layer, &dsc);
+    if (shape == DESK_SHAPE_DIAMOND) {
+        fill_tri(layer, &dsc, cx, area.y1, area.x2, cy, cx, area.y2);
+        fill_tri(layer, &dsc, cx, area.y1, area.x1, cy, cx, area.y2);
+        return;
+    }
+    if (shape == DESK_SHAPE_CLOUD) {
+        fill_round(layer, color, x + 1, y + 10, 14, 14);
+        fill_round(layer, color, x + 8, y + 8, 15, 15);
+        fill_round(layer, color, x + 5, y + 3, 11, 11);
+        fill_round(layer, color, x + 12, y + 4, 10, 10);
+        return;
+    }
+    if (shape == DESK_SHAPE_FLOWER) {
+        fill_round(layer, color, x + 1, y + 1, 12, 12);
+        fill_round(layer, color, x + 11, y + 1, 12, 12);
+        fill_round(layer, color, x + 1, y + 11, 12, 12);
+        fill_round(layer, color, x + 11, y + 11, 12, 12);
+        return;
+    }
+    if (shape == DESK_SHAPE_HEART) {
+        fill_round(layer, color, x + 1, y + 3, 12, 12);
+        fill_round(layer, color, x + 11, y + 3, 12, 12);
+        fill_tri(layer, &dsc, x + 2, y + 10, x + 22, y + 10, x + 12, y + 22);
+        return;
+    }
+    if (shape == DESK_SHAPE_DROP) {
+        fill_round(layer, color, x + 4, y + 8, 16, 16);
+        fill_tri(layer, &dsc, x + 12, y + 1, x + 4, y + 14, x + 20, y + 14);
+        return;
+    }
+    if (shape == DESK_SHAPE_PILL) {
+        fill_round(layer, color, x + 5, y + 1, 14, 22);
+        return;
+    }
+    if (shape == DESK_SHAPE_STAR) {
+        fill_poly(layer, &dsc, &area, k_star, (int)(sizeof(k_star) / 2));
+    } else if (shape == DESK_SHAPE_BLOB) {
+        fill_poly(layer, &dsc, &area, k_blob, (int)(sizeof(k_blob) / 2));
+    } else if (shape == DESK_SHAPE_PENTAGON) {
+        fill_poly(layer, &dsc, &area, k_pentagon, (int)(sizeof(k_pentagon) / 2));
+    } else if (shape == DESK_SHAPE_SUN) {
+        fill_poly(layer, &dsc, &area, k_sun, (int)(sizeof(k_sun) / 2));
+    } else if (shape == DESK_SHAPE_HEXAGON) {
+        fill_poly(layer, &dsc, &area, k_hexagon, (int)(sizeof(k_hexagon) / 2));
+    }
 }
 
 static void apply_mark(lv_obj_t *mark, uint32_t color, int shape) {
+    int radius = 0;
+    lv_opa_t opa = LV_OPA_TRANSP;
     lv_obj_set_style_bg_color(mark, lv_color_hex(color), 0);
     lv_obj_set_user_data(mark, (void *)(intptr_t)shape);
     if (shape == DESK_SHAPE_SQUARE) {
-        lv_obj_set_style_radius(mark, 2, 0);
-        lv_obj_set_style_bg_opa(mark, LV_OPA_COVER, 0);
+        radius = 2;
+        opa = LV_OPA_COVER;
+    } else if (shape == DESK_SHAPE_ROUNDED) {
+        radius = 6;
+        opa = LV_OPA_COVER;
     } else if (shape == DESK_SHAPE_CIRCLE) {
-        lv_obj_set_style_radius(mark, LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_bg_opa(mark, LV_OPA_COVER, 0);
-    } else {
-        lv_obj_set_style_radius(mark, 0, 0);
-        lv_obj_set_style_bg_opa(mark, LV_OPA_TRANSP, 0);
+        radius = LV_RADIUS_CIRCLE;
+        opa = LV_OPA_COVER;
     }
+    lv_obj_set_style_radius(mark, radius, 0);
+    lv_obj_set_style_bg_opa(mark, opa, 0);
     lv_obj_invalidate(mark);
 }
 

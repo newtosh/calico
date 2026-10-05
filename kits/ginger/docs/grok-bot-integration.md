@@ -25,10 +25,52 @@ Send `Authorization: Bearer <token>` when `webhook_token` is set. Leave the head
 | `title`, `message` | Shown on the panel. Either may be empty. |
 | `source` | Optional. Defaults to `grok-bot`. The inject buttons send `manual`. |
 | `color` | Optional. `#RRGGBB` or `RRGGBB`. Drawn as the row’s accent. Any other value is stored and shown with the neutral mark. |
-| `shape` | Optional. `circle`, `square`, `diamond`, or `triangle`. Anything else is stored and drawn as the neutral circle. |
+| `shape` | Optional. A name from the shape table. Anything else is stored and drawn as the neutral circle. |
 | `icon` | Optional. A short name, or an `http`/`https` URL. The dashboard shows a URL as a small image and any other string as text. The panel does not draw icons. |
 
-Leave `color`, `shape`, and `icon` off when you have nothing to send. An empty string, or a non-string, keeps the previous value for that agent. Omitted fields are not filled in from the agent id. Every session without a color and shape uses the same neutral circle, `#a39b88`.
+Leave `color`, `shape`, and `icon` off when you have nothing to send. An empty string, or a non-string, keeps the previous value for that agent. Omitted fields are not filled in from the agent id. Every session without a color and shape uses the same neutral circle, `#a39b88`. The companion stores a shape string as sent (clipped and lowercased) and does not drop names it does not draw.
+
+### Shapes
+
+The panel draws a filled 24px silhouette. The picker glyphs also have a pair of eyes; those are left off at this size. `square` and `diamond` are the marks this desk already drew. `rounded_square` is the picker squircle.
+
+| `shape` | Draws |
+| --- | --- |
+| `circle` | Circle |
+| `cloud` | Cloud |
+| `rounded_square`, `rounded` | Rounded square |
+| `star` | 4-point star |
+| `flower`, `clover` | Flower |
+| `heart` | Heart |
+| `blob`, `splatter` | Splatter |
+| `teardrop`, `drop` | Teardrop |
+| `pill`, `capsule` | Capsule |
+| `triangle` | Triangle |
+| `pentagon`, `shield` | Pentagon |
+| `sun`, `gear` | 8-point sun |
+| `hexagon`, `hex` | Hexagon |
+| `square` | Square, the existing mark |
+| `diamond` | Diamond, the existing mark |
+
+An unknown name, or no name, is a circle.
+
+### Colors
+
+Sampled from the center of each swatch in a Grok Bot picker screenshot, left to right, top row then bottom. These are not official tokens. Any other `#RRGGBB` still draws. Leaving `color` off does not pick a swatch; the mark stays `#a39b88`.
+
+| Swatch | Hex |
+| --- | --- |
+| White | `#ffffff` |
+| Terracotta | `#845c39` |
+| Red | `#df2638` |
+| Orange | `#ff6700` |
+| Amber | `#ff9700` |
+| Green | `#009858` |
+| Teal | `#00a491` |
+| Blue | `#1673df` |
+| Purple | `#7f4fdf` |
+| Pink | `#df2e87` |
+| Gray | `#767676` |
 
 Grok Bot’s own webhook body, as used by this companion today, has no icon, accent, or avatar. Cursor’s `GET /v1/agents` list items (`id`, `name`, `status`, `env`, `url`, `createdAt`, `updatedAt`, `latestRunId`) do not either. The poll forwards `color`, `shape`, and `icon` only when those exact string keys are present. It does not turn `url` into an icon, and it does not invent a color. A later poll that omits them leaves a webhook-set identity in place.
 

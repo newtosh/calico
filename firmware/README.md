@@ -1,6 +1,6 @@
 # Firmware
 
-ESP-IDF app for the Waveshare ESP32-S3-Touch-AMOLED-2.16. It polls `GET {companion}/api/status`. Up to six agents are rows under the title. IDLE / RUNNING / NEEDS YOU show as the status-bar lamp and a short toast. NEEDS YOU still takes the whole screen. Each row is a 24px mark: `color` (`#RRGGBB`) and `shape` (`circle`, `square`, `diamond`, `triangle`) from the status JSON. A missing or unusable value is one neutral circle, `#a39b88`. Agent icons are not drawn on the panel. A tap on the alert POSTs `/api/dismiss`. Settings are stored in NVS namespace `desk`: a list of known networks plus a global companion URL and bearer token. The Mic button is a dimmed icon and only shows `Voice not in this PoC`.
+ESP-IDF app for the Waveshare ESP32-S3-Touch-AMOLED-2.16. It polls `GET {companion}/api/status`. Up to six agents are rows under the title. IDLE / RUNNING / NEEDS YOU show as the status-bar lamp and a short toast. NEEDS YOU still takes the whole screen. Each row is a 24px mark: `color` (`#RRGGBB`) and `shape` from the status JSON. Shape names and the sampled picker palette are in [docs/grok-bot-integration.md](../docs/grok-bot-integration.md). A missing or unusable value is one neutral circle, `#a39b88`. Agent icons are not drawn on the panel. A tap on the alert POSTs `/api/dismiss`. Settings are stored in NVS namespace `desk`: a list of known networks plus a global companion URL and bearer token. The Mic button is a dimmed icon and only shows `Voice not in this PoC`.
 
 ## Flash
 

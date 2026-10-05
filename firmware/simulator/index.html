@@ -215,6 +215,39 @@
       .mark.triangle {
         clip-path: polygon(50% 0, 100% 100%, 0 100%);
       }
+      .mark.rounded {
+        border-radius: 6px;
+      }
+      .mark.pill {
+        clip-path: inset(1px 5px 1px 5px round 7px);
+      }
+      .mark.cloud {
+        clip-path: url(#mark-cloud);
+      }
+      .mark.flower {
+        clip-path: url(#mark-flower);
+      }
+      .mark.heart {
+        clip-path: url(#mark-heart);
+      }
+      .mark.drop {
+        clip-path: url(#mark-drop);
+      }
+      .mark.star {
+        clip-path: url(#mark-star);
+      }
+      .mark.blob {
+        clip-path: url(#mark-blob);
+      }
+      .mark.pentagon {
+        clip-path: url(#mark-pentagon);
+      }
+      .mark.sun {
+        clip-path: url(#mark-sun);
+      }
+      .mark.hex {
+        clip-path: url(#mark-hex);
+      }
       .agent span {
         overflow: hidden;
         text-overflow: ellipsis;
@@ -350,6 +383,46 @@
     </style>
   </head>
   <body>
+    <svg width="0" height="0" aria-hidden="true">
+      <defs>
+        <clipPath id="mark-cloud" clipPathUnits="objectBoundingBox">
+          <circle cx="0.3333" cy="0.7083" r="0.2917" />
+          <circle cx="0.6458" cy="0.6458" r="0.3125" />
+          <circle cx="0.4375" cy="0.3542" r="0.2292" />
+          <circle cx="0.7083" cy="0.375" r="0.2083" />
+        </clipPath>
+        <clipPath id="mark-flower" clipPathUnits="objectBoundingBox">
+          <circle cx="0.2917" cy="0.2917" r="0.25" />
+          <circle cx="0.7083" cy="0.2917" r="0.25" />
+          <circle cx="0.2917" cy="0.7083" r="0.25" />
+          <circle cx="0.7083" cy="0.7083" r="0.25" />
+        </clipPath>
+        <clipPath id="mark-heart" clipPathUnits="objectBoundingBox">
+          <circle cx="0.2917" cy="0.375" r="0.25" />
+          <circle cx="0.7083" cy="0.375" r="0.25" />
+          <polygon points="0.0833,0.4167 0.9167,0.4167 0.5,0.9167" />
+        </clipPath>
+        <clipPath id="mark-drop" clipPathUnits="objectBoundingBox">
+          <circle cx="0.5" cy="0.6667" r="0.3333" />
+          <polygon points="0.5,0.0417 0.1667,0.5833 0.8333,0.5833" />
+        </clipPath>
+        <clipPath id="mark-star" clipPathUnits="objectBoundingBox">
+          <polygon points="0.5000,0.0000 0.5833,0.3750 0.9167,0.5000 0.5833,0.5833 0.5000,0.9167 0.3750,0.5833 0.0000,0.5000 0.3750,0.3750" />
+        </clipPath>
+        <clipPath id="mark-blob" clipPathUnits="objectBoundingBox">
+          <polygon points="0.5000,0.0000 0.6667,0.1667 0.8333,0.2500 0.7500,0.5000 0.8750,0.7083 0.6667,0.7500 0.5000,0.7500 0.2917,0.8333 0.2083,0.6250 0.0000,0.5000 0.1667,0.2917 0.3333,0.2083" />
+        </clipPath>
+        <clipPath id="mark-pentagon" clipPathUnits="objectBoundingBox">
+          <polygon points="0.5000,0.0000 0.9167,0.3333 0.7500,0.8333 0.2083,0.8333 0.0417,0.3333" />
+        </clipPath>
+        <clipPath id="mark-sun" clipPathUnits="objectBoundingBox">
+          <polygon points="0.5000,0.0000 0.5833,0.2083 0.7917,0.1667 0.7500,0.3750 0.9167,0.5000 0.7500,0.5833 0.7917,0.7917 0.5833,0.7500 0.5000,0.9167 0.3750,0.7500 0.1667,0.7917 0.2083,0.5833 0.0000,0.5000 0.2083,0.3750 0.1667,0.1667 0.3750,0.2083" />
+        </clipPath>
+        <clipPath id="mark-hex" clipPathUnits="objectBoundingBox">
+          <polygon points="0.5000,0.0000 0.8750,0.2500 0.8750,0.7083 0.5000,0.9167 0.0833,0.7083 0.0833,0.2500" />
+        </clipPath>
+      </defs>
+    </svg>
     <div id="panel" class="asleep">
       <div id="bar">
         <i id="lamp" class="amber"></i>
@@ -437,12 +510,34 @@
         return match ? "#" + match[1] : neutral;
       }
 
+      const markShapes = {
+        square: "square",
+        diamond: "diamond",
+        triangle: "triangle",
+        cloud: "cloud",
+        rounded: "rounded",
+        rounded_square: "rounded",
+        star: "star",
+        flower: "flower",
+        clover: "flower",
+        heart: "heart",
+        blob: "blob",
+        splatter: "blob",
+        drop: "drop",
+        teardrop: "drop",
+        pill: "pill",
+        capsule: "pill",
+        pentagon: "pentagon",
+        shield: "pentagon",
+        sun: "sun",
+        gear: "sun",
+        hex: "hex",
+        hexagon: "hex",
+      };
+
       function markShape(value) {
         const key = String(value || "").trim().toLowerCase();
-        if (key === "square" || key === "diamond" || key === "triangle" || key === "circle") {
-          return key;
-        }
-        return "circle";
+        return markShapes[key] || "circle";
       }
 
       function faceTitle(event) {
