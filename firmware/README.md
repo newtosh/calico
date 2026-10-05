@@ -1,6 +1,6 @@
 # Firmware
 
-ESP-IDF app for the Waveshare ESP32-S3-Touch-AMOLED-2.16. It polls `GET {companion}/api/status` and draws IDLE / RUNNING / NEEDS YOU. Up to six agents are rows under that header. Each row is a 16px mark: `color` (`#RRGGBB`) and `shape` (`circle`, `square`, `diamond`, `triangle`) from the status JSON. A missing or unusable value is one neutral circle, `#a39b88`. Icons are not drawn on the panel. A tap on the alert POSTs `/api/dismiss`. Settings are stored in NVS namespace `desk`: a list of known networks plus a global companion URL and bearer token. The Mic button only shows `Voice not in this PoC`.
+ESP-IDF app for the Waveshare ESP32-S3-Touch-AMOLED-2.16. It polls `GET {companion}/api/status` and draws IDLE / RUNNING / NEEDS YOU. Up to six agents are rows under that header. Each row is a 24px mark: `color` (`#RRGGBB`) and `shape` (`circle`, `square`, `diamond`, `triangle`) from the status JSON. A missing or unusable value is one neutral circle, `#a39b88`. Icons are not drawn on the panel. A tap on the alert POSTs `/api/dismiss`. Settings are stored in NVS namespace `desk`: a list of known networks plus a global companion URL and bearer token. The Mic button only shows `Voice not in this PoC`.
 
 ## Flash
 
@@ -13,7 +13,7 @@ idf.py build
 idf.py -p PORT flash monitor
 ```
 
-The managed BSP is `waveshare/esp32_s3_touch_amoled_2_16` `^2.0.1` with LVGL 9, declared in `main/idf_component.yml`. `sdkconfig.defaults` matches the official LVGL example: 16 MB flash, octal PSRAM, Montserrat 16/20/24.
+The managed BSP is `waveshare/esp32_s3_touch_amoled_2_16` `^2.0.1` with LVGL 9, declared in `main/idf_component.yml`. `sdkconfig.defaults` matches the official LVGL example: 16 MB flash, octal PSRAM, Montserrat 16/20/24, plus 28 and 48 for the desk face.
 
 ## Upright
 
@@ -67,7 +67,7 @@ python3 -m pytest scripts/test_provision_wifi.py
 
 After Wi-Fi is up, a successful `GET /api/status` may include `panel` with `url` and `token`. When those differ from the global NVS url and token, the firmware writes just those two keys and restarts. Saved networks, SSIDs, and passwords are not on that path. The object is absent until the dashboard stores a push, and a failed poll does not apply it. That is separate from the `link down` label, which is three missed polls, and from `NO NETWORK`, which means a scan found none of the saved SSIDs.
 
-Dismiss the keyboard with Done, the keyboard checkmark, the keyboard hide key, or a tap outside the field. The form above the keyboard scrolls.
+Done closes settings and dismisses the keyboard. The keyboard checkmark, the keyboard hide key, or a tap outside the field dismisses the keyboard only. The form above the keyboard scrolls.
 
 ## Host checks without a board
 

@@ -13,6 +13,21 @@ enum {
     KEYBOARD_PX = 200,
     HEADER_PX = 48,
     PAD_PX = EDGE_PX,
+    /* Desk face, inside the 16px bezel. Six agent rows still clear the count. */
+    PHASE_Y = EDGE_PX,
+    TITLE_Y = 68,
+    MESSAGE_Y = 96,
+    AGENT_Y = 120,
+    AGENT_ROW_H = 34,
+    AGENT_GAP = 4,
+    AGENT_STRIDE = AGENT_ROW_H + AGENT_GAP,
+    MARK_PX = 24,
+    BTN_H = 64,
+    BTN_MIC_W = 148,
+    BTN_SET_W = 204,
+    COUNT_H = 28,
+    COUNT_GAP = 8,
+    COUNT_TOP = SCREEN_PX - EDGE_PX - BTN_H - COUNT_GAP - COUNT_H,
     INK = 0xefe7d6,
     INK_DIM = 0xa39b88,
     BG = 0x14160f,
@@ -175,11 +190,11 @@ static void apply_mark(lv_obj_t *mark, uint32_t color, int shape) {
 static void build_agent_rows(lv_obj_t *screen) {
     int i;
     s_agent_box = lv_obj_create(screen);
-    lv_obj_set_size(s_agent_box, SCREEN_PX - (EDGE_PX * 2), 34 * DESK_AGENT_MAX);
-    lv_obj_align(s_agent_box, LV_ALIGN_TOP_MID, 0, EDGE_PX + 100);
+    lv_obj_set_size(s_agent_box, SCREEN_PX - (EDGE_PX * 2), AGENT_STRIDE * DESK_AGENT_MAX);
+    lv_obj_align(s_agent_box, LV_ALIGN_TOP_MID, 0, AGENT_Y);
     lv_obj_set_flex_flow(s_agent_box, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_all(s_agent_box, 0, 0);
-    lv_obj_set_style_pad_row(s_agent_box, 4, 0);
+    lv_obj_set_style_pad_row(s_agent_box, AGENT_GAP, 0);
     lv_obj_set_style_bg_opa(s_agent_box, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(s_agent_box, 0, 0);
     lv_obj_set_style_radius(s_agent_box, 0, 0);
@@ -192,24 +207,25 @@ static void build_agent_rows(lv_obj_t *screen) {
         s_agent_marks[i] = mark;
         s_agent_labels[i] = label;
         lv_obj_set_width(row, lv_pct(100));
-        lv_obj_set_height(row, 30);
+        lv_obj_set_height(row, AGENT_ROW_H);
         lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_pad_all(row, 0, 0);
-        lv_obj_set_style_pad_column(row, 8, 0);
+        lv_obj_set_style_pad_column(row, 12, 0);
         lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(row, 0, 0);
         lv_obj_set_style_radius(row, 0, 0);
-        lv_obj_set_size(mark, 16, 16);
+        lv_obj_set_size(mark, MARK_PX, MARK_PX);
         lv_obj_set_style_border_width(mark, 0, 0);
         lv_obj_set_style_pad_all(mark, 0, 0);
         lv_obj_set_style_shadow_width(mark, 0, 0);
         lv_obj_add_event_cb(mark, draw_mark, LV_EVENT_DRAW_POST, NULL);
         apply_mark(mark, DESK_MARK_NEUTRAL, DESK_SHAPE_CIRCLE);
         lv_obj_set_flex_grow(label, 1);
-        lv_obj_set_width(label, SCREEN_PX - (EDGE_PX * 2) - 32);
+        lv_obj_set_width(label, SCREEN_PX - (EDGE_PX * 2) - MARK_PX - 16);
         lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
         style_text(label);
+        lv_obj_set_style_text_font(label, &lv_font_montserrat_24, 0);
         lv_label_set_text(label, "");
         lv_obj_set_hidden(row, true);
     }
@@ -293,6 +309,7 @@ static void on_keyboard(lv_event_t *event) {
 static void on_done(lv_event_t *event) {
     (void)event;
     hide_keyboard(1);
+    lv_obj_set_hidden(s_settings, true);
 }
 
 static void on_body_clicked(lv_event_t *event) {
@@ -492,9 +509,9 @@ static void start_anim(lv_obj_t *obj, lv_anim_exec_xcb_t exec, int32_t from, int
 
 /* Large face when the middle of the 480 panel is empty. Shrink to stay under
  * the agent rows and above the running count. 16px bezel stays. */
-static void place_sleep(int agents) {
-    int below = agents > 0 ? EDGE_PX + 100 + agents * 34 : EDGE_PX + 88;
-    int limit = SCREEN_PX - 80;
+static int place_sleep(int agents) {
+    int below = agents > 0 ? AGENT_Y + agents * AGENT_STRIDE : MESSAGE_Y + 28;
+    int limit = COUNT_TOP;
     int head = 96;
     int span = head + 36;
     int y = (below + limit - span) / 2;
@@ -508,6 +525,9 @@ static void place_sleep(int agents) {
         eye = 12;
         gap = 8;
         font = &lv_font_montserrat_16;
+        if (y + span > limit) {
+            return 0;
+        }
     }
     lv_obj_set_size(s_sleep, head + 56, span);
     lv_obj_set_size(s_head, head, head);
@@ -519,6 +539,7 @@ static void place_sleep(int agents) {
     lv_obj_align(s_head, LV_ALIGN_BOTTOM_LEFT, 0, 0);
     lv_obj_align(s_zzz, LV_ALIGN_TOP_LEFT, head - 4, 4);
     lv_obj_align(s_sleep, LV_ALIGN_TOP_MID, 0, y);
+    return 1;
 }
 
 static void sleep_stop(void) {
@@ -534,7 +555,10 @@ static void sleep_stop(void) {
 
 static void sleep_show(int agents) {
     if (!s_asleep || s_sleep_agents != agents) {
-        place_sleep(agents);
+        if (!place_sleep(agents)) {
+            sleep_stop();
+            return;
+        }
         s_sleep_agents = agents;
     }
     lv_obj_set_hidden(s_sleep, false);
@@ -596,30 +620,37 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     s_on_scan = on_scan;
     lv_obj_set_style_bg_color(screen, lv_color_hex(BG), 0);
     s_phase = lv_label_create(screen);
-    lv_obj_set_style_text_font(s_phase, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_font(s_phase, &lv_font_montserrat_48, 0);
     lv_obj_set_style_text_color(s_phase, lv_color_hex(INK), 0);
-    lv_obj_align(s_phase, LV_ALIGN_TOP_MID, 0, EDGE_PX + 4);
+    lv_obj_align(s_phase, LV_ALIGN_TOP_MID, 0, PHASE_Y);
     s_title = lv_label_create(screen);
     lv_obj_set_width(s_title, SCREEN_PX - (EDGE_PX * 2));
     lv_label_set_long_mode(s_title, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_font(s_title, &lv_font_montserrat_24, 0);
     lv_obj_set_style_text_align(s_title, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(s_title, lv_color_hex(INK), 0);
-    lv_obj_align(s_title, LV_ALIGN_TOP_MID, 0, EDGE_PX + 40);
+    lv_obj_align(s_title, LV_ALIGN_TOP_MID, 0, TITLE_Y);
     s_message = lv_label_create(screen);
     lv_obj_set_width(s_message, SCREEN_PX - (EDGE_PX * 2));
     lv_label_set_long_mode(s_message, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_font(s_message, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_align(s_message, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(s_message, lv_color_hex(INK_DIM), 0);
-    lv_obj_align(s_message, LV_ALIGN_TOP_MID, 0, EDGE_PX + 68);
+    lv_obj_align(s_message, LV_ALIGN_TOP_MID, 0, MESSAGE_Y);
     build_agent_rows(screen);
     build_sleep(screen);
     s_count = lv_label_create(screen);
+    lv_obj_set_style_text_font(s_count, &lv_font_montserrat_28, 0);
     lv_obj_set_style_text_color(s_count, lv_color_hex(ROW_MARK), 0);
-    lv_obj_align(s_count, LV_ALIGN_BOTTOM_MID, 0, -(EDGE_PX + 32));
+    lv_obj_align(s_count, LV_ALIGN_BOTTOM_MID, 0, -(EDGE_PX + BTN_H + COUNT_GAP));
     mic = action_button(screen, "Mic", on_mic);
-    lv_obj_align(mic, LV_ALIGN_BOTTOM_LEFT, EDGE_PX + 8, -(EDGE_PX + 8));
+    lv_obj_set_size(mic, BTN_MIC_W, BTN_H);
+    lv_obj_set_style_text_font(lv_obj_get_child(mic, 0), &lv_font_montserrat_24, 0);
+    lv_obj_align(mic, LV_ALIGN_BOTTOM_LEFT, EDGE_PX, -EDGE_PX);
     settings_btn = action_button(screen, "Settings", on_open_settings);
-    lv_obj_align(settings_btn, LV_ALIGN_BOTTOM_RIGHT, -(EDGE_PX + 8), -(EDGE_PX + 8));
+    lv_obj_set_size(settings_btn, BTN_SET_W, BTN_H);
+    lv_obj_set_style_text_font(lv_obj_get_child(settings_btn, 0), &lv_font_montserrat_24, 0);
+    lv_obj_align(settings_btn, LV_ALIGN_BOTTOM_RIGHT, -EDGE_PX, -EDGE_PX);
 
     s_alert = lv_obj_create(screen);
     lv_obj_set_size(s_alert, SCREEN_PX, SCREEN_PX);
@@ -629,7 +660,7 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_add_event_cb(s_alert, on_alert, LV_EVENT_CLICKED, NULL);
     lv_obj_t *alert_label = lv_label_create(s_alert);
     lv_label_set_text(alert_label, "NEEDS YOU");
-    lv_obj_set_style_text_font(alert_label, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_font(alert_label, &lv_font_montserrat_48, 0);
     lv_obj_set_style_text_color(alert_label, lv_color_hex(BG), 0);
     lv_obj_center(alert_label);
 
