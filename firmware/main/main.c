@@ -5,7 +5,6 @@
 #include "bsp/esp-bsp.h"
 #include "esp_check.h"
 #include "esp_err.h"
-#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_lv_adapter.h"
 #include "esp_system.h"
@@ -261,29 +260,6 @@ static void load_rotlock(void) {
     apply_quarter(quarter);
 }
 
-/* BSP 2.0.1 draws through a 50-line partial buffer. The scrolled roster is
- * about 300px, so one swipe becomes a stack of QSPI windows. The CO5300
- * leaves a bright scanline on each join. A buffer the size of the panel
- * flushes that roster as one window. Two RGB565 frames fit in octal PSRAM. */
-static void use_panel_height_draw_buf(void) {
-    lv_display_t *disp = lv_display_get_default();
-    size_t bytes = (size_t)BSP_LCD_H_RES * BSP_LCD_V_RES * (BSP_LCD_BITS_PER_PIXEL / 8);
-    void *a;
-    void *b;
-    if (!disp) {
-        return;
-    }
-    a = heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    b = heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!a || !b) {
-        heap_caps_free(a);
-        heap_caps_free(b);
-        ESP_LOGE("desk", "panel-height draw buffer failed");
-        return;
-    }
-    lv_display_set_buffers(disp, a, b, (uint32_t)bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);
-}
-
 static void hook_touch(void) {
     lv_indev_t *indev = bsp_display_get_input_dev();
     if (!indev) {
@@ -332,7 +308,6 @@ void app_main(void) {
     }
     bsp_display_start();
     if (lock_lvgl()) {
-        use_panel_height_draw_buf();
         hook_touch();
         load_rotlock();
         unlock_lvgl();
