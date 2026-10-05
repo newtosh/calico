@@ -68,7 +68,7 @@ static int s_row_count;
 static ui_save_fn s_on_save;
 static void (*s_on_dismiss)(void);
 static ui_scan_fn s_on_scan;
-static int s_mic_hold;
+static lv_timer_t *s_mic_timer;
 static int s_hiding;
 static wifi_net_t s_known[WIFI_NET_MAX];
 static int s_known_count;
@@ -98,6 +98,7 @@ static int s_fail_count;
 static int s_applied;
 static int s_applied_failures;
 static desk_view_t s_applied_view;
+static int s_last_lamp = DESK_LAMP_AMBER;
 static int s_status_seen_ok;
 static char s_phase_text[24];
 static char s_status_seen[24];
@@ -422,10 +423,16 @@ static void on_keyboard(lv_event_t *event) {
     hide_keyboard(1);
 }
 
+static void sync_sleep(const desk_view_t *view, int failures, int lamp);
+
 static void on_done(lv_event_t *event) {
     (void)event;
     hide_keyboard(1);
     lv_obj_set_hidden(s_settings, true);
+    /* Closing settings is what starts idle sleep. The poll does not take the lock to notice. */
+    if (s_applied) {
+        sync_sleep(&s_applied_view, s_applied_failures, s_last_lamp);
+    }
 }
 
 static void on_body_clicked(lv_event_t *event) {
@@ -484,10 +491,25 @@ static void on_alert(lv_event_t *event) {
     }
 }
 
+static void mic_restore(lv_timer_t *timer) {
+    (void)timer;
+    s_mic_timer = NULL;
+    if (s_message && s_applied) {
+        lv_label_set_text(s_message, s_applied_view.message);
+    }
+}
+
 static void on_mic(lv_event_t *event) {
     (void)event;
-    s_mic_hold = 3;
     lv_label_set_text(s_message, "Voice not in this PoC");
+    if (s_mic_timer) {
+        lv_timer_reset(s_mic_timer);
+        return;
+    }
+    s_mic_timer = lv_timer_create(mic_restore, 6000, NULL);
+    if (s_mic_timer) {
+        lv_timer_set_repeat_count(s_mic_timer, 1);
+    }
 }
 
 static void on_open_settings(lv_event_t *event) {
@@ -709,6 +731,14 @@ static void sleep_show(int agents) {
     start_anim(s_zzz, sleep_zzz, 0, 100, 4200, 0);
 }
 
+static void sync_sleep(const desk_view_t *view, int failures, int lamp) {
+    if (!lv_obj_is_hidden(s_settings) || !desk_quiet_idle(view, failures) || lamp == DESK_LAMP_RED) {
+        sleep_stop();
+        return;
+    }
+    sleep_show(view->agent_count);
+}
+
 static lv_obj_t *sleep_eye(lv_obj_t *parent) {
     lv_obj_t *bar = lv_obj_create(parent);
     lv_obj_set_style_bg_color(bar, lv_color_hex(INK_DIM), 0);
@@ -829,6 +859,7 @@ static int present_status(const char *phase, int failures) {
     }
     lv_obj_set_style_bg_color(s_lamp, lv_color_hex(color), 0);
     paint_bars(desk_wifi_bars(s_wifi_ip, s_wifi_rssi));
+    s_last_lamp = glance.lamp;
     text = glance.text ? glance.text : "IDLE";
     if (!s_status_seen_ok) {
         copy_text(s_status_seen, sizeof(s_status_seen), text);
@@ -1213,11 +1244,8 @@ void ui_apply(const desk_view_t *view, int failures) {
     const char *headline;
     int lamp = present_status(desk_phase_label(view, failures), failures);
     int fresh;
-    fresh = !s_applied || s_applied_failures != failures || !desk_view_same(&s_applied_view, view);
-    /* Hold counts down for three polls, then one later poll puts the face line back. */
-    if (s_mic_hold > 0) {
-        s_mic_hold--;
-    } else if (fresh || strcmp(lv_label_get_text(s_message), view->message) != 0) {
+    fresh = !s_applied || !desk_status_same(&s_applied_view, s_applied_failures, view, failures);
+    if (!s_mic_timer && (fresh || strcmp(lv_label_get_text(s_message), view->message) != 0)) {
         lv_label_set_text(s_message, view->message);
     }
     if (fresh) {
@@ -1255,10 +1283,9 @@ void ui_apply(const desk_view_t *view, int failures) {
         s_applied_failures = failures;
         s_applied = 1;
     }
-    /* Settings and the lamp sit outside the parsed view, so sleep still runs every poll. */
-    if (!lv_obj_is_hidden(s_settings) || !desk_quiet_idle(view, failures) || lamp == DESK_LAMP_RED) {
-        sleep_stop();
-    } else {
-        sleep_show(view->agent_count);
-    }
+    sync_sleep(view, failures, lamp);
+}
+
+int ui_status_current(const desk_view_t *view, int failures) {
+    return s_applied && desk_status_same(&s_applied_view, s_applied_failures, view, failures);
 }

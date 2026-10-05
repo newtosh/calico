@@ -19,3 +19,5 @@ void ui_show_networks(const net_ap_t *aps, int count);
 void ui_set_settings_status(const char *text);
 void ui_show_panel_note(const char *phase, const char *message);
 void ui_apply(const desk_view_t *view, int failures);
+/* 1 when this view and failure count are already on the face. */
+int ui_status_current(const desk_view_t *view, int failures);

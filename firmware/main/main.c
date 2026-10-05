@@ -20,6 +20,8 @@
 static wifi_store_t s_store;
 static desk_settings_t s_active;
 static int s_failures;
+/* 1 means the link is up and not retrying. RSSI is not part of it. -1 is unpublished. */
+static int s_lamp_key = -1;
 /* 24 agents with icons, plus last_event, before the events tail is cut. */
 static char s_status_body[16384];
 static volatile int s_scan_busy;
@@ -149,13 +151,22 @@ static void apply_panel_push(const char *body) {
 
 static void publish_link(void);
 
+static int lamp_key(const net_link_t *link) {
+    return (link->has_ip ? 1 : 0) | (link->gave_up ? 2 : 0) | (link->retries > 0 ? 4 : 0);
+}
+
 static void poll_task(void *arg) {
     /* 24-agent views are about 4 KB each. Keep them off this 16 KB stack. */
     static desk_view_t view;
     static desk_view_t next;
     (void)arg;
     while (1) {
-        if (net_fetch_status(&s_active, s_status_body, sizeof(s_status_body)) == 0) {
+        net_link_t link;
+        int fetched;
+        int same;
+        int key;
+        fetched = net_fetch_status(&s_active, s_status_body, sizeof(s_status_body)) == 0;
+        if (fetched) {
             net_mark_reachable();
             apply_panel_push(s_status_body);
             if (desk_view_from_json(s_status_body, &next) == 0) {
@@ -164,20 +175,22 @@ static void poll_task(void *arg) {
             } else if (s_failures < 3) {
                 s_failures++;
             }
-        } else {
-            net_link_t link;
-            net_link(&link);
-            /* Misses before a lease are the join, not a dead companion. */
-            if (link.has_ip && s_failures < 3) {
-                s_failures++;
-            }
         }
-        if (lock_lvgl()) {
+        net_link(&link);
+        /* Misses before a lease are the join, not a dead companion. */
+        if (!fetched && link.has_ip && s_failures < 3) {
+            s_failures++;
+        }
+        same = ui_status_current(&view, s_failures);
+        key = lamp_key(&link);
+        /* Unchanged face and lamp inputs stay off the LVGL lock so touch can take it. */
+        if ((!same || key != s_lamp_key) && lock_lvgl()) {
             publish_link();
             ui_apply(&view, s_failures);
             unlock_lvgl();
+            s_lamp_key = key;
         }
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        vTaskDelay(pdMS_TO_TICKS(desk_poll_ms(&view, s_failures, key == 1)));
     }
 }
 

@@ -119,6 +119,10 @@ int desk_view_same(const desk_view_t *a, const desk_view_t *b) {
     return a && b && memcmp(a, b, sizeof(*a)) == 0;
 }
 
+int desk_status_same(const desk_view_t *a, int failures_a, const desk_view_t *b, int failures_b) {
+    return failures_a == failures_b && desk_view_same(a, b);
+}
+
 void desk_count_text(const desk_view_t *view, char *out, size_t out_len) {
     if (!out || out_len == 0) {
         return;
@@ -372,4 +376,11 @@ int desk_quiet_idle(const desk_view_t *view, int consecutive_failures) {
         return 0;
     }
     return strcmp(desk_phase_label(view, consecutive_failures), "IDLE") == 0;
+}
+
+int desk_poll_ms(const desk_view_t *view, int consecutive_failures, int link_ok) {
+    if (link_ok && consecutive_failures == 0 && desk_quiet_idle(view, consecutive_failures)) {
+        return 10000;
+    }
+    return 2000;
 }

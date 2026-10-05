@@ -314,6 +314,32 @@ int main(void) {
         check(desk_view_same(&view, &again) == 0, "agent status is a view change");
         check(desk_view_from_json(flipped, &again) == 0, "flipped parse");
         check(desk_view_same(&view, &again) == 0, "agent order is a view change");
+        check(desk_view_from_json(roster, &again) == 0, "roster for the failure count");
+        check(desk_status_same(&view, 0, &again, 0) == 1, "same view and failures");
+        check(desk_status_same(&view, 2, &again, 2) == 1, "matching misses");
+        check(desk_status_same(&view, 0, &again, 1) == 0, "failure count is a status change");
+        check(desk_view_from_json(needs_row, &again) == 0, "needs row for status");
+        check(desk_status_same(&view, 0, &again, 0) == 0, "row change is a status change");
+        check(desk_status_same(NULL, 0, &view, 0) == 0, "missing left view");
+        check(desk_status_same(&view, 0, NULL, 0) == 0, "missing right view");
+    }
+
+    {
+        desk_view_t idle;
+        desk_view_t running;
+        const char *idle_json = "{\"phase\":\"idle\",\"needs_you\":false,\"agents\":[]}";
+        const char *running_json =
+            "{\"phase\":\"running\",\"needs_you\":false,\"agents\":[{\"id\":\"a1\",\"status\":\"running\"}]}";
+        check(desk_view_from_json(idle_json, &idle) == 0, "idle for poll");
+        check(desk_view_from_json(running_json, &running) == 0, "running for poll");
+        check(desk_poll_ms(&idle, 0, 1) == 10000, "quiet idle waits");
+        check(desk_poll_ms(&idle, 0, 0) == 2000, "bad link stays fast");
+        check(desk_poll_ms(&idle, 2, 1) == 2000, "misses stay fast");
+        check(desk_poll_ms(&idle, 3, 1) == 2000, "link down stays fast");
+        check(desk_poll_ms(&running, 0, 1) == 2000, "running stays fast");
+        idle.needs_you = 1;
+        check(desk_poll_ms(&idle, 0, 1) == 2000, "needs you stays fast");
+        check(desk_poll_ms(NULL, 0, 1) == 2000, "missing view stays fast");
     }
 
     if (g_failed) {
