@@ -32,25 +32,13 @@ Leave `color`, `shape`, and `icon` off when you have nothing to send. An empty s
 
 ### Shapes
 
-The panel draws a filled 24px silhouette. The picker glyphs also have a pair of eyes; those are left off at this size. `square` and `diamond` are the marks this desk already drew. `rounded_square` is the picker squircle.
+The panel draws a filled 24px mark in that agent's color. It does not paint custom polygons. Each name is one of three style widgets:
 
-| `shape` | Draws |
+| `shape` | Widget |
 | --- | --- |
-| `circle` | Circle |
-| `cloud` | Cloud |
-| `rounded_square`, `rounded` | Rounded square |
-| `star` | 4-point star |
-| `flower`, `clover` | Flower |
-| `heart` | Heart |
-| `blob`, `splatter` | Splatter |
-| `teardrop`, `drop` | Teardrop |
-| `pill`, `capsule` | Capsule |
-| `triangle` | Triangle |
-| `pentagon`, `shield` | Pentagon |
-| `sun`, `gear` | 8-point sun |
-| `hexagon`, `hex` | Hexagon |
-| `square` | Square, the existing mark |
-| `diamond` | Diamond, the existing mark |
+| `circle`, `cloud`, `flower`, `clover`, `heart`, `blob`, `splatter`, `teardrop`, `drop`, `sun`, `gear` | Circle |
+| `rounded_square`, `rounded`, `pill`, `capsule` | Rounded square |
+| `square`, `diamond`, `triangle`, `star`, `pentagon`, `shield`, `hexagon`, `hex` | Square |
 
 An unknown name, or no name, is a circle.
 
@@ -74,7 +62,7 @@ Sampled from the center of each swatch in a Grok Bot picker screenshot, left to 
 
 Grok Bot’s own webhook body, as used by this companion today, has no icon, accent, or avatar. Cursor’s `GET /v1/agents` list items (`id`, `name`, `status`, `env`, `url`, `createdAt`, `updatedAt`, `latestRunId`) do not either. The poll forwards `color`, `shape`, and `icon` only when those exact string keys are present. It does not turn `url` into an icon, and it does not invent a color. A later poll that omits them leaves a webhook-set identity in place.
 
-`agent.launched` marks that agent running. `agent.finished` marks it idle. `agent.needs_you` fills the panel and the dashboard with NEEDS YOU until `POST /api/dismiss` or a tap on the panel. `note` is a line in the event list and does not change agents.
+`agent.launched` marks that agent running. `agent.finished` marks it idle. `agent.needs_you` fills the panel and the dashboard with NEEDS YOU until `POST /api/dismiss` or a tap on the panel. `note` is a line in the event list and does not change agents. A `running` row whose `updated_at` is more than 2 minutes old is reported as `idle`, and the phase and running count follow. `needs_you` does not age out. A later `agent.launched` refreshes `updated_at`, so that row counts as running again.
 
 The server assigns `id` and `at` and returns the event with status 201. Unknown `type`, or an agent event with an empty `agent_id`, is 400. A repeat `agent.launched` while that agent is already running or in NEEDS YOU refreshes the row, is not stored again, and does not clear NEEDS YOU.
 

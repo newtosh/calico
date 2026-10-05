@@ -4,13 +4,15 @@ import sqlite3
 import threading
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 AGENT_TYPES = frozenset({"agent.launched", "agent.finished", "agent.needs_you"})
 EVENT_CAP = 50
 COLOR_LIMIT = 32
 SHAPE_LIMIT = 16
 ICON_LIMIT = 200
+# A launch POST that nobody refreshes must not pin the desk on the 2s poll.
+RUNNING_TTL = timedelta(seconds=120)
 
 _STATUS_FOR_TYPE = {
     "agent.launched": "running",
@@ -81,6 +83,18 @@ def _public_event(event: Event) -> dict[str, object]:
 
 def _now() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _visible_status(agent: _Agent, now: datetime) -> str:
+    if agent.status != "running":
+        return agent.status
+    try:
+        updated = datetime.strptime(agent.updated_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+    except ValueError:
+        return agent.status
+    if now - updated > RUNNING_TTL:
+        return "idle"
+    return agent.status
 
 
 class DeskStore:
@@ -165,11 +179,12 @@ class DeskStore:
             ordered = sorted(self._agents.values(), key=lambda agent: agent.id)
             ordered.sort(key=lambda agent: agent.updated_at, reverse=True)
             ordered.sort(key=lambda agent: agent.status != "needs_you")
+            now = datetime.now(UTC)
             agents = [
                 {
                     "id": agent.id,
                     "title": agent.title,
-                    "status": agent.status,
+                    "status": _visible_status(agent, now),
                     "updated_at": agent.updated_at,
                     "color": agent.color,
                     "shape": agent.shape,

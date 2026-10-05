@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -188,7 +189,7 @@ def test_omitted_identity_stays_empty_and_cursor_does_not_invent_it() -> None:
     )
     assert store.apply_cursor_item("bc-1", "Readme", "idle", "2026-10-02T13:01:00Z") is False
     store.apply_event(EventIn(type="agent.finished", agent_id="bc-1"))
-    assert store.apply_cursor_item("bc-1", "Readme", "running", "2026-10-02T13:02:00Z") is True
+    assert store.apply_cursor_item("bc-1", "Readme", "running", _stamp(timedelta(0))) is True
     still = store.status()["agents"]
     assert isinstance(still, list)
     blocked = next(item for item in still if item["id"] == "bc-1")
@@ -256,10 +257,52 @@ def test_standing_launch_keeps_the_row_and_needs_you() -> None:
     assert len(back["events"]) == 5
 
 
+def _stamp(age: timedelta) -> str:
+    return (datetime.now(UTC) - age).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def test_stale_running_ages_to_idle() -> None:
+    store = DeskStore()
+    store.apply_event(EventIn(type="agent.launched", agent_id="fresh", title="Fresh"))
+    store.apply_event(EventIn(type="agent.launched", agent_id="old", title="Old"))
+    store.apply_event(EventIn(type="agent.needs_you", agent_id="ask", message="Pick one"))
+    store._agents["old"].updated_at = _stamp(timedelta(seconds=121))
+    store._agents["ask"].updated_at = _stamp(timedelta(minutes=30))
+    body = store.status()
+    agents = {item["id"]: item for item in body["agents"]}
+    assert agents["fresh"]["status"] == "running"
+    assert agents["old"]["status"] == "idle"
+    assert agents["ask"]["status"] == "needs_you"
+    assert body["phase"] == "needs_you"
+    assert body["needs_you"] is True
+    assert [item["id"] for item in body["agents"] if item["status"] == "running"] == ["fresh"]
+
+    quiet = DeskStore()
+    quiet.apply_event(EventIn(type="agent.launched", agent_id="seed", title="Seed"))
+    quiet._agents["seed"].updated_at = _stamp(timedelta(seconds=121))
+    aged = quiet.status()
+    assert aged["phase"] == "idle"
+    assert aged["needs_you"] is False
+    assert aged["agents"][0]["status"] == "idle"
+    events = len(aged["events"])
+    quiet.apply_event(EventIn(type="agent.launched", agent_id="seed", title="Seed"))
+    again = quiet.status()
+    assert again["phase"] == "running"
+    assert again["agents"][0]["status"] == "running"
+    assert len(again["events"]) == events
+
+    inside = DeskStore()
+    inside.apply_event(EventIn(type="agent.launched", agent_id="near", title="Near"))
+    inside._agents["near"].updated_at = _stamp(timedelta(seconds=90))
+    assert inside.status()["agents"][0]["status"] == "running"
+    assert inside.status()["phase"] == "running"
+
+
 def test_cursor_item_does_not_repeat(tmp_path: Path) -> None:
     path = str(tmp_path / "desk.sqlite")
     store = DeskStore(sqlite_path=path)
-    assert store.apply_cursor_item("bc-1", "Readme", "running", "2026-10-02T13:00:00Z") is True
-    assert store.apply_cursor_item("bc-1", "Readme", "running", "2026-10-02T13:00:01Z") is False
+    fresh = _stamp(timedelta(0))
+    assert store.apply_cursor_item("bc-1", "Readme", "running", fresh) is True
+    assert store.apply_cursor_item("bc-1", "Readme", "running", fresh) is False
     reloaded = DeskStore(sqlite_path=path)
     assert reloaded.status()["phase"] == "running"

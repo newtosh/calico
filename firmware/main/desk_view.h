@@ -9,19 +9,7 @@
 enum {
     DESK_SHAPE_CIRCLE = 0,
     DESK_SHAPE_SQUARE = 1,
-    DESK_SHAPE_DIAMOND = 2,
-    DESK_SHAPE_TRIANGLE = 3,
-    DESK_SHAPE_CLOUD,
-    DESK_SHAPE_ROUNDED,
-    DESK_SHAPE_STAR,
-    DESK_SHAPE_FLOWER,
-    DESK_SHAPE_HEART,
-    DESK_SHAPE_BLOB,
-    DESK_SHAPE_DROP,
-    DESK_SHAPE_PILL,
-    DESK_SHAPE_PENTAGON,
-    DESK_SHAPE_SUN,
-    DESK_SHAPE_HEXAGON
+    DESK_SHAPE_ROUNDED = 2
 };
 
 typedef struct {
@@ -68,4 +56,5 @@ int desk_quiet_idle(const desk_view_t *view, int consecutive_failures);
 /* 10000 while idle on a good link with no misses. 2000 otherwise. */
 int desk_poll_ms(const desk_view_t *view, int consecutive_failures, int link_ok);
 int desk_mark_color(const char *color, uint32_t *out);
+/* Style widget for a webhook shape name: circle, square, or rounded. */
 int desk_mark_shape(const char *shape);

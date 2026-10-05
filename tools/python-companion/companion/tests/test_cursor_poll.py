@@ -1,10 +1,15 @@
 import json
 import logging
+from datetime import UTC, datetime
 
 import pytest
 
 from grok_desk_buddy.cursor_poll import map_cursor_status, poll_once
 from grok_desk_buddy.store import DeskStore
+
+
+def _now() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def test_map_and_poll_once() -> None:
@@ -20,7 +25,7 @@ def test_map_and_poll_once() -> None:
         seen.append((url, api_key))
         return body
 
-    poll_once(store, "ck_test", get, "2026-10-02T13:00:00Z")
+    poll_once(store, "ck_test", get, _now())
     assert seen[0][0] == "https://api.cursor.com/v1/agents?limit=20"
     assert seen[0][1] == "ck_test"
     assert store.status()["phase"] == "running"
