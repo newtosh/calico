@@ -20,7 +20,8 @@
 static wifi_store_t s_store;
 static desk_settings_t s_active;
 static int s_failures;
-static char s_status_body[8192];
+/* 24 agents with icons, plus last_event, before the events tail is cut. */
+static char s_status_body[16384];
 static volatile int s_scan_busy;
 static int s_quarter;
 static volatile int s_rot_locked;
@@ -149,11 +150,11 @@ static void apply_panel_push(const char *body) {
 static void publish_link(void);
 
 static void poll_task(void *arg) {
-    desk_view_t view;
+    /* 24-agent views are about 4 KB each. Keep them off this 16 KB stack. */
+    static desk_view_t view;
+    static desk_view_t next;
     (void)arg;
-    memset(&view, 0, sizeof(view));
     while (1) {
-        desk_view_t next;
         if (net_fetch_status(&s_active, s_status_body, sizeof(s_status_body)) == 0) {
             net_mark_reachable();
             apply_panel_push(s_status_body);

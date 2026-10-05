@@ -26,6 +26,18 @@ def test_launch_then_needs_you_then_dismiss(tmp_path: Path) -> None:
     assert last["message"] == ""
 
 
+def test_status_returns_every_stored_agent() -> None:
+    store = DeskStore()
+    for i in range(17):
+        store.apply_event(EventIn(type="agent.launched", agent_id=f"a{i:02d}", title=f"Agent {i}"))
+    agents = store.status()["agents"]
+    assert isinstance(agents, list)
+    assert len(agents) == 17
+    assert agents[0]["id"] == "a00"
+    assert agents[16]["id"] == "a16"
+    assert agents[16]["title"] == "Agent 16"
+
+
 def test_face_title_keeps_real_events_and_drops_dismiss() -> None:
     assert face_event_title("Dismissed", "") == ""
     assert face_event_title("Remember", "milk") == "Remember"

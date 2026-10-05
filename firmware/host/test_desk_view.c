@@ -13,6 +13,18 @@ static void check(int cond, const char *msg) {
     }
 }
 
+static void roster_json(char *buf, size_t len, int count, int running_at) {
+    size_t used = 0;
+    int i;
+    used += (size_t)snprintf(buf, len, "{\"phase\":\"running\",\"agents\":[");
+    for (i = 0; i < count; i++) {
+        used += (size_t)snprintf(
+            buf + used, len - used, "%s{\"id\":\"a%02d\",\"title\":\"Agent %d\",\"status\":\"%s\"}",
+            i ? "," : "", i, i, i == running_at ? "running" : "idle");
+    }
+    snprintf(buf + used, len - used, "]}");
+}
+
 int main(void) {
     desk_view_t view;
     char label[32];
@@ -139,8 +151,8 @@ int main(void) {
         "],\"last_event\":null,\"events\":[]}";
     uint32_t color = 0;
     check(desk_view_from_json(marked, &view) == 0, "marked parse");
-    check(view.agent_count == 6, "agent cap");
-    check(view.known_count == 7, "known includes the dropped row");
+    check(view.agent_count == 7, "seven rows kept");
+    check(view.known_count == 7, "seven known");
     desk_count_text(&view, label, sizeof(label));
     check(strcmp(label, "idle") == 0, "no running status is idle");
     check(strcmp(view.agents[0].title, "Scaffold") == 0, "agent title");
@@ -159,6 +171,7 @@ int main(void) {
     check(desk_mark_shape(view.agents[4].shape) == DESK_SHAPE_TRIANGLE, "triangle kind");
     check(desk_mark_shape(view.agents[5].shape) == DESK_SHAPE_CIRCLE, "explicit circle");
     check(strcmp(view.agents[5].id, "a6") == 0, "sixth kept");
+    check(strcmp(view.agents[6].id, "a7") == 0, "seventh kept");
     check(desk_mark_color(NULL, &color) == -1, "null color");
     check(desk_mark_shape(NULL) == DESK_SHAPE_CIRCLE, "null shape");
     check(desk_mark_shape("Diamond") == DESK_SHAPE_DIAMOND, "shape case");
@@ -252,6 +265,30 @@ int main(void) {
     check(strcmp(view.agents[0].title, "Scaffold") == 0, "idle scaffold title");
     desk_count_text(&view, label, sizeof(label));
     check(strcmp(label, "idle") == 0, "zero running is idle");
+
+    {
+        char roster[4096];
+        char id[8];
+        roster_json(roster, sizeof(roster), 17, 16);
+        check(desk_view_from_json(roster, &view) == 0, "roster parse");
+        check(view.agent_count == 17, "seventeen rows");
+        check(view.known_count == 17, "seventeen known");
+        check(view.running_count == 1, "one runner in the roster");
+        check(strcmp(view.agents[0].title, "Agent 0") == 0, "first row");
+        check(strcmp(view.agents[16].id, "a16") == 0, "seventeenth row");
+        desk_count_text(&view, label, sizeof(label));
+        check(strcmp(label, "1/17 running") == 0, "dock counts the roster");
+
+        roster_json(roster, sizeof(roster), DESK_AGENT_MAX + 1, DESK_AGENT_MAX);
+        check(desk_view_from_json(roster, &view) == 0, "over cap parse");
+        check(view.agent_count == DESK_AGENT_MAX, "row cap");
+        check(view.known_count == DESK_AGENT_MAX + 1, "known past the row cap");
+        check(view.running_count == 1, "runner past the row cap still counts");
+        snprintf(id, sizeof(id), "a%02d", DESK_AGENT_MAX - 1);
+        check(strcmp(view.agents[DESK_AGENT_MAX - 1].id, id) == 0, "last kept row");
+        desk_count_text(&view, label, sizeof(label));
+        check(strcmp(label, "1/25 running") == 0, "dock counts past the rows");
+    }
 
     if (g_failed) {
         return 1;

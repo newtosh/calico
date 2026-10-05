@@ -1,6 +1,6 @@
 # Firmware
 
-ESP-IDF app for the Waveshare ESP32-S3-Touch-AMOLED-2.16. It polls `GET {companion}/api/status`. Up to six agents are rows under the title. IDLE / RUNNING / NEEDS YOU show as the status-bar lamp and a short toast. NEEDS YOU still takes the whole screen. Each row is a 24px mark: `color` (`#RRGGBB`) and `shape` from the status JSON. Shape names and the sampled picker palette are in [docs/grok-bot-integration.md](../docs/grok-bot-integration.md). A missing or unusable value is one neutral circle, `#a39b88`. Agent icons are not drawn on the panel. A tap on the alert POSTs `/api/dismiss`. Settings are stored in NVS namespace `desk`: a list of known networks plus a global companion URL and bearer token. The Mic button is a dimmed icon and only shows `Voice not in this PoC`.
+ESP-IDF app for the Waveshare ESP32-S3-Touch-AMOLED-2.16. It polls `GET {companion}/api/status`. Agent rows under the title scroll in that list. The panel keeps 24 rows. The status bar and the dock stay put. IDLE / RUNNING / NEEDS YOU show as the status-bar lamp and a short toast. NEEDS YOU still takes the whole screen. Each row is a 24px mark: `color` (`#RRGGBB`) and `shape` from the status JSON. Shape names and the sampled picker palette are in [docs/grok-bot-integration.md](../docs/grok-bot-integration.md). A missing or unusable value is one neutral circle, `#a39b88`. Agent icons are not drawn on the panel. A tap on the alert POSTs `/api/dismiss`. Settings are stored in NVS namespace `desk`: a list of known networks plus a global companion URL and bearer token. The Mic button is a dimmed icon and only shows `Voice not in this PoC`.
 
 ## Flash
 
@@ -37,7 +37,7 @@ At boot the panel scans and joins whichever saved SSID is actually in range. If 
 
 ## Status bar
 
-The top strip and the bottom strip are `#0c0e09` and run to the 480px edges of the glass. Lamp, toast, the resting `grokbot-buddy` label, Wi-Fi, struck-through BT, Auto, the running count, Mic, and Settings stay inside the 16px bezel. The center of the bar reads `grokbot-buddy` until a status toast replaces that label, then the name comes back. Title and agent rows start just below the bar. That title is the last event's title. With no useful title, including a dismiss acknowledgement, the headline is empty. A note, a launch, and a needs-you question keep theirs. Mic and Settings are icon buttons, Lucide `mic` and `settings` as 40px alpha bitmaps. Both are 80×64. Mic is dimmed and still only shows `Voice not in this PoC`. Settings opens settings. The running count stays Montserrat 28: `n/X running` while any stored agent is running, and a dimmed `idle` when none are. X is every agent in the companion store, not a fixed roster. Agent titles and marks stay 24px.
+The top strip and the bottom strip are `#0c0e09` and run to the 480px edges of the glass. Lamp, toast, the resting `grokbot-buddy` label, Wi-Fi, struck-through BT, Auto, the running count, Mic, and Settings stay inside the 16px bezel. The center of the bar reads `grokbot-buddy` until a status toast replaces that label, then the name comes back. Title and agent rows start just below the bar. A swipe on the agent list scrolls that list. The bar and the dock stay fixed. That title is the last event's title. With no useful title, including a dismiss acknowledgement, the headline is empty. A note, a launch, and a needs-you question keep theirs. Mic and Settings are icon buttons, Lucide `mic` and `settings` as 40px alpha bitmaps. Both are 80×64. Mic is dimmed and still only shows `Voice not in this PoC`. Settings opens settings. The running count stays Montserrat 28: `n/X running` while any stored agent is running, and a dimmed `idle` when none are. X is every agent in the companion store, not a fixed roster. Agent titles and marks stay 24px.
 
 The left lamp uses the phase label plus the poll-failure count and the Wi-Fi facts the STA path already tracks:
 
@@ -110,7 +110,7 @@ gcc -Wall -Werror -I firmware/main firmware/host/test_desk_status.c firmware/mai
 /tmp/test_desk_status
 ```
 
-Open `firmware/simulator/index.html` in a browser. It polls `http://127.0.0.1:8787` unless you pass `?base=http://192.168.1.20:8787`.
+Open `firmware/simulator/index.html` in a browser. It polls `http://127.0.0.1:8787` unless you pass `?base=http://192.168.1.20:8787`. Wheel or drag scrolls the agent list inside the face. The bar and the dock stay fixed.
 
 ## If `idf.py` is missing
 

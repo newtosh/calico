@@ -178,14 +178,18 @@
       }
       #agents {
         flex: 1;
+        min-height: 0;
         width: 100%;
         margin: 4px 0 0;
         display: flex;
         flex-direction: column;
         gap: 4px;
-        overflow: hidden;
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
         font-size: 24px;
         line-height: 1;
+        user-select: none;
       }
       .agent {
         display: flex;
@@ -477,6 +481,23 @@
       let failures = 0;
       let statusSeen = "IDLE";
       let face = "IDLE";
+      let drag = null;
+
+      agents.addEventListener("pointerdown", (event) => {
+        if (event.pointerType !== "mouse" || event.button !== 0) return;
+        drag = { id: event.pointerId, y: event.clientY, top: agents.scrollTop };
+        agents.setPointerCapture(event.pointerId);
+      });
+      agents.addEventListener("pointermove", (event) => {
+        if (!drag || drag.id !== event.pointerId) return;
+        agents.scrollTop = drag.top - (event.clientY - drag.y);
+      });
+      function endDrag(event) {
+        if (!drag || drag.id !== event.pointerId) return;
+        drag = null;
+      }
+      agents.addEventListener("pointerup", endDrag);
+      agents.addEventListener("pointercancel", endDrag);
 
       function statusText(phaseLabel, fail) {
         if (phaseLabel === "NO NETWORK" || phaseLabel === "SCAN FAILED") return phaseLabel;
@@ -569,7 +590,7 @@
           count.classList.toggle("idle", running === 0);
           panel.classList.toggle("asleep", quiet);
           agents.replaceChildren();
-          (status.agents || []).slice(0, 6).forEach((agent) => {
+          (status.agents || []).forEach((agent) => {
             const row = document.createElement("div");
             const mark = document.createElement("i");
             const name = document.createElement("span");

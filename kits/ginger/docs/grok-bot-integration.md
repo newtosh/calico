@@ -78,7 +78,7 @@ Grok Bot’s own webhook body, as used by this companion today, has no icon, acc
 
 The server assigns `id` and `at` and returns the event with status 201. Unknown `type`, or an agent event with an empty `agent_id`, is 400. A repeat `agent.launched` while that agent is already running or in NEEDS YOU refreshes the row, is not stored again, and does not clear NEEDS YOU.
 
-Grok Bot has no device API here. A session is on the desk only after it POSTs `agent.launched`. Repeat that POST with the same `agent_id` while the routine is running, and post `agent.finished` when it stops. Idle rows stay. `X` in `n/X running` is every agent still in this store.
+Grok Bot has no device API here. A session is on the desk only after it POSTs `agent.launched`. Repeat that POST with the same `agent_id` while the routine is running, and post `agent.finished` when it stops. Idle rows stay. `X` in `n/X running` is every agent still in this store. `GET /api/status` returns that full list. The panel keeps 24 rows and scrolls them.
 
 ## Routine sketch
 

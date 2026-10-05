@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define DESK_AGENT_MAX 6
+#define DESK_AGENT_MAX 24
 #define DESK_MARK_NEUTRAL 0xa39b88u
 
 enum {

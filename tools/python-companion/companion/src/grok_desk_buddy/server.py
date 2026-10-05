@@ -84,7 +84,7 @@ def _handler_class(
                 if config is not None:
                     panel = panel_status_field(config)
                     if panel is not None:
-                        # First key: the panel buffer is 8 KB and drops the tail.
+                        # First key: the panel buffer is 16 KB and drops the tail.
                         body = {"panel": panel, **body}
                 self._json(200, body)
                 return

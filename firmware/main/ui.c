@@ -298,7 +298,7 @@ static void apply_mark(lv_obj_t *mark, uint32_t color, int shape) {
 static void build_agent_rows(lv_obj_t *screen) {
     int i;
     s_agent_box = lv_obj_create(screen);
-    lv_obj_set_size(s_agent_box, SCREEN_PX - (EDGE_PX * 2), AGENT_STRIDE * DESK_AGENT_MAX);
+    lv_obj_set_size(s_agent_box, SCREEN_PX - (EDGE_PX * 2), DOCK_TOP - AGENT_Y);
     lv_obj_align(s_agent_box, LV_ALIGN_TOP_MID, 0, AGENT_Y);
     lv_obj_set_flex_flow(s_agent_box, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_all(s_agent_box, 0, 0);
@@ -307,6 +307,8 @@ static void build_agent_rows(lv_obj_t *screen) {
     lv_obj_set_style_border_width(s_agent_box, 0, 0);
     lv_obj_set_style_radius(s_agent_box, 0, 0);
     lv_obj_set_scrollbar_mode(s_agent_box, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_scroll_dir(s_agent_box, LV_DIR_VER);
+    lv_obj_clear_flag(s_agent_box, LV_OBJ_FLAG_SCROLL_ELASTIC);
     for (i = 0; i < DESK_AGENT_MAX; i++) {
         lv_obj_t *row = lv_obj_create(s_agent_box);
         lv_obj_t *mark = lv_obj_create(row);
@@ -314,6 +316,7 @@ static void build_agent_rows(lv_obj_t *screen) {
         s_agent_rows[i] = row;
         s_agent_marks[i] = mark;
         s_agent_labels[i] = label;
+        lv_obj_clear_flag(row, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_set_width(row, lv_pct(100));
         lv_obj_set_height(row, AGENT_ROW_H);
         lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
@@ -327,8 +330,10 @@ static void build_agent_rows(lv_obj_t *screen) {
         lv_obj_set_style_border_width(mark, 0, 0);
         lv_obj_set_style_pad_all(mark, 0, 0);
         lv_obj_set_style_shadow_width(mark, 0, 0);
+        lv_obj_clear_flag(mark, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_add_event_cb(mark, draw_mark, LV_EVENT_DRAW_POST, NULL);
         apply_mark(mark, DESK_MARK_NEUTRAL, DESK_SHAPE_CIRCLE);
+        lv_obj_clear_flag(label, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_set_flex_grow(label, 1);
         lv_obj_set_width(label, SCREEN_PX - (EDGE_PX * 2) - MARK_PX - 16);
         lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
@@ -944,6 +949,7 @@ static void build_status_bar(lv_obj_t *screen) {
 
 void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_t *screen = lv_screen_active();
+    static const desk_view_t blank;
     lv_obj_t *settings_btn;
     lv_obj_t *mic;
     lv_obj_t *dock;
@@ -953,6 +959,7 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     s_on_save = on_save;
     s_on_dismiss = on_dismiss;
     s_on_scan = on_scan;
+    lv_obj_set_scrollable(screen, false);
     lv_obj_set_style_bg_color(screen, lv_color_hex(BG), 0);
     desk_toast_init(&s_toast_state);
     build_status_bar(screen);
@@ -1082,7 +1089,7 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_add_event_cb(s_keyboard, on_keyboard, LV_EVENT_READY, NULL);
     lv_obj_add_event_cb(s_keyboard, on_keyboard, LV_EVENT_CANCEL, NULL);
     layout_settings();
-    ui_apply(&(desk_view_t){0}, 0);
+    ui_apply(&blank, 0);
 }
 
 void ui_bind_rotlock(int locked, ui_rotlock_fn on_toggle) {
