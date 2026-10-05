@@ -132,6 +132,8 @@ static void apply_panel_push(const char *body) {
     esp_restart();
 }
 
+static void publish_link(void);
+
 static void poll_task(void *arg) {
     desk_view_t view;
     (void)arg;
