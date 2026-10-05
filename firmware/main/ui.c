@@ -14,12 +14,11 @@ enum {
     KEYBOARD_PX = 200,
     HEADER_PX = 48,
     PAD_PX = EDGE_PX,
-    /* 32px status bar under the 16px bezel, then the same face gaps as before. */
+    /* 32px status bar under the 16px bezel. Face gaps start just under it. */
     BAR_H = 32,
-    PHASE_Y = 50,
-    TITLE_Y = 100,
-    MESSAGE_Y = 124,
-    AGENT_Y = 148,
+    TITLE_Y = 50,
+    MESSAGE_Y = 74,
+    AGENT_Y = 98,
     AGENT_ROW_H = 32,
     AGENT_GAP = 2,
     AGENT_STRIDE = AGENT_ROW_H + AGENT_GAP,
@@ -39,10 +38,11 @@ enum {
     ROW_ON = 0x3d4f32,
     ROW_MARK = 0x9bb57a,
     LAMP_AMBER = 0xe2a23a,
-    LAMP_RED = 0xc4544a
+    LAMP_RED = 0xc4544a,
+    /* One step under the olive face so the bottom chrome reads as a strip. */
+    DOCK = 0x0c0e09
 };
 
-static lv_obj_t *s_phase;
 static lv_obj_t *s_title;
 static lv_obj_t *s_message;
 static lv_obj_t *s_count;
@@ -651,14 +651,17 @@ static void toast_apply(int opacity, int shift) {
     if (!s_toast_label) {
         return;
     }
-    if (s_toast_state.stage == DESK_TOAST_HIDDEN || opacity <= 0) {
-        lv_obj_set_hidden(s_toast_label, true);
+    if (s_toast_state.stage == DESK_TOAST_HIDDEN) {
+        lv_label_set_text(s_toast_label, "grokbot-buddy");
+        lv_obj_set_style_opa(s_toast_label, LV_OPA_COVER, 0);
+        lv_obj_set_style_translate_y(s_toast_label, 0, 0);
+        lv_obj_set_hidden(s_toast_label, false);
         return;
     }
     lv_label_set_text(s_toast_label, s_toast_state.showing);
-    lv_obj_set_hidden(s_toast_label, false);
     lv_obj_set_style_opa(s_toast_label, (lv_opa_t)opacity, 0);
     lv_obj_set_style_translate_y(s_toast_label, shift, 0);
+    lv_obj_set_hidden(s_toast_label, opacity <= 0);
 }
 
 static void toast_cb(lv_timer_t *timer) {
@@ -762,8 +765,7 @@ static void build_status_bar(lv_obj_t *screen) {
     lv_obj_set_style_text_align(s_toast_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_align(s_toast_label, LV_ALIGN_CENTER, 0, 0);
     lv_obj_clear_flag(s_toast_label, LV_OBJ_FLAG_CLICKABLE);
-    lv_label_set_text(s_toast_label, "");
-    lv_obj_set_hidden(s_toast_label, true);
+    toast_apply(0, 0);
 
     cluster = lv_obj_create(bar);
     lv_obj_set_height(cluster, BAR_H);
@@ -831,6 +833,7 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_t *screen = lv_screen_active();
     lv_obj_t *settings_btn;
     lv_obj_t *mic;
+    lv_obj_t *dock;
     lv_obj_t *heading;
     lv_obj_t *manual;
     lv_obj_t *save;
@@ -840,10 +843,6 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_set_style_bg_color(screen, lv_color_hex(BG), 0);
     desk_toast_init(&s_toast_state);
     build_status_bar(screen);
-    s_phase = lv_label_create(screen);
-    lv_obj_set_style_text_font(s_phase, &lv_font_montserrat_48, 0);
-    lv_obj_set_style_text_color(s_phase, lv_color_hex(INK), 0);
-    lv_obj_align(s_phase, LV_ALIGN_TOP_MID, 0, PHASE_Y);
     s_title = lv_label_create(screen);
     lv_obj_set_width(s_title, SCREEN_PX - (EDGE_PX * 2));
     lv_label_set_long_mode(s_title, LV_LABEL_LONG_DOT);
@@ -860,6 +859,13 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_align(s_message, LV_ALIGN_TOP_MID, 0, MESSAGE_Y);
     build_agent_rows(screen);
     build_sleep(screen);
+    dock = lv_obj_create(screen);
+    lv_obj_set_size(dock, SCREEN_PX - (EDGE_PX * 2), COUNT_H + COUNT_GAP + BTN_H);
+    lv_obj_align(dock, LV_ALIGN_BOTTOM_MID, 0, -EDGE_PX);
+    flatten(dock);
+    lv_obj_set_style_bg_color(dock, lv_color_hex(DOCK), 0);
+    lv_obj_set_style_bg_opa(dock, LV_OPA_COVER, 0);
+    lv_obj_clear_flag(dock, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     s_count = lv_label_create(screen);
     lv_obj_set_style_text_font(s_count, &lv_font_montserrat_28, 0);
     lv_obj_set_style_text_color(s_count, lv_color_hex(ROW_MARK), 0);
@@ -1037,10 +1043,9 @@ void ui_set_settings_status(const char *text) {
 
 void ui_show_panel_note(const char *phase, const char *message) {
     sleep_stop();
-    if (!s_phase || !s_message) {
+    if (!s_message) {
         return;
     }
-    lv_label_set_text(s_phase, phase && phase[0] ? phase : "IDLE");
     lv_label_set_text(s_message, message ? message : "");
     present_status(phase && phase[0] ? phase : "IDLE", s_fail_count);
 }
@@ -1082,22 +1087,7 @@ void ui_show_networks(const net_ap_t *aps, int count) {
 void ui_apply(const desk_view_t *view, int failures) {
     char count[32];
     int i;
-    int lamp;
-    uint32_t phase = INK_DIM;
-    const char *label = desk_phase_label(view, failures);
-    lamp = present_status(label, failures);
-    if (lamp == DESK_LAMP_RED && strcmp(label, "link down") != 0) {
-        label = "link down";
-    }
-    lv_label_set_text(s_phase, label);
-    if (lamp != DESK_LAMP_RED && failures < 3) {
-        if (view->needs_you || strcmp(view->phase, "needs_you") == 0) {
-            phase = 0xe2a23a;
-        } else if (strcmp(view->phase, "running") == 0) {
-            phase = ROW_MARK;
-        }
-    }
-    lv_obj_set_style_text_color(s_phase, lv_color_hex(phase), 0);
+    int lamp = present_status(desk_phase_label(view, failures), failures);
     lv_label_set_text(s_title, view->title[0] ? view->title : "Waiting");
     if (s_mic_hold > 0) {
         s_mic_hold--;

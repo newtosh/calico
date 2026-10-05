@@ -46,22 +46,30 @@
       #lamp.red {
         background: #c4544a;
       }
+      #brand,
       #toast {
         position: absolute;
         left: 50%;
         top: 0;
-        max-width: 168px;
+        width: 168px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
         font-size: 16px;
         line-height: 32px;
-        opacity: 0;
+        color: #efe7d6;
+        text-align: center;
         pointer-events: none;
-        transform: translate(-50%, -8px);
+        transform: translateX(-50%);
+      }
+      #toast {
+        opacity: 0;
       }
       #toast.show {
         animation: toast 3.2s ease forwards;
+      }
+      #bar:has(#toast.show) #brand {
+        visibility: hidden;
       }
       @keyframes toast {
         0% {
@@ -134,18 +142,6 @@
       #panel.needs #bar {
         visibility: hidden;
       }
-      #phase {
-        margin-top: 2px;
-        font-size: 48px;
-        line-height: 1;
-        font-weight: 600;
-        letter-spacing: 0.04em;
-        text-align: center;
-        color: #a39b88;
-      }
-      #panel.running #phase {
-        color: #9bb57a;
-      }
       #title,
       #message,
       #count {
@@ -206,6 +202,13 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
+      #chrome {
+        width: 100%;
+        background: #0c0e09;
+      }
+      #panel.needs #chrome {
+        background: transparent;
       }
       #count {
         margin: 0 0 8px;
@@ -306,7 +309,6 @@
         background: #e2a23a;
         color: #14160f;
       }
-      #panel.needs #phase,
       #panel.needs #title,
       #panel.needs #message,
       #panel.needs #count {
@@ -323,6 +325,7 @@
     <div id="panel" class="asleep">
       <div id="bar">
         <i id="lamp" class="amber"></i>
+        <div id="brand">grokbot-buddy</div>
         <div id="toast"></div>
         <div id="glance">
           <span id="wifi" data-bars="0" title="Wi-Fi"><i></i><i></i><i></i></span>
@@ -330,7 +333,6 @@
           <button id="rotlock" type="button" aria-pressed="false">Auto</button>
         </div>
       </div>
-      <div id="phase">IDLE</div>
       <p id="title">Waiting</p>
       <p id="message"></p>
       <div id="sleeper" aria-hidden="true">
@@ -338,16 +340,17 @@
         <b>Zzz</b>
       </div>
       <div id="agents"></div>
-      <p id="count">0 running</p>
-      <div id="dock">
-        <button id="mic" type="button">Mic</button>
-        <button id="settings" type="button">Settings</button>
+      <div id="chrome">
+        <p id="count">0 running</p>
+        <div id="dock">
+          <button id="mic" type="button">Mic</button>
+          <button id="settings" type="button">Settings</button>
+        </div>
       </div>
     </div>
     <script>
       const base = new URLSearchParams(location.search).get("base") || "http://127.0.0.1:8787";
       const panel = document.getElementById("panel");
-      const phase = document.getElementById("phase");
       const title = document.getElementById("title");
       const message = document.getElementById("message");
       const count = document.getElementById("count");
@@ -359,6 +362,7 @@
       const neutral = "#a39b88";
       let failures = 0;
       let statusSeen = "IDLE";
+      let face = "IDLE";
 
       function statusText(phaseLabel, fail) {
         if (phaseLabel === "NO NETWORK" || phaseLabel === "SCAN FAILED") return phaseLabel;
@@ -375,6 +379,8 @@
         void toast.offsetWidth;
         toast.classList.add("show");
       }
+
+      toast.addEventListener("animationend", () => toast.classList.remove("show"));
 
       function paintLink(phaseLabel, fail) {
         const text = statusText(phaseLabel, fail);
@@ -411,8 +417,8 @@
           if (!response.ok) throw new Error(String(response.status));
           const status = await response.json();
           failures = 0;
-          phase.textContent = label(status);
-          paintLink(label(status), failures);
+          face = label(status);
+          paintLink(face, failures);
           title.textContent = (status.last_event && (status.last_event.title || status.last_event.message)) || "Waiting";
           message.textContent = (status.last_event && status.last_event.message) || "";
           const running = (status.agents || []).filter((agent) => agent.status === "running").length;
@@ -432,14 +438,10 @@
             agents.append(row);
           });
           panel.classList.toggle("needs", status.needs_you === true);
-          panel.classList.toggle(
-            "running",
-            status.needs_you !== true && status.phase === "running",
-          );
         } catch (err) {
           failures = Math.min(3, failures + 1);
-          phase.textContent = failures >= 3 ? "link down" : phase.textContent;
-          paintLink(phase.textContent, failures);
+          if (failures >= 3) face = "link down";
+          paintLink(face, failures);
           if (failures >= 3) {
             panel.classList.remove("asleep");
           }
