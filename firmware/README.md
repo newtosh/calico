@@ -15,6 +15,22 @@ idf.py -p PORT flash monitor
 
 The managed BSP is `waveshare/esp32_s3_touch_amoled_2_16` `^2.0.1` with LVGL 9, declared in `main/idf_component.yml`. `sdkconfig.defaults` matches the official LVGL example: 16 MB flash, octal PSRAM, Montserrat 16/20/24.
 
+## Upright
+
+This SKU has a QMI8658 on the shared I2C bus (SDA GPIO15, SCL GPIO14, address `0x6B` on the schematic). BSP 2.0.1 sets `BSP_CAPS_IMU` to 0 and its I2C comment still names a QMA7981, so the firmware reads the chip with `waveshare/qmi8658` on `bsp_i2c_get_handle()`.
+
+Gravity snaps the UI to 0/90/180/270. The panel boots with MADCTL `0xA0`; that picture is quarter 0. Flat (Z wins), a weak reading, or a near-diagonal holds the last quarter. Four matching samples, 100 ms apart, have to agree before the picture turns. Settings open freezes the angle so the keyboard stays put.
+
+Chip +Y is treated as the top edge of that boot picture. The schematic names the part and `0x6B`; it does not mark the chip's X arrow on the glass.
+
+`idf.py` is not on the machine that added this, so it was not flashed here. On the desk, from `firmware/`:
+
+```bash
+idf.py -p /dev/ttyACM0 app-flash
+```
+
+`app-flash` writes the application only. It does not erase NVS.
+
 On first boot no network is saved, so the settings screen is up and scans for networks. Tap a row to select an SSID (Scan repeats the scan). Password, a companion URL for that network, and a bearer token for that network are labeled fields under the list. Type SSID is only for a hidden network. Saving adds that network to the known list (up to 8) and restarts. It does not erase the others. The default companion URL is `http://192.168.4.30:8787`. A network with no URL of its own uses the global URL, then that default.
 
 At boot the panel scans and joins whichever saved SSID is actually in range. If more than one is in range, it uses the strongest RSSI. A saved SSID that does not show up in the broadcast scan is probed once, so a hidden network typed by hand can still be joined. If none of the saved networks are in range, the panel shows `NO NETWORK` / `No saved network in range` and does not keep retrying one missing SSID. Association of the network it did pick still stops after 10 disconnects.
@@ -62,6 +78,8 @@ gcc -Wall -Werror -I firmware/main firmware/host/test_desk_view.c firmware/main/
 /tmp/test_desk_view
 gcc -Wall -Werror -I firmware/main firmware/host/test_wifi_store.c firmware/main/wifi_store.c -o /tmp/test_wifi_store
 /tmp/test_wifi_store
+gcc -Wall -Werror -I firmware/main firmware/host/test_orient.c firmware/main/orient.c -o /tmp/test_orient
+/tmp/test_orient
 ```
 
 Open `firmware/simulator/index.html` in a browser. It polls `http://127.0.0.1:8787` unless you pass `?base=http://192.168.1.20:8787`.

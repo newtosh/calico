@@ -8,6 +8,7 @@ typedef void (*ui_scan_fn)(void);
 
 void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan);
 void ui_open_settings(void);
+int ui_settings_is_open(void);
 void ui_set_fields(const desk_settings_t *settings);
 void ui_set_known(const wifi_store_t *store);
 void ui_show_scanning(void);

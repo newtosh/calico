@@ -1,11 +1,14 @@
 #include "net.h"
+#include "orient.h"
 #include "ui.h"
 
 #include "bsp/esp-bsp.h"
 #include "esp_check.h"
 #include "esp_err.h"
+#include "esp_log.h"
 #include "esp_lv_adapter.h"
 #include "esp_system.h"
+#include "qmi8658.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
@@ -19,6 +22,17 @@ static desk_settings_t s_active;
 static int s_failures;
 static char s_status_body[8192];
 static volatile int s_scan_busy;
+static int s_quarter;
+static lv_indev_read_cb_t s_touch_read;
+
+/* Panel init writes MADCTL 0xA0. bsp_display_rotation_set calls that value
+ * 270, and each step after it is +90 clockwise. Quarter 0 is the boot picture. */
+static const bsp_display_rotation_t s_panel_quarter[4] = {
+    BSP_DISPLAY_ROTATE_270,
+    BSP_DISPLAY_ROTATE_0,
+    BSP_DISPLAY_ROTATE_90,
+    BSP_DISPLAY_ROTATE_180,
+};
 
 static void copy_setting(char *dest, size_t dest_len, const char *src) {
     size_t i;
@@ -163,6 +177,73 @@ static void join_task(void *arg) {
     vTaskDelete(NULL);
 }
 
+static void touch_read(lv_indev_t *indev, lv_indev_data_t *data) {
+    int x;
+    int y;
+    s_touch_read(indev, data);
+    x = data->point.x;
+    y = data->point.y;
+    orient_touch_point(s_quarter, &x, &y);
+    data->point.x = x;
+    data->point.y = y;
+}
+
+static void apply_quarter(int quarter) {
+    lv_indev_t *indev;
+    if (quarter == s_quarter) {
+        return;
+    }
+    if (bsp_display_rotation_set(s_panel_quarter[quarter]) != ESP_OK) {
+        return;
+    }
+    s_quarter = quarter;
+    indev = bsp_display_get_input_dev();
+    if (indev) {
+        lv_indev_reset(indev, NULL);
+    }
+    lv_obj_invalidate(lv_screen_active());
+    ESP_LOGI("orient", "quarter %d", quarter);
+}
+
+static void hook_touch(void) {
+    lv_indev_t *indev = bsp_display_get_input_dev();
+    if (!indev) {
+        return;
+    }
+    s_touch_read = lv_indev_get_read_cb(indev);
+    if (s_touch_read) {
+        lv_indev_set_read_cb(indev, touch_read);
+    }
+}
+
+static void imu_task(void *arg) {
+    qmi8658_dev_t dev;
+    orient_debounce_t deb;
+    (void)arg;
+    if (qmi8658_init(&dev, bsp_i2c_get_handle(), QMI8658_ADDRESS_HIGH) != ESP_OK) {
+        ESP_LOGE("orient", "QMI8658 not readable at 0x6B");
+        vTaskDelete(NULL);
+        return;
+    }
+    orient_debounce_init(&deb);
+    for (;;) {
+        float ax;
+        float ay;
+        float az;
+        int shown;
+        if (qmi8658_read_accel(&dev, &ax, &ay, &az) == ESP_OK) {
+            shown = orient_debounce_feed(&deb, orient_from_accel((int)ax, (int)ay, (int)az));
+            if (shown != s_quarter && lock_lvgl()) {
+                if (!ui_settings_is_open()) {
+                    apply_quarter(shown);
+                }
+                unlock_lvgl();
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
 void app_main(void) {
     esp_err_t err = nvs_flash_init();
     desk_settings_t fields;
@@ -171,6 +252,13 @@ void app_main(void) {
         ESP_ERROR_CHECK(nvs_flash_init());
     }
     bsp_display_start();
+    if (lock_lvgl()) {
+        hook_touch();
+        unlock_lvgl();
+    }
+    if (xTaskCreate(imu_task, "imu", 4096, NULL, 3, NULL) != pdPASS) {
+        ESP_LOGE("orient", "imu task not started");
+    }
     net_load(&s_store);
     memset(&fields, 0, sizeof(fields));
     copy_setting(fields.url, sizeof(fields.url), s_store.url);

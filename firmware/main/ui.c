@@ -714,6 +714,10 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     ui_apply(&(desk_view_t){0}, 0);
 }
 
+int ui_settings_is_open(void) {
+    return s_settings && !lv_obj_has_flag(s_settings, LV_OBJ_FLAG_HIDDEN);
+}
+
 void ui_open_settings(void) {
     sleep_stop();
     lv_obj_set_hidden(s_settings, false);
