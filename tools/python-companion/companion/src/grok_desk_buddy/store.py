@@ -110,6 +110,21 @@ class DeskStore:
             icon=clip_text(raw.icon, ICON_LIMIT),
         )
         with self._lock:
+            # A standing launch ping must not flood the log or clear NEEDS YOU.
+            if raw.type == "agent.launched":
+                current = self._agents.get(raw.agent_id)
+                if current is not None and current.status in {"running", "needs_you"}:
+                    self._upsert(
+                        raw.agent_id,
+                        raw.title,
+                        current.status,
+                        event.at,
+                        event.color,
+                        event.shape,
+                        event.icon,
+                    )
+                    self._persist()
+                    return event
             self._remember(event)
             if raw.type in _STATUS_FOR_TYPE:
                 self._upsert(

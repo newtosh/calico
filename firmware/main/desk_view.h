@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stddef.h>
 #include <stdint.h>
 
 #define DESK_AGENT_MAX 6
@@ -25,6 +26,7 @@ typedef struct {
     char title[96];
     char message[160];
     int running_count;
+    int known_count;
     desk_agent_t agents[DESK_AGENT_MAX];
     int agent_count;
 } desk_view_t;
@@ -40,6 +42,7 @@ int desk_view_from_json(const char *json, desk_view_t *out);
 /* Face headline. Empty when last_event has no useful title. A dismiss
  * acknowledgement is not one. Notes, launches, and needs-you questions keep theirs. */
 const char *desk_face_title(const desk_view_t *view);
+void desk_count_text(const desk_view_t *view, char *out, size_t out_len);
 int desk_panel_from_json(const char *json, desk_panel_t *out);
 int desk_panel_should_apply(const desk_panel_t *panel, const char *url, const char *token);
 /* 1 when the push should be stored. A different URL is stored only if that

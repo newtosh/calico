@@ -15,6 +15,7 @@ static void check(int cond, const char *msg) {
 
 int main(void) {
     desk_view_t view;
+    char label[32];
     const char *sample =
         "{\"phase\":\"running\",\"needs_you\":false,\"agents\":[{\"id\":\"a1\",\"status\":\"running\"}],"
         "\"last_event\":{\"title\":\"Scaffold\",\"message\":\"Pick one\"},\"events\":[]}";
@@ -23,6 +24,9 @@ int main(void) {
     check(strcmp(view.message, "Pick one") == 0, "message");
     check(strcmp(desk_face_title(&view), "Scaffold") == 0, "launch stays the headline");
     check(view.running_count == 1, "running count");
+    check(view.known_count == 1, "one known");
+    desk_count_text(&view, label, sizeof(label));
+    check(strcmp(label, "1/1 running") == 0, "one of one");
     check(strcmp(desk_phase_label(&view, 0), "RUNNING") == 0, "running label");
     check(desk_quiet_idle(&view, 0) == 0, "running is not quiet");
 
@@ -50,6 +54,11 @@ int main(void) {
     check(view.title[0] == '\0', "empty title");
     check(desk_face_title(&view)[0] == '\0', "empty headline");
     check(desk_face_title(NULL)[0] == '\0', "null headline");
+    check(view.known_count == 0 && view.running_count == 0, "empty store");
+    desk_count_text(&view, label, sizeof(label));
+    check(strcmp(label, "idle") == 0, "empty count is idle");
+    desk_count_text(NULL, label, sizeof(label));
+    check(strcmp(label, "idle") == 0, "null view is idle");
     check(strcmp(desk_phase_label(&view, 0), "IDLE") == 0, "idle label");
     check(desk_quiet_idle(&view, 0) == 1, "idle is quiet");
     check(desk_quiet_idle(&view, 2) == 1, "two misses still quiet");
@@ -131,6 +140,9 @@ int main(void) {
     uint32_t color = 0;
     check(desk_view_from_json(marked, &view) == 0, "marked parse");
     check(view.agent_count == 6, "agent cap");
+    check(view.known_count == 7, "known includes the dropped row");
+    desk_count_text(&view, label, sizeof(label));
+    check(strcmp(label, "idle") == 0, "no running status is idle");
     check(strcmp(view.agents[0].title, "Scaffold") == 0, "agent title");
     check(strcmp(view.agents[0].color, "#C45C26") == 0, "agent color");
     check(strcmp(view.agents[0].shape, "diamond") == 0, "agent shape");
@@ -172,6 +184,34 @@ int main(void) {
         "\"source\":\"grok-bot\",\"title\":\"Scaffold\",\"message\":\"Pick one\"}}";
     check(desk_view_from_json(question, &view) == 0, "question parse");
     check(strcmp(desk_face_title(&view), "Scaffold") == 0, "question title stays");
+
+    const char *pair =
+        "{\"phase\":\"running\",\"needs_you\":false,\"agents\":["
+        "{\"id\":\"scaffold\",\"title\":\"Scaffold\",\"status\":\"running\","
+        "\"color\":\"#c45c26\",\"shape\":\"diamond\"},"
+        "{\"id\":\"jeeves\",\"title\":\"Jeeves\",\"status\":\"idle\",\"shape\":\"square\"}"
+        "],\"last_event\":{\"title\":\"Scaffold\",\"message\":\"started\"},\"events\":[]}";
+    check(desk_view_from_json(pair, &view) == 0, "pair parse");
+    check(view.agent_count == 2, "pair rows");
+    check(strcmp(view.agents[0].title, "Scaffold") == 0, "scaffold title");
+    check(strcmp(view.agents[1].title, "Jeeves") == 0, "jeeves title");
+    check(desk_mark_shape(view.agents[0].shape) == DESK_SHAPE_DIAMOND, "scaffold mark");
+    check(desk_mark_shape(view.agents[1].shape) == DESK_SHAPE_SQUARE, "jeeves mark");
+    check(view.running_count == 1 && view.known_count == 2, "one of two running");
+    check(strcmp(desk_face_title(&view), "Scaffold") == 0, "pair headline");
+    desk_count_text(&view, label, sizeof(label));
+    check(strcmp(label, "1/2 running") == 0, "pair count");
+
+    const char *both_idle =
+        "{\"phase\":\"idle\",\"agents\":["
+        "{\"id\":\"scaffold\",\"title\":\"Scaffold\",\"status\":\"idle\"},"
+        "{\"id\":\"jeeves\",\"title\":\"Jeeves\",\"status\":\"idle\"}]}";
+    check(desk_view_from_json(both_idle, &view) == 0, "both idle parse");
+    check(view.agent_count == 2 && view.known_count == 2, "idle rows stay");
+    check(view.running_count == 0, "neither running");
+    check(strcmp(view.agents[0].title, "Scaffold") == 0, "idle scaffold title");
+    desk_count_text(&view, label, sizeof(label));
+    check(strcmp(label, "idle") == 0, "zero running is idle");
 
     if (g_failed) {
         return 1;

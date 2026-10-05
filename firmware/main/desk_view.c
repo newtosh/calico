@@ -1,5 +1,6 @@
 #include "desk_view.h"
 
+#include <stdio.h>
 #include <string.h>
 #include <strings.h>
 
@@ -81,22 +82,6 @@ static const char *object_end(const char *open) {
 
 static void read_agents(const char *json, desk_view_t *out);
 
-static int count_running(const char *json) {
-    const char *p = json;
-    int count = 0;
-    while ((p = strstr(p, "\"status\"")) != NULL) {
-        const char *value = skip_ws(p + strlen("\"status\""));
-        if (*value == ':') {
-            value = skip_ws(value + 1);
-            if (strncmp(value, "\"running\"", 9) == 0) {
-                count++;
-            }
-        }
-        p += 8;
-    }
-    return count;
-}
-
 int desk_view_from_json(const char *json, desk_view_t *out) {
     const char *last;
     const char *value;
@@ -126,9 +111,19 @@ int desk_view_from_json(const char *json, desk_view_t *out) {
             }
         }
     }
-    out->running_count = count_running(json);
     read_agents(json, out);
     return 0;
+}
+
+void desk_count_text(const desk_view_t *view, char *out, size_t out_len) {
+    if (!out || out_len == 0) {
+        return;
+    }
+    if (!view || view->running_count <= 0) {
+        snprintf(out, out_len, "idle");
+        return;
+    }
+    snprintf(out, out_len, "%d/%d running", view->running_count, view->known_count);
 }
 
 /* Top-level only. A status event can quote the word panel; that must not
@@ -237,9 +232,10 @@ static void read_agents(const char *json, desk_view_t *out) {
         return;
     }
     p++;
-    while (*p && out->agent_count < DESK_AGENT_MAX) {
+    while (*p) {
         const char *end;
         desk_agent_t *agent;
+        char status[16];
         p = skip_ws(p);
         if (*p == ']') {
             break;
@@ -252,12 +248,20 @@ static void read_agents(const char *json, desk_view_t *out) {
             break;
         }
         end = object_end(p);
-        agent = &out->agents[out->agent_count];
-        read_string_field(p, end, "id", agent->id, sizeof(agent->id));
-        read_string_field(p, end, "title", agent->title, sizeof(agent->title));
-        read_string_field(p, end, "color", agent->color, sizeof(agent->color));
-        read_string_field(p, end, "shape", agent->shape, sizeof(agent->shape));
-        out->agent_count++;
+        status[0] = '\0';
+        read_string_field(p, end, "status", status, sizeof(status));
+        if (strcmp(status, "running") == 0) {
+            out->running_count++;
+        }
+        out->known_count++;
+        if (out->agent_count < DESK_AGENT_MAX) {
+            agent = &out->agents[out->agent_count];
+            read_string_field(p, end, "id", agent->id, sizeof(agent->id));
+            read_string_field(p, end, "title", agent->title, sizeof(agent->title));
+            read_string_field(p, end, "color", agent->color, sizeof(agent->color));
+            read_string_field(p, end, "shape", agent->shape, sizeof(agent->shape));
+            out->agent_count++;
+        }
         p = end;
     }
 }

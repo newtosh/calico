@@ -45,7 +45,7 @@ See [firmware/README.md](firmware/README.md). ESP-IDF 5.5, target `esp32s3`, BSP
 
 ## Grok Bot
 
-Point a Scaffold routine at the companion on launch and on finish. Optional `color`, `shape`, and `icon` on that webhook are what make each session distinct on the dashboard and the panel. Full schema and a curl example: [docs/grok-bot-integration.md](docs/grok-bot-integration.md).
+Point a Scaffold routine at the companion on launch and on finish. Nothing else discovers a Grok Bot session: until `agent.launched` arrives, that bot is not a row. Optional `color`, `shape`, and `icon` on that webhook are what make each session distinct on the dashboard and the panel. Full schema, the standing ping, and a curl example: [docs/grok-bot-integration.md](docs/grok-bot-integration.md).
 
 ```bash
 curl -s -X POST http://127.0.0.1:8787/api/webhook/grok-bot \

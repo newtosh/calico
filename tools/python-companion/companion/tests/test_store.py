@@ -190,6 +190,40 @@ def test_old_sqlite_schema_gains_identity_columns(tmp_path: Path) -> None:
     assert agent[0]["icon"] == ""
 
 
+def test_standing_launch_keeps_the_row_and_needs_you() -> None:
+    store = DeskStore()
+    store.apply_event(EventIn(type="agent.launched", agent_id="scaffold", title="Scaffold"))
+    store.apply_event(EventIn(type="agent.launched", agent_id="jeeves", title="Jeeves"))
+    store.apply_event(EventIn(type="agent.finished", agent_id="jeeves"))
+    body = store.status()
+    assert body["phase"] == "running"
+    agents = {item["id"]: item for item in body["agents"]}
+    assert agents["scaffold"]["status"] == "running"
+    assert agents["jeeves"]["status"] == "idle"
+    assert len(body["events"]) == 3
+
+    store.apply_event(EventIn(type="agent.launched", agent_id="scaffold", title="Scaffold desk"))
+    refreshed = store.status()
+    assert len(refreshed["events"]) == 3
+    scaffold = next(item for item in refreshed["agents"] if item["id"] == "scaffold")
+    assert scaffold["status"] == "running"
+    assert scaffold["title"] == "Scaffold desk"
+
+    store.apply_event(EventIn(type="agent.needs_you", agent_id="scaffold", message="Pick one"))
+    store.apply_event(EventIn(type="agent.launched", agent_id="scaffold", title="Scaffold"))
+    blocked = store.status()
+    assert blocked["needs_you"] is True
+    assert len(blocked["events"]) == 4
+    scaffold = next(item for item in blocked["agents"] if item["id"] == "scaffold")
+    assert scaffold["status"] == "needs_you"
+
+    store.apply_event(EventIn(type="agent.launched", agent_id="jeeves", title="Jeeves"))
+    back = store.status()
+    jeeves = next(item for item in back["agents"] if item["id"] == "jeeves")
+    assert jeeves["status"] == "running"
+    assert len(back["events"]) == 5
+
+
 def test_cursor_item_does_not_repeat(tmp_path: Path) -> None:
     path = str(tmp_path / "desk.sqlite")
     store = DeskStore(sqlite_path=path)

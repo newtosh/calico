@@ -244,6 +244,7 @@
       }
       #mic,
       #settings {
+        width: 80px;
         height: 64px;
         padding: 0;
         display: grid;
@@ -256,13 +257,12 @@
         height: 40px;
       }
       #mic {
-        width: 148px;
         background: #24261f;
         border-color: rgba(109, 103, 86, 0.4);
         color: rgba(239, 231, 214, 0.5);
       }
-      #settings {
-        width: 204px;
+      #count.idle {
+        color: #a39b88;
       }
       #sleeper {
         display: none;
@@ -468,9 +468,11 @@
           paintLink(face, failures);
           title.textContent = faceTitle(status.last_event);
           message.textContent = (status.last_event && status.last_event.message) || "";
-          const running = (status.agents || []).filter((agent) => agent.status === "running").length;
+          const list = status.agents || [];
+          const running = list.filter((agent) => agent.status === "running").length;
           const quiet = label(status) === "IDLE" && running === 0;
-          count.textContent = running + " running";
+          count.textContent = running === 0 ? "idle" : running + "/" + list.length + " running";
+          count.classList.toggle("idle", running === 0);
           panel.classList.toggle("asleep", quiet);
           agents.replaceChildren();
           (status.agents || []).slice(0, 6).forEach((agent) => {

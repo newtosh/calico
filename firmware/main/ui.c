@@ -25,8 +25,7 @@ enum {
     AGENT_STRIDE = AGENT_ROW_H + AGENT_GAP,
     MARK_PX = 24,
     BTN_H = 64,
-    BTN_MIC_W = 148,
-    BTN_SET_W = 204,
+    BTN_W = 80,
     COUNT_H = 28,
     COUNT_GAP = 8,
     COUNT_TOP = SCREEN_PX - EDGE_PX - BTN_H - COUNT_GAP - COUNT_H,
@@ -898,10 +897,10 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_set_style_text_color(s_count, lv_color_hex(ROW_MARK), 0);
     lv_obj_align(s_count, LV_ALIGN_BOTTOM_MID, 0, -(EDGE_PX + BTN_H + COUNT_GAP));
     mic = icon_button(screen, &desk_icon_mic, on_mic, 1);
-    lv_obj_set_size(mic, BTN_MIC_W, BTN_H);
+    lv_obj_set_size(mic, BTN_W, BTN_H);
     lv_obj_align(mic, LV_ALIGN_BOTTOM_LEFT, EDGE_PX, -EDGE_PX);
     settings_btn = icon_button(screen, &desk_icon_settings, on_open_settings, 0);
-    lv_obj_set_size(settings_btn, BTN_SET_W, BTN_H);
+    lv_obj_set_size(settings_btn, BTN_W, BTN_H);
     lv_obj_align(settings_btn, LV_ALIGN_BOTTOM_RIGHT, -EDGE_PX, -EDGE_PX);
 
     s_alert = lv_obj_create(screen);
@@ -1140,8 +1139,10 @@ void ui_apply(const desk_view_t *view, int failures) {
         lv_label_set_text(s_agent_labels[i], label[0] ? label : "agent");
         lv_obj_set_hidden(s_agent_rows[i], false);
     }
-    snprintf(count, sizeof(count), "%d running", view->running_count);
+    desk_count_text(view, count, sizeof(count));
     lv_label_set_text(s_count, count);
+    lv_obj_set_style_text_color(s_count, lv_color_hex(view->running_count > 0 ? ROW_MARK : INK_DIM),
+                                0);
     if (view->needs_you && failures < 3) {
         lv_obj_set_hidden(s_alert, false);
     } else {

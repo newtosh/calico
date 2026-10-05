@@ -34,7 +34,9 @@ Grok Bot’s own webhook body, as used by this companion today, has no icon, acc
 
 `agent.launched` marks that agent running. `agent.finished` marks it idle. `agent.needs_you` fills the panel and the dashboard with NEEDS YOU until `POST /api/dismiss` or a tap on the panel. `note` is a line in the event list and does not change agents.
 
-The server assigns `id` and `at` and returns the stored event with status 201. Unknown `type`, or an agent event with an empty `agent_id`, is 400.
+The server assigns `id` and `at` and returns the event with status 201. Unknown `type`, or an agent event with an empty `agent_id`, is 400. A repeat `agent.launched` while that agent is already running or in NEEDS YOU refreshes the row, is not stored again, and does not clear NEEDS YOU.
+
+Grok Bot has no device API here. A session is on the desk only after it POSTs `agent.launched`. Repeat that POST with the same `agent_id` while the routine is running, and post `agent.finished` when it stops. Idle rows stay. `X` in `n/X running` is every agent still in this store.
 
 ## Routine sketch
 
@@ -49,7 +51,7 @@ curl -s -X POST "$DESK_URL/api/webhook/grok-bot" \
 
 `color`, `shape`, and `icon` are optional. Drop them to keep the neutral mark.
 
-On finish, the same call with `"type":"agent.finished"`. When the routine needs a person, send `"type":"agent.needs_you"` and the question in `message`. Drop the Authorization header when no token is configured.
+On finish, the same call with `"type":"agent.finished"`. While the routine is still running, repeat the launch POST with the same `agent_id`. When the routine needs a person, send `"type":"agent.needs_you"` and the question in `message`. Drop the Authorization header when no token is configured.
 
 Dismiss from anything that is not the panel:
 
