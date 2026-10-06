@@ -385,6 +385,17 @@ int desk_view_from_json(const char *json, desk_view_t *out) {
     if (read_top_int(json, "unread", &out->unread) != 0 || out->unread < 0) {
         out->unread = 0;
     }
+    {
+        const char *cap = find_top_key(json, "capture");
+        const char *bit;
+        if (cap) {
+            bit = skip_ws(cap + strlen("\"capture\""));
+            if (*bit == ':') {
+                bit = skip_ws(bit + 1);
+                out->capture = strncmp(bit, "true", 4) == 0;
+            }
+        }
+    }
     last = find_key(json, json + strlen(json), "needs_you");
     if (last) {
         value = skip_ws(last + strlen("\"needs_you\""));
@@ -411,7 +422,8 @@ int desk_view_from_json(const char *json, desk_view_t *out) {
 }
 
 int desk_view_same(const desk_view_t *a, const desk_view_t *b) {
-    return a && b && memcmp(a, b, sizeof(*a)) == 0;
+    /* capture is a one-shot side channel. A request must not look like a new desk. */
+    return a && b && memcmp(a, b, offsetof(desk_view_t, capture)) == 0;
 }
 
 int desk_status_same(const desk_view_t *a, int failures_a, const desk_view_t *b, int failures_b) {
@@ -753,6 +765,79 @@ const char *desk_face_title(const desk_view_t *view) {
 
 static int agent_needs(const desk_agent_t *agent) {
     return agent->attention || strcmp(agent->status, "needs_you") == 0;
+}
+
+int desk_sheet_agent(const desk_view_t *view) {
+    int i;
+    if (!view || view->agent_count < 1) {
+        return -1;
+    }
+    if (agent_needs(&view->agents[0])) {
+        return 0;
+    }
+    for (i = 1; i < view->agent_count; i++) {
+        if (agent_needs(&view->agents[i])) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+uint32_t desk_sheet_ink(uint32_t color) {
+    int r = (int)((color >> 16) & 255u);
+    int g = (int)((color >> 8) & 255u);
+    int b = (int)(color & 255u);
+    int y = (299 * r + 587 * g + 114 * b) / 1000;
+    return y < 140 ? 0xefe7d6u : 0x14160fu;
+}
+
+int desk_sheet_dismiss(int overflow, int dy, int dt_ms) {
+    if (dy < 40) {
+        return 0;
+    }
+    if (!overflow) {
+        return 1;
+    }
+    if (dy < 48 || dt_ms > 280) {
+        return 0;
+    }
+    return 1;
+}
+
+static void bmp_u16(uint8_t *p, unsigned v) {
+    p[0] = (uint8_t)(v & 255u);
+    p[1] = (uint8_t)((v >> 8) & 255u);
+}
+
+static void bmp_u32(uint8_t *p, unsigned v) {
+    p[0] = (uint8_t)(v & 255u);
+    p[1] = (uint8_t)((v >> 8) & 255u);
+    p[2] = (uint8_t)((v >> 16) & 255u);
+    p[3] = (uint8_t)((v >> 24) & 255u);
+}
+
+int desk_bmp565_header(uint8_t *dst, size_t cap, int w, int h) {
+    unsigned pixels;
+    if (!dst || w < 1 || h < 1 || cap < 66) {
+        return -1;
+    }
+    pixels = (unsigned)w * (unsigned)h * 2u;
+    memset(dst, 0, 66);
+    dst[0] = 'B';
+    dst[1] = 'M';
+    bmp_u32(dst + 2, 66u + pixels);
+    bmp_u32(dst + 10, 66u);
+    bmp_u32(dst + 14, 40u);
+    bmp_u32(dst + 18, (unsigned)w);
+    bmp_u32(dst + 22, (unsigned)(-h));
+    bmp_u16(dst + 26, 1u);
+    bmp_u16(dst + 28, 16u);
+    bmp_u32(dst + 30, 3u);
+    bmp_u32(dst + 34, pixels);
+    bmp_u32(dst + 54, 0x0000f800u);
+    bmp_u32(dst + 58, 0x000007e0u);
+    bmp_u32(dst + 62, 0x0000001fu);
+    return 66;
 }
 
 static int title_hits(const desk_view_t *view, const char *title) {

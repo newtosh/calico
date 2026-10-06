@@ -144,9 +144,6 @@
         border-color: #9bb57a;
         background: #3d4f32;
       }
-      #panel.needs #bar {
-        visibility: hidden;
-      }
       #face {
         flex: 1;
         min-height: 0;
@@ -319,9 +316,6 @@
         padding: 16px 24px 24px;
         background: #0c0e09;
       }
-      #panel.needs #chrome {
-        background: transparent;
-      }
       #dock {
         display: flex;
         align-items: center;
@@ -440,14 +434,67 @@
         padding: 8px 14px;
         font: inherit;
       }
-      #panel.needs {
-        background: #e2a23a;
-        color: #14160f;
+      #sheet {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 48px;
+        bottom: -36px;
+        z-index: 4;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 28px 24px 72px;
+        border-radius: 36px 36px 0 0;
+        transform: translateY(110%);
+        transition: transform 280ms ease-out;
+        pointer-events: none;
       }
-      #panel.needs #title,
-      #panel.needs #message,
-      #panel.needs #count {
-        color: #14160f;
+      #sheet.up {
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+      #sheet .plate {
+        width: 168px;
+        height: 168px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+      }
+      #sheet .mark {
+        width: 120px;
+        height: 120px;
+      }
+      #sheet .mark.square {
+        border-radius: 10px;
+      }
+      #sheet .mark.rounded {
+        border-radius: 30px;
+      }
+      #sheet .mark.diamond {
+        width: 90px;
+        height: 90px;
+      }
+      #sheet h2 {
+        margin: 0;
+        width: 100%;
+        font-size: 24px;
+        font-weight: 400;
+        line-height: 1.2;
+        text-align: center;
+      }
+      #sheet .copy {
+        flex: 1;
+        min-height: 0;
+        width: 100%;
+        overflow: auto;
+        font-size: 20px;
+        line-height: 1.25;
+        text-align: center;
       }
       #title.badge {
         align-self: center;
@@ -462,15 +509,6 @@
         font-size: 16px;
         line-height: 22px;
         cursor: pointer;
-      }
-      #panel.needs #title.badge {
-        background: #14160f;
-        color: #e2a23a;
-      }
-      #panel.needs button {
-        background: #14160f;
-        color: #efe7d6;
-        border-color: #14160f;
       }
     </style>
   </head>
@@ -535,6 +573,11 @@
       </div>
       <div id="agents"></div>
       <button id="newjump" type="button" hidden>1 new</button>
+      </div>
+      <div id="sheet">
+        <div class="plate"><i class="mark circle"></i></div>
+        <h2></h2>
+        <div class="copy"></div>
       </div>
       <div id="chrome">
         <div id="dock">
@@ -620,7 +663,7 @@
         const away =
           agents.scrollTop > 0 &&
           !panel.classList.contains("asleep") &&
-          !panel.classList.contains("needs");
+          !document.getElementById("sheet").classList.contains("up");
         newjump.hidden = !away || unseen < 1;
         if (newjump.hidden) return;
         newjump.textContent = unseen > 99 ? "99+ new" : unseen + " new";
@@ -830,7 +873,7 @@
           settling = false;
           unseen = agents.scrollTop > 0 ? unseen + added : 0;
           prevStatus = status;
-          panel.classList.toggle("needs", label(status) === "NEEDS YOU");
+          paintSheet(status);
           paintNew();
         } catch (err) {
           failures = Math.min(3, failures + 1);
@@ -857,11 +900,82 @@
         if (!title.classList.contains("badge")) return;
         fetch(base + "/api/unread/dismiss", { method: "POST" }).then(() => tick());
       });
-      panel.addEventListener("click", (event) => {
-        if (event.target.closest("button") || !panel.classList.contains("needs")) {
+      const sheet = document.getElementById("sheet");
+      const sheetCopy = sheet.querySelector(".copy");
+      let sheetDrag = null;
+      let sheetLeaving = false;
+      let sheetHold = false;
+
+      function sheetInk(hex) {
+        const n = parseInt(String(hex).slice(1), 16);
+        const y = (299 * ((n >> 16) & 255) + 587 * ((n >> 8) & 255) + 114 * (n & 255)) / 1000;
+        return y < 140 ? "#efe7d6" : "#14160f";
+      }
+
+      function featuredAgent(status) {
+        const list = (status && status.agents) || [];
+        if (agentNeeds(list[0])) return list[0];
+        return list.find(agentNeeds) || null;
+      }
+
+      function paintSheet(status) {
+        const show = label(status) === "NEEDS YOU" && !sheetHold && !sheetLeaving;
+        if (!show) {
+          if (!sheetLeaving) sheet.classList.remove("up");
           return;
         }
-        fetch(base + "/api/dismiss", { method: "POST" });
+        const agent = featuredAgent(status);
+        const color = markColor(agent && agent.color);
+        const ink = sheetInk(color);
+        const mark = sheet.querySelector(".mark");
+        sheet.style.background = color;
+        sheet.style.color = ink;
+        sheet.querySelector(".plate").style.background = ink;
+        mark.className = "mark " + markShape(agent && agent.shape);
+        mark.style.background = color;
+        sheet.querySelector("h2").textContent =
+          (agent && (agent.title || agent.id)) || "NEEDS YOU";
+        sheetCopy.textContent = agent ? rowAside(agent, status) : "";
+        sheet.classList.add("up");
+      }
+
+      function leaveSheet() {
+        if (sheetLeaving || !sheet.classList.contains("up")) return;
+        sheetLeaving = true;
+        sheetHold = true;
+        sheet.classList.remove("up");
+        setTimeout(() => {
+          sheetLeaving = false;
+          fetch(base + "/api/dismiss", { method: "POST" })
+            .catch(() => {})
+            .then(() => {
+              sheetHold = false;
+              return tick();
+            });
+        }, 280);
+      }
+
+      function sheetOverflow() {
+        return sheetCopy.scrollHeight > sheetCopy.clientHeight + 1;
+      }
+
+      sheet.addEventListener("pointerdown", (event) => {
+        if (!sheet.classList.contains("up") || event.button !== 0) return;
+        sheetDrag = { id: event.pointerId, y: event.clientY, t: performance.now() };
+      });
+      sheet.addEventListener("pointerup", (event) => {
+        if (!sheetDrag || sheetDrag.id !== event.pointerId) return;
+        const dy = event.clientY - sheetDrag.y;
+        const dt = performance.now() - sheetDrag.t;
+        const dragged = dy > 8 || dy < -8;
+        const flick = dy >= 48 && dt < 280;
+        const dismiss = dy >= 40 && (!sheetOverflow() || flick);
+        sheetDrag = null;
+        if (dismiss) leaveSheet();
+        else if (!dragged) leaveSheet();
+      });
+      sheet.addEventListener("pointercancel", () => {
+        sheetDrag = null;
       });
       (function loop() {
         tick().then(() => setTimeout(loop, pollMs));

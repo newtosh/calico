@@ -23,6 +23,8 @@ CONFIG_LV_FONT_MONTSERRAT_20=y
 CONFIG_LV_FONT_MONTSERRAT_24=y
 CONFIG_LV_FONT_MONTSERRAT_28=y
 CONFIG_LV_FONT_MONTSERRAT_48=y
+# On-demand screen capture renders into a PSRAM buffer. It does not add a DMA stripe.
+CONFIG_LV_USE_SNAPSHOT=y
 # One 20-line stripe is pinned in DMA RAM at boot (main.c). A flush does
 # not allocate another copy, and the pin is small enough that the STA
 # can still take this pool. Two 50-line stripes left only 29KB. 512 stops

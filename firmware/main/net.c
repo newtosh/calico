@@ -1,4 +1,5 @@
 #include "net.h"
+#include "desk_view.h"
 #include "orient.h"
 
 #include "esp_check.h"
@@ -509,4 +510,47 @@ void net_dismiss(const desk_settings_t *in) {
 
 void net_clear_unread(const desk_settings_t *in) {
     request(in, "/api/unread/dismiss", "POST", NULL);
+}
+
+void net_post_frame(const desk_settings_t *in, const uint8_t *pixels, int width, int height,
+                    int stride) {
+    uint8_t hdr[66];
+    char url[160];
+    char bearer[160];
+    int packed;
+    int y;
+    int body;
+    esp_http_client_config_t cfg = {
+        .timeout_ms = 8000,
+    };
+    esp_http_client_handle_t client;
+    if (!in || !pixels || width < 1 || height < 1 || stride < width * 2) {
+        return;
+    }
+    if (desk_bmp565_header(hdr, sizeof(hdr), width, height) != 66) {
+        return;
+    }
+    packed = width * 2;
+    body = 66 + packed * height;
+    join_url(url, sizeof(url), in->url, "/api/frame");
+    cfg.url = url;
+    client = esp_http_client_init(&cfg);
+    if (!client) {
+        return;
+    }
+    esp_http_client_set_method(client, HTTP_METHOD_POST);
+    esp_http_client_set_header(client, "Content-Type", "image/bmp");
+    if (in->token[0]) {
+        snprintf(bearer, sizeof(bearer), "Bearer %s", in->token);
+        esp_http_client_set_header(client, "Authorization", bearer);
+    }
+    if (esp_http_client_open(client, body) == ESP_OK) {
+        esp_http_client_write(client, (char *)hdr, 66);
+        for (y = 0; y < height; y++) {
+            esp_http_client_write(client, (char *)(pixels + (size_t)y * (size_t)stride), packed);
+        }
+        esp_http_client_fetch_headers(client);
+    }
+    esp_http_client_close(client);
+    esp_http_client_cleanup(client);
 }

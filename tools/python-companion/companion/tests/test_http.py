@@ -4,13 +4,27 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from grok_desk_buddy.server import serve_in_thread
-from grok_desk_buddy.store import DeskStore
+from grok_desk_buddy.store import FRAME_MAX, DeskStore
 
 
 class _Response:
     def __init__(self, status: int, body: bytes) -> None:
         self.status = status
         self.body = body
+
+
+def post_bytes(
+    url: str, body: bytes, token: str = "", content_type: str = "image/bmp"
+) -> _Response:
+    headers = {"Content-Type": content_type}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = Request(url, data=body, headers=headers, method="POST")
+    try:
+        with urlopen(request) as response:
+            return _Response(response.status, response.read())
+    except HTTPError as exc:
+        return _Response(exc.code, exc.read())
 
 
 def post(url: str, payload: dict[str, object], token: str = "") -> _Response:
@@ -134,5 +148,48 @@ def test_parallel_launches_both_land() -> None:
             thread.join()
         ids = {agent["id"] for agent in json.loads(urlopen(base + "/api/status").read())["agents"]}
         assert ids == {"a", "b"}
+    finally:
+        server.shutdown()
+
+
+def test_frame_request_post_and_get() -> None:
+    store = DeskStore()
+    server, base = serve_in_thread(store, token="secret", web_dist=None)
+    try:
+        try:
+            urlopen(base + "/api/frame")
+            raise AssertionError("missing frame should be 404")
+        except HTTPError as exc:
+            assert exc.code == 404
+        denied = post_bytes(base + "/api/frame/request", b"")
+        assert denied.status == 401
+        assert json.loads(urlopen(base + "/api/status").read())["capture"] is False
+        asked = post_bytes(base + "/api/frame/request", b"", "secret")
+        assert asked.status == 204
+        waiting = json.loads(urlopen(base + "/api/status").read())
+        keys = list(waiting)
+        assert keys.index("capture") == keys.index("unread") + 1
+        assert waiting["capture"] is True
+        stolen = post_bytes(base + "/api/frame", b"BMnope")
+        assert stolen.status == 401
+        assert store.frame() is None
+        assert store.status()["capture"] is True
+        typed = post_bytes(base + "/api/frame", b"BMnope", "secret", "text/plain")
+        assert typed.status == 415
+        assert store.frame() is None
+        huge = post_bytes(base + "/api/frame", b"BM" + bytes(FRAME_MAX), "secret")
+        assert huge.status == 413
+        assert store.frame() is None
+        assert store.status()["capture"] is True
+        stored = post_bytes(base + "/api/frame", b"BMpixels", "secret")
+        assert stored.status == 204
+        assert store.status()["capture"] is False
+        with urlopen(base + "/api/frame") as got:
+            assert got.status == 200
+            assert got.headers.get("Content-Type") == "image/bmp"
+            assert got.read() == b"BMpixels"
+        race = post_bytes(base + "/api/frame", b"BMrace", "secret")
+        assert race.status == 204
+        assert urlopen(base + "/api/frame").read() == b"BMrace"
     finally:
         server.shutdown()

@@ -48,6 +48,8 @@ typedef struct {
     int known_count;
     desk_agent_t agents[DESK_AGENT_MAX];
     int agent_count;
+    /* One-shot frame request. desk_view_same ignores this field. */
+    int capture;
 } desk_view_t;
 
 typedef struct {
@@ -99,3 +101,12 @@ int desk_aside_scroll(const desk_view_t *prev, const desk_view_t *view);
 /* Rows that are new, or whose status, attention, or aside changed.
  * 0 when either view is missing. Color and order alone do not count. */
 int desk_unseen_updates(const desk_view_t *prev, const desk_view_t *view);
+/* Index of the agent the needs-you sheet features, or -1. */
+int desk_sheet_agent(const desk_view_t *view);
+/* Cream on a dark mark, near-black on a light one. */
+uint32_t desk_sheet_ink(uint32_t color);
+/* 1 when this pointer release should dismiss the sheet.
+ * dy is downward pixels. overflow is 1 when the body is taller than the viewport. */
+int desk_sheet_dismiss(int overflow, int dy, int dt_ms);
+/* 66-byte top-down RGB565 BMP header. biHeight is negative. Returns 66, or -1. */
+int desk_bmp565_header(uint8_t *dst, size_t cap, int w, int h);

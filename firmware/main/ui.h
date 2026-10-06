@@ -22,3 +22,8 @@ void ui_show_panel_note(const char *phase, const char *message);
 void ui_apply(const desk_view_t *view, int failures);
 /* 1 when this view and failure count are already on the face. */
 int ui_status_current(const desk_view_t *view, int failures);
+/* A status fetch that started after the dismiss POST may show the sheet again. */
+void ui_release_sheet_suppress(void);
+/* RGB565 pixels in PSRAM. *stride is bytes per row. Caller frees with heap_caps_free.
+ * -1 when settings are open, snapshot is off, or the alloc failed. */
+int ui_capture_frame(uint8_t **pixels, int *stride);

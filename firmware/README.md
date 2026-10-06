@@ -1,6 +1,6 @@
 # Firmware
 
-ESP-IDF app for the Waveshare ESP32-S3-Touch-AMOLED-2.16. It polls `GET {companion}/api/status`. Agent rows under the title scroll in that list. The panel keeps 24 rows. The status bar and the dock stay put. IDLE / RUNNING / NEEDS YOU show as the status-bar lamp and a short toast. NEEDS YOU still takes the whole screen. Each row is a 24px mark: `color` (`#RRGGBB`) and `shape` from the status JSON. Shape names and the sampled picker palette are in [docs/grok-bot-integration.md](../docs/grok-bot-integration.md). A missing or unusable value is one neutral circle, `#a39b88`. Agent icons are not drawn on the panel. A tap on the alert POSTs `/api/dismiss`. Settings are stored in NVS namespace `desk`: a list of known networks plus a global companion URL and bearer token. The Mic button is a dimmed icon and only shows `Voice not in this PoC`.
+ESP-IDF app for the Waveshare ESP32-S3-Touch-AMOLED-2.16. It polls `GET {companion}/api/status`. Agent rows under the title scroll in that list. The panel keeps 24 rows. The status bar and the dock stay put. IDLE / RUNNING / NEEDS YOU show as the status-bar lamp and a short toast. NEEDS YOU raises a sheet from the bottom, just under the status bar, filled with that agent's mark color. The mark is the roster shape, drawn at 120px on a contrasting plate. The title and the row's aside sit under it. A downward swipe dismisses the sheet. A long aside scrolls instead, and a quick downward flick still dismisses. A tap that did not drag POSTs `/api/dismiss` after the sheet has left. Each row is a 24px mark: `color` (`#RRGGBB`) and `shape` from the status JSON. Shape names and the sampled picker palette are in [docs/grok-bot-integration.md](../docs/grok-bot-integration.md). A missing or unusable value is one neutral circle, `#a39b88`. Agent icons are not drawn on the panel. Settings are stored in NVS namespace `desk`: a list of known networks plus a global companion URL and bearer token. The Mic button is a dimmed icon and only shows `Voice not in this PoC`.
 
 ## Flash
 
@@ -49,11 +49,28 @@ The left lamp uses the phase label plus the poll-failure count and the Wi-Fi fac
 
 A stale STA give-up does not override a poll that just succeeded while the station still has an address. Misses before a DHCP lease are not counted. A pushed panel URL is stored only when that URL answers, so a stale address does not replace the host the panel just reached.
 
-`NEEDS YOU` is green. The companion answered; the full-screen alert still covers the bar. A short toast slides into the center of the bar when that status text changes (`IDLE` → `RUNNING`, `reconnecting`, `link down`, and the panel notes). One line is on screen and one can wait. A newer one replaces the waiter. It does not cover the alert.
+`NEEDS YOU` is green. The companion answered. The sheet covers the list and the dock and leaves the bar visible, so the lamp, toast, and Wi-Fi stay readable. A short toast slides into the center of the bar when that status text changes (`IDLE` → `RUNNING`, `reconnecting`, `link down`, and the panel notes). One line is on screen and one can wait. A newer one replaces the waiter.
 
 Wi-Fi is three bars from the associated AP's RSSI (`esp_wifi_sta_get_ap_info`): 3 at -60 dBm and up, 2 at -75 dBm and up, 1 if associated but weaker, none if there is no IP. Bluetooth is a dim struck-through `BT`. The ESP32-S3 and this board's 2.4 GHz antenna can do Bluetooth 5 LE, and the BSP does not start it. `sdkconfig.defaults` does not enable a controller, and the app never opens one. The mark means off.
 
 `Auto` / `Lock` toggles the QMI8658 snap. Locked writes NVS namespace `desk` key `rotlock` as `0`, `1`, `2`, or `3` (the quarter on screen) and ignores the IMU until unlock, including across reboot. Unlock erases that key. It does not use `ssid`, `pass`, `url`, `token`, or `n{i}*`.
+
+## Screen capture
+
+The CO5300 is written over QSPI. The BSP flush is write-only, and the extracted datasheet has no GRAM-read opcode, so the panel cannot be read back. LVGL is in partial mode: the only DMA buffer is the 20-line stripe (`DESK_DMA_LINES` 20, `DESK_DMA_BUFS` 1, 19200 bytes). A full framebuffer, or a second internal DMA buffer, is what left the STA unable to join. Do not switch the display to full-frame mode.
+
+A frame is still available on demand. `CONFIG_LV_USE_SNAPSHOT` renders the active screen into a caller-owned PSRAM buffer (480×480 RGB565 is 460800 bytes, plus stride slack). The LVGL lock is held only for that render. The poll task then POSTs a top-down BMP (`BI_BITFIELDS`, RGB565 masks) to the companion and frees the buffer. If the PSRAM alloc fails, the poll logs nothing extra and skips the frame. It does not fall back to internal RAM. Settings open skips the snapshot so the bearer field is not uploaded, and the request stays pending for a later poll.
+
+The DMA stripe is unchanged. If `sdkconfig` was generated before `CONFIG_LV_USE_SNAPSHOT=y` landed in `sdkconfig.defaults`, delete `sdkconfig` and reconfigure. Do not add another stripe.
+
+From the companion host, with the panel's bearer:
+
+```bash
+curl -s -X POST "$DESK_URL/api/frame/request" -H "Authorization: Bearer $GROK_DESK_WEBHOOK_TOKEN"
+curl -s -D - "$DESK_URL/api/frame" -o /tmp/desk.bmp
+```
+
+`GET /api/status` includes `"capture": true` while a request is waiting, immediately after `unread`, so a truncated 16KB body still sees it. The panel posts `image/bmp` to `POST /api/frame` on a later poll. `GET /api/frame` returns that BMP, or 404. The companion keeps one frame in memory. A restart drops it. A 401 does not store or clear the request. A body over 480×480×2+256 bytes is 413 and does not replace a stored frame.
 
 Ship this UI with app-flash only:
 
@@ -114,7 +131,7 @@ gcc -Wall -Werror -I firmware/main firmware/host/test_dma_stripe.c -o /tmp/test_
 /tmp/test_dma_stripe
 ```
 
-Open `firmware/simulator/index.html` in a browser. It polls `http://127.0.0.1:8787` unless you pass `?base=http://192.168.1.20:8787`. Wheel or drag scrolls the agent list inside the face. The bar and the dock stay fixed.
+Open `firmware/simulator/index.html` in a browser. It polls `http://127.0.0.1:8787` unless you pass `?base=http://192.168.1.20:8787`. Wheel or drag scrolls the agent list inside the face. The bar and the dock stay fixed. A needs-you status raises the sheet over the list and the dock. The bar stays. A downward swipe, or a tap, dismisses it.
 
 ## If `idf.py` is missing
 

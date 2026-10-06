@@ -108,10 +108,17 @@ curl -s -X POST "$DESK_URL/api/webhook/grok-bot" \
 
 On finish, the same call with `"type":"agent.finished"`. While the routine is still running, repeat the launch POST with the same `agent_id` (a new `message` updates the aside; it does not add unread). When the routine needs a person, send `"type":"agent.needs_you"` and the question in `message`. That question stays on the row until `POST /api/dismiss`, including if `agent.finished` arrives first. Drop the Authorization header when no token is configured.
 
-Dismiss from anything that is not the panel:
+Dismiss from anything that is not the panel. The panel itself dismisses from the needs-you sheet (a tap, or a downward swipe):
 
 ```bash
 curl -s -X POST "$DESK_URL/api/dismiss" -H "Authorization: Bearer $GROK_DESK_WEBHOOK_TOKEN"
+```
+
+Ask the panel for one frame. The next status poll carries `"capture": true` (right after `unread`). The panel then POSTs `image/bmp`. Fetch it without the bearer:
+
+```bash
+curl -s -X POST "$DESK_URL/api/frame/request" -H "Authorization: Bearer $GROK_DESK_WEBHOOK_TOKEN"
+curl -s "$DESK_URL/api/frame" -o /tmp/desk.bmp
 ```
 
 `GET /api/status` includes `unread`. The badge is the number of agents in attention. If none are waiting, a note that is still the latest event and has text shows 1. A first launch does not raise it. `POST /api/dismiss` clears it along with attention. A badge with no waiting row and no note text is stored back as 0 on the next status read, including a count left over from an older build. Restart the companion after this build so attention, per-agent messages, and that badge rule are loaded. Flash the panel to pick up row binding when `last_event` is not the only copy of the question. A tap on the badge, or:

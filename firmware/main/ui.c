@@ -5,6 +5,11 @@
 #include "icons.h"
 #include "lvgl.h"
 
+#include "esp_heap_caps.h"
+#if LV_USE_SNAPSHOT
+#include "lv_snapshot.h"
+#endif
+
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -43,6 +48,12 @@ enum {
     DOCK_GAP = 16,
     /* Top of the dock strip. Buttons sit DOCK_GAP below it. The count sits with them. */
     DOCK_TOP = SCREEN_PX - EDGE_PX - DOCK_INSET - DOCK_GAP - BTN_H,
+    /* Sheet starts under the status strip and runs off the bottom so the
+     * lower radius stays past the glass. */
+    SHEET_Y = EDGE_PX + BAR_H,
+    SHEET_MARK = 120,
+    SHEET_PLATE = 168,
+    SHEET_MS = 280,
     INK = 0xefe7d6,
     INK_DIM = 0xa39b88,
     BG = 0x14160f,
@@ -75,7 +86,20 @@ _Static_assert((int)MESSAGE_Y == (int)FACE_MESSAGE_Y, "sleep origin");
 static lv_obj_t *s_title;
 static lv_obj_t *s_message;
 static lv_obj_t *s_count;
-static lv_obj_t *s_alert;
+static lv_obj_t *s_sheet;
+static lv_obj_t *s_sheet_plate;
+static lv_obj_t *s_sheet_mark;
+static lv_obj_t *s_sheet_title;
+static lv_obj_t *s_sheet_body;
+static lv_obj_t *s_sheet_text;
+static lv_timer_t *s_sheet_timer;
+static int s_sheet_up;
+static int s_sheet_leaving;
+static int s_sheet_suppress;
+static int s_sheet_pressed;
+static int s_sheet_dragged;
+static int s_sheet_press_y;
+static uint32_t s_sheet_press_ms;
 static lv_obj_t *s_settings;
 static lv_obj_t *s_header;
 static lv_obj_t *s_body;
@@ -207,15 +231,26 @@ static void fill_tri(lv_layer_t *layer, lv_draw_triangle_dsc_t *dsc, int x0, int
 }
 
 /* Fan from the box center. Every polygon here is visible from that point. */
+static int mark_box(const lv_area_t *area) {
+    int w = (int)(area->x2 - area->x1 + 1);
+    return w > 0 ? w : 1;
+}
+
+/* Tables are drawn for a 24px mark. A larger widget uses the same points. */
+static int sc(int v, int w) {
+    return v * w / 24;
+}
+
 static void fill_poly(lv_layer_t *layer, lv_draw_triangle_dsc_t *dsc, const lv_area_t *box,
                       const int8_t *xy, int n) {
     int i;
+    int w = mark_box(box);
     int cx = (box->x1 + box->x2) / 2;
     int cy = (box->y1 + box->y2) / 2;
     for (i = 0; i < n; i++) {
         int j = (i + 1) % n;
-        fill_tri(layer, dsc, cx, cy, box->x1 + xy[2 * i], box->y1 + xy[2 * i + 1],
-                 box->x1 + xy[2 * j], box->y1 + xy[2 * j + 1]);
+        fill_tri(layer, dsc, cx, cy, box->x1 + sc(xy[2 * i], w), box->y1 + sc(xy[2 * i + 1], w),
+                 box->x1 + sc(xy[2 * j], w), box->y1 + sc(xy[2 * j + 1], w));
     }
 }
 
@@ -276,32 +311,39 @@ static void draw_mark(lv_event_t *event) {
         return;
     }
     if (shape == DESK_SHAPE_CLOUD) {
-        fill_round(layer, color, x + 1, y + 10, 14, 14);
-        fill_round(layer, color, x + 8, y + 8, 15, 15);
-        fill_round(layer, color, x + 5, y + 3, 11, 11);
-        fill_round(layer, color, x + 12, y + 4, 10, 10);
+        int w = mark_box(&area);
+        fill_round(layer, color, x + sc(1, w), y + sc(10, w), sc(14, w), sc(14, w));
+        fill_round(layer, color, x + sc(8, w), y + sc(8, w), sc(15, w), sc(15, w));
+        fill_round(layer, color, x + sc(5, w), y + sc(3, w), sc(11, w), sc(11, w));
+        fill_round(layer, color, x + sc(12, w), y + sc(4, w), sc(10, w), sc(10, w));
         return;
     }
     if (shape == DESK_SHAPE_FLOWER) {
-        fill_round(layer, color, x + 1, y + 1, 12, 12);
-        fill_round(layer, color, x + 11, y + 1, 12, 12);
-        fill_round(layer, color, x + 1, y + 11, 12, 12);
-        fill_round(layer, color, x + 11, y + 11, 12, 12);
+        int w = mark_box(&area);
+        fill_round(layer, color, x + sc(1, w), y + sc(1, w), sc(12, w), sc(12, w));
+        fill_round(layer, color, x + sc(11, w), y + sc(1, w), sc(12, w), sc(12, w));
+        fill_round(layer, color, x + sc(1, w), y + sc(11, w), sc(12, w), sc(12, w));
+        fill_round(layer, color, x + sc(11, w), y + sc(11, w), sc(12, w), sc(12, w));
         return;
     }
     if (shape == DESK_SHAPE_HEART) {
-        fill_round(layer, color, x + 1, y + 3, 12, 12);
-        fill_round(layer, color, x + 11, y + 3, 12, 12);
-        fill_tri(layer, &dsc, x + 2, y + 10, x + 22, y + 10, x + 12, y + 22);
+        int w = mark_box(&area);
+        fill_round(layer, color, x + sc(1, w), y + sc(3, w), sc(12, w), sc(12, w));
+        fill_round(layer, color, x + sc(11, w), y + sc(3, w), sc(12, w), sc(12, w));
+        fill_tri(layer, &dsc, x + sc(2, w), y + sc(10, w), x + sc(22, w), y + sc(10, w), x + sc(12, w),
+                 y + sc(22, w));
         return;
     }
     if (shape == DESK_SHAPE_DROP) {
-        fill_round(layer, color, x + 4, y + 8, 16, 16);
-        fill_tri(layer, &dsc, x + 12, y + 1, x + 4, y + 14, x + 20, y + 14);
+        int w = mark_box(&area);
+        fill_round(layer, color, x + sc(4, w), y + sc(8, w), sc(16, w), sc(16, w));
+        fill_tri(layer, &dsc, x + sc(12, w), y + sc(1, w), x + sc(4, w), y + sc(14, w), x + sc(20, w),
+                 y + sc(14, w));
         return;
     }
     if (shape == DESK_SHAPE_PILL) {
-        fill_round(layer, color, x + 5, y + 1, 14, 22);
+        int w = mark_box(&area);
+        fill_round(layer, color, x + sc(5, w), y + sc(1, w), sc(14, w), sc(22, w));
         return;
     }
     if (shape == DESK_SHAPE_STAR) {
@@ -319,14 +361,18 @@ static void draw_mark(lv_event_t *event) {
 
 static void apply_mark(lv_obj_t *mark, uint32_t color, int shape) {
     int radius = 0;
+    int side = (int)lv_obj_get_width(mark);
     lv_opa_t opa = LV_OPA_TRANSP;
+    if (side < 1) {
+        side = MARK_PX;
+    }
     lv_obj_set_style_bg_color(mark, lv_color_hex(color), 0);
     lv_obj_set_user_data(mark, (void *)(intptr_t)shape);
     if (shape == DESK_SHAPE_SQUARE) {
-        radius = 2;
+        radius = 2 * side / 24;
         opa = LV_OPA_COVER;
     } else if (shape == DESK_SHAPE_ROUNDED) {
-        radius = 6;
+        radius = 6 * side / 24;
         opa = LV_OPA_COVER;
     } else if (shape == DESK_SHAPE_CIRCLE) {
         radius = LV_RADIUS_CIRCLE;
@@ -641,11 +687,185 @@ static void show_unread(int count) {
     lv_obj_set_hidden(s_title, false);
 }
 
-static void on_alert(lv_event_t *event) {
-    (void)event;
+static void anim_delete(void *var);
+
+static void sheet_exec_y(void *obj, int32_t v) {
+    lv_obj_set_y(obj, v);
+}
+
+static void sheet_timer_drop(void) {
+    if (!s_sheet_timer) {
+        return;
+    }
+    lv_timer_delete(s_sheet_timer);
+    s_sheet_timer = NULL;
+}
+
+static void sheet_hide_now(void) {
+    sheet_timer_drop();
+    s_sheet_leaving = 0;
+    s_sheet_up = 0;
+    s_sheet_pressed = 0;
+    if (!s_sheet) {
+        return;
+    }
+    anim_delete(s_sheet);
+    lv_obj_set_y(s_sheet, SCREEN_PX);
+    lv_obj_set_hidden(s_sheet, true);
+}
+
+static void sheet_leave_done(lv_timer_t *timer) {
+    (void)timer;
+    s_sheet_timer = NULL;
+    s_sheet_leaving = 0;
+    s_sheet_up = 0;
+    s_sheet_pressed = 0;
+    if (s_sheet) {
+        lv_obj_set_y(s_sheet, SCREEN_PX);
+        lv_obj_set_hidden(s_sheet, true);
+    }
     if (s_on_dismiss) {
         s_on_dismiss();
     }
+}
+
+static void sheet_leave(void) {
+    if (!s_sheet || s_sheet_leaving || !s_sheet_up) {
+        return;
+    }
+    s_sheet_leaving = 1;
+    s_sheet_suppress = 1;
+    s_sheet_pressed = 0;
+    anim_delete(s_sheet);
+    {
+        lv_anim_t a;
+        lv_anim_init(&a);
+        lv_anim_set_var(&a, s_sheet);
+        lv_anim_set_exec_cb(&a, sheet_exec_y);
+        lv_anim_set_values(&a, lv_obj_get_y(s_sheet), SCREEN_PX);
+        lv_anim_set_duration(&a, SHEET_MS);
+        lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+        lv_anim_start(&a);
+    }
+    sheet_timer_drop();
+    s_sheet_timer = lv_timer_create(sheet_leave_done, SHEET_MS, NULL);
+    lv_timer_set_repeat_count(s_sheet_timer, 1);
+}
+
+static int sheet_overflow(void) {
+    if (!s_sheet_body) {
+        return 0;
+    }
+    return lv_obj_get_scroll_top(s_sheet_body) > 0 || lv_obj_get_scroll_bottom(s_sheet_body) > 0;
+}
+
+static void on_sheet(lv_event_t *event) {
+    lv_indev_t *indev;
+    lv_point_t point;
+    lv_event_code_t code = lv_event_get_code(event);
+    if (code == LV_EVENT_CLICKED) {
+        /* A pan already decided. A flick dismisses from RELEASED. */
+        if (!s_sheet_dragged) {
+            sheet_leave();
+        }
+        s_sheet_dragged = 0;
+        return;
+    }
+#if LVGL_VERSION_MAJOR == 9 && LVGL_VERSION_MINOR < 3
+    indev = lv_indev_get_act();
+#else
+    indev = lv_indev_active();
+#endif
+    if (!indev) {
+        return;
+    }
+    lv_indev_get_point(indev, &point);
+    if (code == LV_EVENT_PRESSED) {
+        s_sheet_pressed = 1;
+        s_sheet_dragged = 0;
+        s_sheet_press_y = point.y;
+        s_sheet_press_ms = lv_tick_get();
+        return;
+    }
+    if (code != LV_EVENT_RELEASED || !s_sheet_pressed) {
+        return;
+    }
+    s_sheet_pressed = 0;
+    if (point.y - s_sheet_press_y > 8 || s_sheet_press_y - point.y > 8) {
+        s_sheet_dragged = 1;
+    }
+    if (desk_sheet_dismiss(sheet_overflow(), point.y - s_sheet_press_y,
+                           (int)(lv_tick_get() - s_sheet_press_ms))) {
+        sheet_leave();
+    }
+}
+
+static void sheet_rise(void) {
+    lv_anim_t a;
+    if (!s_sheet || s_sheet_up || s_sheet_leaving) {
+        return;
+    }
+    s_sheet_up = 1;
+    lv_obj_set_y(s_sheet, SCREEN_PX);
+    lv_obj_set_hidden(s_sheet, false);
+    lv_obj_move_foreground(s_sheet);
+    if (s_settings && !lv_obj_has_flag(s_settings, LV_OBJ_FLAG_HIDDEN)) {
+        lv_obj_move_foreground(s_settings);
+    }
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, s_sheet);
+    lv_anim_set_exec_cb(&a, sheet_exec_y);
+    lv_anim_set_values(&a, SCREEN_PX, SHEET_Y);
+    lv_anim_set_duration(&a, SHEET_MS);
+    lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+    lv_anim_start(&a);
+}
+
+static void sheet_bind(const desk_view_t *view) {
+    int index = desk_sheet_agent(view);
+    const desk_agent_t *agent;
+    const char *aside = "";
+    const char *title;
+    uint32_t color = DESK_MARK_NEUTRAL;
+    uint32_t parsed;
+    uint32_t ink;
+    if (!view || index < 0 || index >= view->agent_count) {
+        title = "NEEDS YOU";
+        aside = "";
+        apply_mark(s_sheet_mark, DESK_MARK_NEUTRAL, DESK_SHAPE_CIRCLE);
+    } else {
+        agent = &view->agents[index];
+        title = agent->title[0] ? agent->title : (agent->id[0] ? agent->id : "NEEDS YOU");
+        desk_agent_hot(view, index, &aside);
+        if (desk_mark_color(agent->color, &parsed) == 0) {
+            color = parsed;
+        }
+        apply_mark(s_sheet_mark, color, desk_mark_shape(agent->shape));
+    }
+    ink = desk_sheet_ink(color);
+    lv_obj_set_style_bg_color(s_sheet, lv_color_hex(color), 0);
+    lv_obj_set_style_bg_color(s_sheet_plate, lv_color_hex(ink), 0);
+    lv_obj_set_style_text_color(s_sheet_title, lv_color_hex(ink), 0);
+    lv_obj_set_style_text_color(s_sheet_text, lv_color_hex(ink), 0);
+    /* Setting the same string still resets the body's scroll. */
+    if (strcmp(lv_label_get_text(s_sheet_title), title) != 0) {
+        lv_label_set_text(s_sheet_title, title);
+    }
+    if (strcmp(lv_label_get_text(s_sheet_text), aside ? aside : "") != 0) {
+        lv_label_set_text(s_sheet_text, aside ? aside : "");
+    }
+}
+
+static void present_sheet(const desk_view_t *view, int failures) {
+    int show = view && view->needs_you && failures < 3 && !s_sheet_suppress;
+    if (!show) {
+        if (!s_sheet_leaving) {
+            sheet_hide_now();
+        }
+        return;
+    }
+    sheet_bind(view);
+    sheet_rise();
 }
 
 static void on_unread(lv_event_t *event) {
@@ -1228,17 +1448,64 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_set_size(settings_btn, BTN_W, BTN_H);
     build_new_pill(screen);
 
-    s_alert = lv_obj_create(screen);
-    lv_obj_set_size(s_alert, SCREEN_PX, SCREEN_PX);
-    lv_obj_set_style_bg_color(s_alert, lv_color_hex(0xe2a23a), 0);
-    lv_obj_set_style_bg_opa(s_alert, LV_OPA_COVER, 0);
-    lv_obj_set_hidden(s_alert, true);
-    lv_obj_add_event_cb(s_alert, on_alert, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *alert_label = lv_label_create(s_alert);
-    lv_label_set_text(alert_label, "NEEDS YOU");
-    lv_obj_set_style_text_font(alert_label, &lv_font_montserrat_48, 0);
-    lv_obj_set_style_text_color(alert_label, lv_color_hex(BG), 0);
-    lv_obj_center(alert_label);
+    s_sheet = lv_obj_create(screen);
+    lv_obj_set_size(s_sheet, SCREEN_PX, SCREEN_PX - SHEET_Y + 36);
+    lv_obj_set_pos(s_sheet, 0, SCREEN_PX);
+    lv_obj_set_style_bg_color(s_sheet, lv_color_hex(DESK_MARK_NEUTRAL), 0);
+    lv_obj_set_style_bg_opa(s_sheet, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(s_sheet, 0, 0);
+    lv_obj_set_style_radius(s_sheet, 36, 0);
+    lv_obj_set_style_pad_top(s_sheet, 28, 0);
+    lv_obj_set_style_pad_hor(s_sheet, 24, 0);
+    lv_obj_set_style_pad_bottom(s_sheet, 36, 0);
+    lv_obj_set_style_pad_row(s_sheet, 12, 0);
+    lv_obj_set_flex_flow(s_sheet, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(s_sheet, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_scrollbar_mode(s_sheet, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_clear_flag(s_sheet, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(s_sheet, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(s_sheet, on_sheet, LV_EVENT_PRESSED, NULL);
+    lv_obj_add_event_cb(s_sheet, on_sheet, LV_EVENT_RELEASED, NULL);
+    lv_obj_add_event_cb(s_sheet, on_sheet, LV_EVENT_CLICKED, NULL);
+    lv_obj_set_hidden(s_sheet, true);
+    s_sheet_plate = lv_obj_create(s_sheet);
+    lv_obj_set_size(s_sheet_plate, SHEET_PLATE, SHEET_PLATE);
+    lv_obj_set_style_radius(s_sheet_plate, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(s_sheet_plate, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(s_sheet_plate, 0, 0);
+    lv_obj_set_style_pad_all(s_sheet_plate, 0, 0);
+    lv_obj_clear_flag(s_sheet_plate, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    s_sheet_mark = lv_obj_create(s_sheet_plate);
+    lv_obj_set_size(s_sheet_mark, SHEET_MARK, SHEET_MARK);
+    lv_obj_center(s_sheet_mark);
+    lv_obj_set_style_border_width(s_sheet_mark, 0, 0);
+    lv_obj_set_style_pad_all(s_sheet_mark, 0, 0);
+    lv_obj_set_style_shadow_width(s_sheet_mark, 0, 0);
+    lv_obj_clear_flag(s_sheet_mark, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(s_sheet_mark, draw_mark, LV_EVENT_DRAW_POST, NULL);
+    apply_mark(s_sheet_mark, DESK_MARK_NEUTRAL, DESK_SHAPE_CIRCLE);
+    s_sheet_title = lv_label_create(s_sheet);
+    lv_obj_set_width(s_sheet_title, SCREEN_PX - 48);
+    lv_label_set_long_mode(s_sheet_title, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_font(s_sheet_title, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_align(s_sheet_title, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text(s_sheet_title, "");
+    s_sheet_body = lv_obj_create(s_sheet);
+    lv_obj_set_width(s_sheet_body, SCREEN_PX - 48);
+    lv_obj_set_flex_grow(s_sheet_body, 1);
+    lv_obj_set_style_bg_opa(s_sheet_body, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_sheet_body, 0, 0);
+    lv_obj_set_style_pad_all(s_sheet_body, 0, 0);
+    lv_obj_set_scrollbar_mode(s_sheet_body, LV_SCROLLBAR_MODE_AUTO);
+    lv_obj_set_scroll_dir(s_sheet_body, LV_DIR_VER);
+    lv_obj_add_flag(s_sheet_body, LV_OBJ_FLAG_EVENT_BUBBLE);
+    s_sheet_text = lv_label_create(s_sheet_body);
+    lv_obj_set_width(s_sheet_text, SCREEN_PX - 48);
+    lv_label_set_long_mode(s_sheet_text, LV_LABEL_LONG_WRAP);
+    lv_obj_set_style_text_font(s_sheet_text, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_align(s_sheet_text, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text(s_sheet_text, "");
+    lv_obj_add_flag(s_sheet_text, LV_OBJ_FLAG_EVENT_BUBBLE);
 
     s_settings = lv_obj_create(screen);
     lv_obj_set_size(s_settings, SCREEN_PX, SCREEN_PX);
@@ -1620,11 +1887,6 @@ void ui_apply(const desk_view_t *view, int failures) {
         lv_label_set_text(s_count, count);
         lv_obj_set_style_text_color(
             s_count, lv_color_hex(view->running_count > 0 ? ROW_MARK : INK_DIM), 0);
-        if (view->needs_you && failures < 3) {
-            lv_obj_set_hidden(s_alert, false);
-        } else {
-            lv_obj_set_hidden(s_alert, true);
-        }
         if (!agent_scrolled()) {
             s_unseen = 0;
         }
@@ -1632,10 +1894,57 @@ void ui_apply(const desk_view_t *view, int failures) {
         s_applied_failures = failures;
         s_applied = 1;
     }
+    /* Also when the desk is unchanged: a dismiss release clears suppress and
+     * this is the only pass that can raise the sheet again. */
+    present_sheet(view, failures);
     sync_sleep(view, failures, lamp);
     show_unseen();
 }
 
 int ui_status_current(const desk_view_t *view, int failures) {
     return s_applied && desk_status_same(&s_applied_view, s_applied_failures, view, failures);
+}
+
+void ui_release_sheet_suppress(void) {
+    s_sheet_suppress = 0;
+}
+
+int ui_capture_frame(uint8_t **pixels, int *stride) {
+#if LV_USE_SNAPSHOT
+    lv_draw_buf_t draw;
+    uint32_t row;
+    size_t bytes;
+    uint8_t *raw;
+    void *aligned;
+    if (!pixels || !stride || ui_settings_is_open()) {
+        return -1;
+    }
+    *pixels = NULL;
+    *stride = 0;
+    row = lv_draw_buf_width_to_stride(SCREEN_PX, LV_COLOR_FORMAT_RGB565);
+    bytes = (size_t)row * (SCREEN_PX + 16);
+    raw = heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!raw) {
+        return -1;
+    }
+    aligned = lv_draw_buf_align(raw, LV_COLOR_FORMAT_RGB565);
+    if (lv_draw_buf_init(&draw, SCREEN_PX, SCREEN_PX, LV_COLOR_FORMAT_RGB565, row, aligned,
+                         (uint32_t)bytes) != LV_RESULT_OK ||
+        lv_snapshot_take_to_draw_buf(lv_screen_active(), LV_COLOR_FORMAT_RGB565, &draw) !=
+            LV_RESULT_OK) {
+        heap_caps_free(raw);
+        return -1;
+    }
+    if (aligned != raw) {
+        /* The caller frees one pointer. Repack only when alignment slid the pixels. */
+        memmove(raw, aligned, (size_t)row * SCREEN_PX);
+    }
+    *pixels = raw;
+    *stride = (int)row;
+    return 0;
+#else
+    (void)pixels;
+    (void)stride;
+    return -1;
+#endif
 }

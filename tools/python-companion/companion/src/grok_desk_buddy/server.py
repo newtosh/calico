@@ -19,6 +19,7 @@ from grok_desk_buddy.config import (
 )
 from grok_desk_buddy.store import (
     COLOR_LIMIT,
+    FRAME_MAX,
     ICON_LIMIT,
     DeskStore,
     EventIn,
@@ -79,6 +80,13 @@ def _handler_class(
 
         def do_GET(self) -> None:
             path = urlparse(self.path).path
+            if path == "/api/frame":
+                frame = store.frame()
+                if frame is None:
+                    self._json(404, {"error": "not found"})
+                    return
+                self._send(200, frame, "image/bmp")
+                return
             if path == "/api/status":
                 body = store.status()
                 if config is not None:
@@ -107,7 +115,13 @@ def _handler_class(
 
         def do_POST(self) -> None:
             path = urlparse(self.path).path
-            if path not in {"/api/webhook/grok-bot", "/api/dismiss", "/api/unread/dismiss"}:
+            if path not in {
+                "/api/webhook/grok-bot",
+                "/api/dismiss",
+                "/api/unread/dismiss",
+                "/api/frame/request",
+                "/api/frame",
+            }:
                 self._json(404, {"error": "not found"})
                 return
             if not self._allowed():
@@ -120,6 +134,13 @@ def _handler_class(
             if path == "/api/unread/dismiss":
                 store.clear_unread()
                 self._send(204, b"", "text/plain")
+                return
+            if path == "/api/frame/request":
+                store.request_frame()
+                self._send(204, b"", "text/plain")
+                return
+            if path == "/api/frame":
+                self._save_frame()
                 return
             payload = self._read_json()
             if payload is None:
@@ -177,6 +198,25 @@ def _handler_class(
             if not expected:
                 return True
             return self.headers.get("Authorization", "") == f"Bearer {expected}"
+
+        def _save_frame(self) -> None:
+            kind = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+            if kind != "image/bmp":
+                self._json(415, {"error": "bmp required"})
+                return
+            length = int(self.headers.get("Content-Length", "0") or "0")
+            if length > FRAME_MAX:
+                self._json(413, {"error": "too large"})
+                return
+            raw = self.rfile.read(length) if length else b""
+            saved = store.save_frame(raw)
+            if saved == "too_big":
+                self._json(413, {"error": "too large"})
+                return
+            if saved != "ok":
+                self._json(400, {"error": "bad bmp"})
+                return
+            self._send(204, b"", "text/plain")
 
         def _read_json(self) -> dict[str, Any] | None:
             length = int(self.headers.get("Content-Length", "0") or "0")

@@ -13,6 +13,8 @@ SHAPE_LIMIT = 16
 ICON_LIMIT = 200
 # A launch POST that nobody refreshes must not pin the desk on the 2s poll.
 RUNNING_TTL = timedelta(seconds=120)
+# One 480x480 RGB565 BMP plus the 66-byte header and a little slack.
+FRAME_MAX = 480 * 480 * 2 + 256
 
 
 @dataclass(frozen=True)
@@ -106,6 +108,8 @@ class DeskStore:
         self._events: list[Event] = []
         self._agents: dict[str, _Agent] = {}
         self._unread = 0
+        self._capture = False
+        self._frame: bytes | None = None
         self._sqlite_path = sqlite_path or None
         if self._sqlite_path:
             self._load()
@@ -226,6 +230,25 @@ class DeskStore:
             )
             self._persist()
 
+    def request_frame(self) -> None:
+        with self._lock:
+            self._capture = True
+
+    def save_frame(self, body: bytes) -> str:
+        """Store one BMP. 'too_big' and 'bad' leave the previous frame and the flag."""
+        if len(body) > FRAME_MAX:
+            return "too_big"
+        if len(body) < 2 or not body.startswith(b"BM"):
+            return "bad"
+        with self._lock:
+            self._frame = bytes(body)
+            self._capture = False
+        return "ok"
+
+    def frame(self) -> bytes | None:
+        with self._lock:
+            return self._frame
+
     def clear_unread(self) -> None:
         with self._lock:
             if self._unread == 0:
@@ -304,6 +327,8 @@ class DeskStore:
                 "phase": phase,
                 "needs_you": phase == "needs_you",
                 "unread": unread,
+                # Before agents: a 16KB panel buffer drops the tail.
+                "capture": self._capture,
                 "agents": agents,
                 "last_event": self._face_last(),
                 "events": [_public_event(event) for event in self._events],

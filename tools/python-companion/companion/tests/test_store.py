@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from grok_desk_buddy.store import DeskStore, EventIn, face_event_title
+from grok_desk_buddy.store import FRAME_MAX, DeskStore, EventIn, face_event_title
 
 
 def test_launch_then_needs_you_then_dismiss(tmp_path: Path) -> None:
@@ -485,3 +485,30 @@ def test_stale_unread_clears_when_nothing_is_waiting(tmp_path: Path) -> None:
     assert store.status()["unread"] == 0
     assert store.status()["agents"][0]["status"] == "running"
     assert DeskStore(sqlite_path=str(path)).status()["unread"] == 0
+
+
+def test_frame_is_one_memory_slot_and_sits_before_agents() -> None:
+    store = DeskStore()
+    body = store.status()
+    keys = list(body)
+    assert keys.index("capture") == keys.index("unread") + 1
+    assert body["capture"] is False
+    store.request_frame()
+    assert store.status()["capture"] is True
+    assert store.save_frame(b"nope") == "bad"
+    assert store.status()["capture"] is True
+    assert store.frame() is None
+    assert store.save_frame(b"BM" + b"\x00" * (FRAME_MAX - 1)) == "too_big"
+    assert store.frame() is None
+    bmp = b"BMframe"
+    assert store.save_frame(bmp) == "ok"
+    assert store.frame() == bmp
+    assert store.status()["capture"] is False
+    # A post that wins the race still stores, and a bad body does not replace it.
+    assert store.save_frame(b"BM2") == "ok"
+    assert store.save_frame(b"xx") == "bad"
+    assert store.frame() == b"BM2"
+    store.request_frame()
+    assert store.save_frame(b"BM" + bytes(FRAME_MAX)) == "too_big"
+    assert store.status()["capture"] is True
+    assert store.frame() == b"BM2"

@@ -29,6 +29,8 @@ static int s_failures;
 static int s_lamp_key = -1;
 /* 24 agents with icons, plus last_event, before the events tail is cut. */
 static char s_status_body[16384];
+static volatile int s_fetch_gen;
+static volatile int s_dismiss_gen;
 static volatile int s_scan_busy;
 static int s_quarter;
 static volatile int s_rot_locked;
@@ -82,6 +84,8 @@ static void save_and_restart(const char *ssid, const char *pass, const char *url
 
 static void dismiss_alert(void) {
     net_dismiss(&s_active);
+    /* After the POST, so a fetch that overlapped the request cannot reopen the sheet. */
+    s_dismiss_gen = s_fetch_gen;
 }
 
 static void clear_unread(void) {
@@ -172,8 +176,10 @@ static void poll_task(void *arg) {
     while (1) {
         net_link_t link;
         int fetched;
+        int parsed = 0;
         int same;
         int key;
+        s_fetch_gen++;
         fetched = net_fetch_status(&s_active, s_status_body, sizeof(s_status_body)) == 0;
         if (fetched) {
             net_mark_reachable();
@@ -181,6 +187,7 @@ static void poll_task(void *arg) {
             if (desk_view_from_json(s_status_body, &next) == 0) {
                 s_failures = 0;
                 view = next;
+                parsed = 1;
             } else if (s_failures < 3) {
                 s_failures++;
             }
@@ -192,12 +199,35 @@ static void poll_task(void *arg) {
         }
         same = ui_status_current(&view, s_failures);
         key = lamp_key(&link);
-        /* Unchanged face and lamp inputs stay off the LVGL lock so touch can take it. */
-        if ((!same || key != s_lamp_key) && lock_lvgl()) {
-            publish_link();
-            ui_apply(&view, s_failures);
-            unlock_lvgl();
-            s_lamp_key = key;
+        {
+            int mine = s_fetch_gen;
+            int release = parsed && s_dismiss_gen && mine > s_dismiss_gen;
+            int want_cap = parsed && view.capture;
+            if (release) {
+                s_dismiss_gen = 0;
+            }
+            /* Unchanged face and lamp inputs stay off the LVGL lock so touch can take it.
+             * A capture request and a dismiss release still take it. */
+            if ((!same || key != s_lamp_key || release || want_cap) && lock_lvgl()) {
+                uint8_t *frame = NULL;
+                int frame_stride = 0;
+                if (release) {
+                    ui_release_sheet_suppress();
+                }
+                if (!same || key != s_lamp_key || release) {
+                    publish_link();
+                    ui_apply(&view, s_failures);
+                    s_lamp_key = key;
+                }
+                if (want_cap && !ui_settings_is_open() &&
+                    ui_capture_frame(&frame, &frame_stride) == 0) {
+                    unlock_lvgl();
+                    net_post_frame(&s_active, frame, 480, 480, frame_stride);
+                    heap_caps_free(frame);
+                } else {
+                    unlock_lvgl();
+                }
+            }
         }
         vTaskDelay(pdMS_TO_TICKS(desk_poll_ms(&view, s_failures, key == 1)));
     }

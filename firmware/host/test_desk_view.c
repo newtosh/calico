@@ -623,6 +623,62 @@ int main(void) {
         check(desk_unseen_updates(&prev, &next) == 0, "color alone is not new");
     }
 
+    {
+        const char *heart =
+            "{\"phase\":\"needs_you\",\"needs_you\":true,\"unread\":1,\"capture\":true,\"agents\":["
+            "{\"id\":\"desky\",\"title\":\"Desky\",\"status\":\"needs_you\",\"color\":\"#c4544a\","
+            "\"shape\":\"heart\",\"message\":\"Pick one\"},"
+            "{\"id\":\"spool\",\"title\":\"Spool\",\"status\":\"needs_you\",\"message\":\"later\"}"
+            "]}";
+        const char *runner_first =
+            "{\"phase\":\"needs_you\",\"needs_you\":true,\"agents\":["
+            "{\"id\":\"run\",\"title\":\"Run\",\"status\":\"running\"},"
+            "{\"id\":\"desky\",\"title\":\"\",\"status\":\"needs_you\",\"message\":\"\"}"
+            "]}";
+        const char *quiet =
+            "{\"phase\":\"running\",\"needs_you\":false,\"unread\":0,\"agents\":["
+            "{\"id\":\"desky\",\"title\":\"Desky\",\"status\":\"running\"}]}";
+        const char *no_flag =
+            "{\"phase\":\"idle\",\"needs_you\":false,\"agents\":[]}";
+        desk_view_t other;
+        uint8_t hdr[66];
+        int32_t height = 0;
+        check(desk_view_from_json(heart, &view) == 0, "sheet waiter parse");
+        check(view.capture == 1, "capture flag");
+        check(desk_sheet_agent(&view) == 0, "first waiter is featured");
+        check(desk_view_from_json(quiet, &other) == 0, "quiet parse");
+        other.capture = 1;
+        check(desk_view_same(&view, &view) == 1, "view matches itself");
+        view.capture = 0;
+        check(desk_view_same(&view, &other) == 0, "desk difference still counts");
+        other = view;
+        other.capture = 1;
+        check(desk_view_same(&view, &other) == 1, "capture flag is not a desk change");
+        check(desk_view_from_json(runner_first, &view) == 0, "runner first parse");
+        check(desk_sheet_agent(&view) == 1, "waiter after a runner is featured");
+        check(view.agents[1].title[0] == '\0', "empty title stays empty");
+        check(view.agents[1].message[0] == '\0', "empty aside stays empty");
+        check(desk_view_from_json(quiet, &view) == 0, "no waiter parse");
+        check(desk_sheet_agent(&view) == -1, "no waiter");
+        check(desk_view_from_json(no_flag, &view) == 0, "no capture key");
+        check(view.capture == 0, "missing capture is clear");
+        check(desk_sheet_ink(0xc4544a) == 0xefe7d6u, "red inks cream");
+        check(desk_sheet_ink(0xefe7d6) == 0x14160fu, "cream inks ink");
+        check(desk_sheet_ink(0xa39b88) == 0x14160fu, "neutral inks ink");
+        check(desk_sheet_dismiss(0, 40, 900) == 1, "short body swipe dismisses");
+        check(desk_sheet_dismiss(0, 39, 10) == 0, "short body small drag stays");
+        check(desk_sheet_dismiss(1, 80, 200) == 1, "flick on a long body dismisses");
+        check(desk_sheet_dismiss(1, 80, 400) == 0, "slow pan on a long body stays");
+        check(desk_sheet_dismiss(1, -20, 100) == 0, "upward drag stays");
+        check(desk_bmp565_header(hdr, sizeof(hdr), 2, 2) == 66, "bmp header size");
+        check(hdr[0] == 'B' && hdr[1] == 'M', "bmp signature");
+        memcpy(&height, hdr + 22, 4);
+        check(height == -2, "bmp is top-down");
+        check(hdr[54] == 0x00 && hdr[55] == 0xf8, "red mask");
+        check(hdr[58] == 0xe0 && hdr[59] == 0x07, "green mask");
+        check(hdr[62] == 0x1f && hdr[63] == 0x00, "blue mask");
+    }
+
     if (g_failed) {
         return 1;
     }
