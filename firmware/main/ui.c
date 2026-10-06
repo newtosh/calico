@@ -19,10 +19,16 @@ enum {
     BAR_H = 32,
     TITLE_Y = 50,
     MESSAGE_Y = 74,
-    AGENT_Y = 98,
-    AGENT_ROW_H = 32,
+    /* Half of the old 24px message band (98 - 74) stays as air under the title.
+     * A centered note still starts the list at 98 so it does not cover row 0. */
+    AGENT_Y = 86,
+    AGENT_NOTE_Y = 98,
+    AGENT_ROW_H = 30,
     AGENT_GAP = 2,
     MARK_PX = 24,
+    ROW_PAD = 8,
+    ROW_GAP = 12,
+    ASIDE_W = 156,
     BTN_H = 64,
     BTN_W = 80,
     /* Top of the button row. The count sits in that row. */
@@ -62,6 +68,7 @@ static lv_obj_t *s_agent_box;
 static lv_obj_t *s_agent_rows[DESK_AGENT_MAX];
 static lv_obj_t *s_agent_marks[DESK_AGENT_MAX];
 static lv_obj_t *s_agent_labels[DESK_AGENT_MAX];
+static lv_obj_t *s_agent_aside[DESK_AGENT_MAX];
 static net_ap_t s_aps[NET_SCAN_MAX];
 static int s_row_count;
 static ui_save_fn s_on_save;
@@ -157,6 +164,44 @@ static void apply_mark(lv_obj_t *mark, uint32_t color, int shape) {
     lv_obj_invalidate(mark);
 }
 
+static void place_agents(int message_line) {
+    int y = message_line ? AGENT_NOTE_Y : AGENT_Y;
+    lv_obj_set_hidden(s_message, !message_line);
+    lv_obj_set_size(s_agent_box, SCREEN_PX - (EDGE_PX * 2), DOCK_TOP - y);
+    lv_obj_align(s_agent_box, LV_ALIGN_TOP_MID, 0, y);
+}
+
+/* Face message stays centered only when no row is carrying it. */
+static const char *centered_note(const desk_view_t *view) {
+    int i;
+    for (i = 0; i < view->agent_count; i++) {
+        const char *aside = "";
+        desk_agent_hot(view, i, &aside);
+        if (aside[0]) {
+            return "";
+        }
+    }
+    return view->message;
+}
+
+static void show_note(const char *text) {
+    int line = text && text[0];
+    lv_label_set_text(s_message, line ? text : "");
+    place_agents(line);
+}
+
+static void lay_row_text(lv_obj_t *name, lv_obj_t *aside, const char *text) {
+    int show = text && text[0];
+    int inner = (SCREEN_PX - (EDGE_PX * 2)) - (ROW_PAD * 2);
+    int name_w = inner - MARK_PX - ROW_GAP;
+    if (show) {
+        name_w -= ROW_GAP + ASIDE_W;
+    }
+    lv_label_set_text(aside, show ? text : "");
+    lv_obj_set_hidden(aside, !show);
+    lv_obj_set_width(name, name_w);
+}
+
 static void build_agent_rows(lv_obj_t *screen) {
     int i;
     s_agent_box = lv_obj_create(screen);
@@ -175,19 +220,24 @@ static void build_agent_rows(lv_obj_t *screen) {
         lv_obj_t *row = lv_obj_create(s_agent_box);
         lv_obj_t *mark = lv_obj_create(row);
         lv_obj_t *label = lv_label_create(row);
+        lv_obj_t *aside = lv_label_create(row);
         s_agent_rows[i] = row;
         s_agent_marks[i] = mark;
         s_agent_labels[i] = label;
+        s_agent_aside[i] = aside;
         lv_obj_clear_flag(row, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_set_width(row, lv_pct(100));
         lv_obj_set_height(row, AGENT_ROW_H);
         lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
         lv_obj_set_flex_align(row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         lv_obj_set_style_pad_all(row, 0, 0);
-        lv_obj_set_style_pad_column(row, 12, 0);
+        lv_obj_set_style_pad_left(row, ROW_PAD, 0);
+        lv_obj_set_style_pad_right(row, ROW_PAD, 0);
+        lv_obj_set_style_pad_column(row, ROW_GAP, 0);
+        lv_obj_set_style_bg_color(row, lv_color_hex(FIELD), 0);
         lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_width(row, 0, 0);
-        lv_obj_set_style_radius(row, 0, 0);
+        lv_obj_set_style_radius(row, 8, 0);
         lv_obj_set_size(mark, MARK_PX, MARK_PX);
         lv_obj_set_style_border_width(mark, 0, 0);
         lv_obj_set_style_pad_all(mark, 0, 0);
@@ -195,12 +245,17 @@ static void build_agent_rows(lv_obj_t *screen) {
         lv_obj_clear_flag(mark, LV_OBJ_FLAG_CLICKABLE);
         apply_mark(mark, DESK_MARK_NEUTRAL, DESK_SHAPE_CIRCLE);
         lv_obj_clear_flag(label, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_set_flex_grow(label, 1);
-        lv_obj_set_width(label, SCREEN_PX - (EDGE_PX * 2) - MARK_PX - 16);
         lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
         style_text(label);
         lv_obj_set_style_text_font(label, &lv_font_montserrat_24, 0);
         lv_label_set_text(label, "");
+        lv_obj_clear_flag(aside, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_width(aside, ASIDE_W);
+        lv_label_set_long_mode(aside, LV_LABEL_LONG_DOT);
+        lv_obj_set_style_text_font(aside, &lv_font_montserrat_16, 0);
+        lv_obj_set_style_text_color(aside, lv_color_hex(INK_DIM), 0);
+        lv_obj_set_style_text_align(aside, LV_TEXT_ALIGN_RIGHT, 0);
+        lay_row_text(label, aside, "");
         lv_obj_set_hidden(row, true);
     }
 }
@@ -352,13 +407,14 @@ static void mic_restore(lv_timer_t *timer) {
     (void)timer;
     s_mic_timer = NULL;
     if (s_message && s_applied) {
-        lv_label_set_text(s_message, s_applied_view.message);
+        show_note(centered_note(&s_applied_view));
     }
 }
 
 static void on_mic(lv_event_t *event) {
     (void)event;
     lv_label_set_text(s_message, "Voice not in this PoC");
+    place_agents(1);
     if (s_mic_timer) {
         lv_timer_reset(s_mic_timer);
         return;
@@ -1031,7 +1087,7 @@ void ui_show_panel_note(const char *phase, const char *message) {
     if (!s_message) {
         return;
     }
-    lv_label_set_text(s_message, message ? message : "");
+    show_note(message);
     present_status(phase && phase[0] ? phase : "IDLE", s_fail_count);
 }
 
@@ -1076,8 +1132,11 @@ void ui_apply(const desk_view_t *view, int failures) {
     int lamp = present_status(desk_phase_label(view, failures), failures);
     int fresh;
     fresh = !s_applied || !desk_status_same(&s_applied_view, s_applied_failures, view, failures);
-    if (!s_mic_timer && (fresh || strcmp(lv_label_get_text(s_message), view->message) != 0)) {
-        lv_label_set_text(s_message, view->message);
+    if (!s_mic_timer) {
+        const char *note = centered_note(view);
+        if (fresh || strcmp(lv_label_get_text(s_message), note) != 0) {
+            show_note(note);
+        }
     }
     if (fresh) {
         headline = desk_face_title(view);
@@ -1088,6 +1147,8 @@ void ui_apply(const desk_view_t *view, int failures) {
             uint32_t color = DESK_MARK_NEUTRAL;
             uint32_t parsed;
             const char *label;
+            const char *aside = "";
+            int hot;
             if (i >= view->agent_count) {
                 lv_obj_set_hidden(s_agent_rows[i], true);
                 continue;
@@ -1099,6 +1160,9 @@ void ui_apply(const desk_view_t *view, int failures) {
             apply_mark(s_agent_marks[i], color, desk_mark_shape(agent->shape));
             label = agent->title[0] ? agent->title : agent->id;
             lv_label_set_text(s_agent_labels[i], label[0] ? label : "agent");
+            hot = desk_agent_hot(view, i, &aside);
+            lay_row_text(s_agent_labels[i], s_agent_aside[i], aside);
+            lv_obj_set_style_bg_opa(s_agent_rows[i], hot ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
             lv_obj_set_hidden(s_agent_rows[i], false);
         }
         desk_count_text(view, count, sizeof(count));

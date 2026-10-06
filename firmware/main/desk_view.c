@@ -355,6 +355,33 @@ const char *desk_face_title(const desk_view_t *view) {
     return view->title;
 }
 
+int desk_agent_hot(const desk_view_t *view, int index, const char **aside) {
+    const desk_agent_t *agent;
+    const char *title;
+    int needs;
+    int owns = 0;
+    if (aside) {
+        *aside = "";
+    }
+    if (!view || index < 0 || index >= view->agent_count) {
+        return 0;
+    }
+    agent = &view->agents[index];
+    needs = strcmp(agent->status, "needs_you") == 0;
+    title = desk_face_title(view);
+    if (view->message[0]) {
+        if (title[0]) {
+            owns = strcmp(agent->title, title) == 0 || strcmp(agent->id, title) == 0;
+        } else {
+            owns = needs;
+        }
+    }
+    if (owns && aside) {
+        *aside = view->message;
+    }
+    return needs || owns;
+}
+
 const char *desk_phase_label(const desk_view_t *view, int consecutive_failures) {
     if (!view) {
         return "IDLE";

@@ -176,14 +176,17 @@
         line-height: 1;
         color: #a39b88;
       }
+      #message:empty {
+        display: none;
+      }
       #agents {
         flex: 1;
         min-height: 0;
         width: 100%;
-        margin: 4px 0 0;
+        margin: 2px 0 0;
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 2px;
         overflow-x: hidden;
         overflow-y: auto;
         overscroll-behavior: contain;
@@ -195,8 +198,25 @@
         display: flex;
         align-items: center;
         gap: 12px;
+        box-sizing: border-box;
         min-width: 0;
-        min-height: 34px;
+        min-height: 30px;
+        padding: 0 8px;
+        border-radius: 8px;
+      }
+      .agent.hot {
+        background: #2a2d24;
+      }
+      .agent .name {
+        flex: 1;
+        min-width: 0;
+      }
+      .agent .aside {
+        flex: none;
+        max-width: 42%;
+        font-size: 16px;
+        text-align: right;
+        color: #a39b88;
       }
       .mark {
         width: 24px;
@@ -566,6 +586,14 @@
         return event.title;
       }
 
+      function rowAside(agent, status) {
+        const note = (status.last_event && status.last_event.message) || "";
+        const title = faceTitle(status.last_event);
+        if (!note) return "";
+        if (title && (agent.title === title || agent.id === title)) return note;
+        return !title && agent.status === "needs_you" ? note : "";
+      }
+
       function label(status) {
         if (failures >= 3) return "link down";
         if (status.needs_you || status.phase === "needs_you") return "NEEDS YOU";
@@ -584,7 +612,7 @@
           face = label(status);
           paintLink(face, failures);
           title.textContent = faceTitle(status.last_event);
-          message.textContent = (status.last_event && status.last_event.message) || "";
+          const note = (status.last_event && status.last_event.message) || "";
           const list = status.agents || [];
           const running = list.filter((agent) => agent.status === "running").length;
           const quiet = label(status) === "IDLE" && running === 0;
@@ -593,17 +621,28 @@
           count.classList.toggle("idle", running === 0);
           panel.classList.toggle("asleep", quiet && list.length === 0);
           agents.replaceChildren();
-          (status.agents || []).forEach((agent) => {
+          let placed = false;
+          list.forEach((agent) => {
             const row = document.createElement("div");
             const mark = document.createElement("i");
             const name = document.createElement("span");
-            row.className = "agent";
+            const asideText = rowAside(agent, status);
+            row.className = "agent" + (agent.status === "needs_you" || asideText ? " hot" : "");
             mark.className = "mark " + markShape(agent.shape);
             mark.style.background = markColor(agent.color);
+            name.className = "name";
             name.textContent = agent.title || agent.id || "agent";
             row.append(mark, name);
+            if (asideText) {
+              const aside = document.createElement("span");
+              aside.className = "aside";
+              aside.textContent = asideText;
+              row.append(aside);
+              placed = true;
+            }
             agents.append(row);
           });
+          message.textContent = placed ? "" : note;
           panel.classList.toggle("needs", status.needs_you === true);
         } catch (err) {
           failures = Math.min(3, failures + 1);

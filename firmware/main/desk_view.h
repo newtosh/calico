@@ -45,6 +45,10 @@ int desk_status_same(const desk_view_t *a, int failures_a, const desk_view_t *b,
 /* Face headline. Empty when last_event has no useful title. A dismiss
  * acknowledgement is not one. Notes, launches, and needs-you questions keep theirs. */
 const char *desk_face_title(const desk_view_t *view);
+/* 1 when this agent row should be filled. *aside (optional) is the face
+ * message on the right of the name, or "". needs_you fills the row even
+ * with no message. A running or idle row fills only when it shows one. */
+int desk_agent_hot(const desk_view_t *view, int index, const char **aside);
 void desk_count_text(const desk_view_t *view, char *out, size_t out_len);
 int desk_panel_from_json(const char *json, desk_panel_t *out);
 int desk_panel_should_apply(const desk_panel_t *panel, const char *url, const char *token);

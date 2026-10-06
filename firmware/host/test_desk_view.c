@@ -349,6 +349,55 @@ int main(void) {
         check(desk_poll_ms(NULL, 0, 1) == 2000, "missing view stays fast");
     }
 
+    {
+        const char *aside = "x";
+        const char *named =
+            "{\"phase\":\"running\",\"agents\":["
+            "{\"id\":\"scaffold\",\"title\":\"Scaffold\",\"status\":\"running\"},"
+            "{\"id\":\"jeeves\",\"title\":\"Jeeves\",\"status\":\"idle\"}"
+            "],\"last_event\":{\"title\":\"Scaffold\",\"message\":\"started\"}}";
+        const char *split =
+            "{\"phase\":\"needs_you\",\"needs_you\":true,\"agents\":["
+            "{\"id\":\"a\",\"title\":\"Aye\",\"status\":\"running\"},"
+            "{\"id\":\"b\",\"title\":\"Bee\",\"status\":\"needs_you\"}"
+            "],\"last_event\":{\"title\":\"Aye\",\"message\":\"Pick one\"}}";
+        const char *question =
+            "{\"phase\":\"needs_you\",\"agents\":["
+            "{\"id\":\"b\",\"title\":\"Bee\",\"status\":\"needs_you\"}],"
+            "\"last_event\":{\"message\":\"Pick one\"}}";
+        const char *quiet =
+            "{\"phase\":\"running\",\"agents\":["
+            "{\"id\":\"scaffold\",\"title\":\"Scaffold\",\"status\":\"running\"}],"
+            "\"last_event\":{\"title\":\"Scaffold\",\"message\":\"\"}}";
+        const char *by_id =
+            "{\"phase\":\"running\",\"agents\":["
+            "{\"id\":\"scaffold\",\"title\":\"\",\"status\":\"running\"}],"
+            "\"last_event\":{\"title\":\"scaffold\",\"message\":\"started\"}}";
+        check(desk_view_from_json(named, &view) == 0, "aside parse");
+        check(desk_agent_hot(&view, 0, &aside) == 1, "fresh message highlights");
+        check(strcmp(aside, "started") == 0, "message on the named row");
+        check(desk_agent_hot(&view, 1, &aside) == 0, "idle row stays quiet");
+        check(aside[0] == '\0', "quiet row has no aside");
+        check(desk_view_from_json(split, &view) == 0, "split parse");
+        check(desk_agent_hot(&view, 0, &aside) == 1, "owner row is hot");
+        check(strcmp(aside, "Pick one") == 0, "owner shows the question");
+        check(desk_agent_hot(&view, 1, &aside) == 1, "needs you highlights");
+        check(aside[0] == '\0', "needs you without the face text");
+        check(desk_view_from_json(question, &view) == 0, "untitled question");
+        check(desk_agent_hot(&view, 0, &aside) == 1, "untitled needs you is hot");
+        check(strcmp(aside, "Pick one") == 0, "untitled needs you carries the message");
+        check(desk_view_from_json(quiet, &view) == 0, "empty message parse");
+        check(desk_agent_hot(&view, 0, &aside) == 0, "running with no message stays plain");
+        check(aside[0] == '\0', "empty message is not aside text");
+        check(desk_view_from_json(by_id, &view) == 0, "id headline parse");
+        check(desk_agent_hot(&view, 0, &aside) == 1, "id match highlights");
+        check(strcmp(aside, "started") == 0, "id match shows the message");
+        check(desk_agent_hot(NULL, 0, &aside) == 0, "null view is not hot");
+        check(aside[0] == '\0', "null view clears aside");
+        check(desk_agent_hot(&view, -1, &aside) == 0, "bad index");
+        check(desk_agent_hot(&view, 4, NULL) == 0, "aside pointer is optional");
+    }
+
     if (g_failed) {
         return 1;
     }
