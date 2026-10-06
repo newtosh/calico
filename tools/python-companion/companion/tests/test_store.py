@@ -357,6 +357,18 @@ def test_cursor_item_does_not_repeat(tmp_path: Path) -> None:
     assert reloaded.status()["phase"] == "running"
 
 
+def test_finished_title_is_kept_and_empty_does_not_clear() -> None:
+    store = DeskStore()
+    store.apply_event(EventIn(type="agent.finished", agent_id="alfred", title="Alfred"))
+    agents = store.status()["agents"]
+    assert isinstance(agents, list)
+    assert agents[0]["title"] == "Alfred"
+    store.apply_event(EventIn(type="agent.finished", agent_id="alfred", title=""))
+    agents = store.status()["agents"]
+    assert isinstance(agents, list)
+    assert agents[0]["title"] == "Alfred"
+
+
 def test_attention_survives_finish_and_dismiss_clears_only_that_row() -> None:
     store = DeskStore()
     store.apply_event(

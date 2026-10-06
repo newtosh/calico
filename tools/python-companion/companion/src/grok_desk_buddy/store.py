@@ -153,11 +153,11 @@ class DeskStore:
                 current = self._agents.get(raw.agent_id)
                 waiting = current is not None and current.attention
                 self._remember(event)
-                # Keep the question up when they are still waiting. A finish
-                # title is not the agent's name.
+                # Keep the question up when they are still waiting. An empty
+                # finish title is not a rename; a provided one is the name.
                 self._touch(
                     raw.agent_id,
-                    "",
+                    raw.title,
                     event.at,
                     event.color,
                     event.shape,
