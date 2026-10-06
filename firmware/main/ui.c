@@ -48,7 +48,13 @@ enum {
     LAMP_AMBER = 0xe2a23a,
     LAMP_RED = 0xc4544a,
     /* One step under the olive face. Top status bar and bottom dock. */
-    DOCK = 0x0c0e09
+    DOCK = 0x0c0e09,
+    /* Sleep glyph in the empty middle. Bob travels 10px down and Zzz rises
+     * 12px through OVERFLOW_VISIBLE, so the dirty rect is padded past the box. */
+    SLEEP_HEAD = 96,
+    SLEEP_SPAN = 96 + 36,
+    SLEEP_W = 96 + 56,
+    SLEEP_EXT = 16
 };
 
 static lv_obj_t *s_title;
@@ -93,6 +99,7 @@ static lv_obj_t *s_eye_l;
 static lv_obj_t *s_eye_r;
 static lv_obj_t *s_zzz;
 static int s_asleep;
+static int s_list_cover;
 static lv_obj_t *s_lamp;
 static lv_obj_t *s_toast_label;
 static lv_obj_t *s_wifi_bars[3];
@@ -799,30 +806,57 @@ static void start_anim(lv_obj_t *obj, lv_anim_exec_xcb_t exec, int32_t from, int
     lv_anim_start(&a);
 }
 
+static void sleep_origin(int *x, int *y) {
+    *y = (MESSAGE_Y + 28 + DOCK_TOP - SLEEP_SPAN) / 2;
+    *x = (SCREEN_PX - SLEEP_W) / 2;
+}
+
 /* Large face in the empty middle of the 480 panel. 16px bezel stays. */
 static void place_sleep(void) {
-    int span = 96 + 36;
-    int y = (MESSAGE_Y + 28 + DOCK_TOP - span) / 2;
-    lv_obj_set_size(s_sleep, 96 + 56, span);
-    lv_obj_set_size(s_head, 96, 96);
+    int x;
+    int y;
+    sleep_origin(&x, &y);
+    lv_obj_set_size(s_sleep, SLEEP_W, SLEEP_SPAN);
+    lv_obj_set_size(s_head, SLEEP_HEAD, SLEEP_HEAD);
     lv_obj_set_size(s_eye_l, 22, 4);
     lv_obj_set_size(s_eye_r, 22, 4);
     lv_obj_align(s_eye_l, LV_ALIGN_CENTER, -16, 3);
     lv_obj_align(s_eye_r, LV_ALIGN_CENTER, 16, 3);
     lv_obj_set_style_text_font(s_zzz, &lv_font_montserrat_24, 0);
     lv_obj_align(s_head, LV_ALIGN_BOTTOM_LEFT, 0, 0);
-    lv_obj_align(s_zzz, LV_ALIGN_TOP_LEFT, 92, 4);
-    lv_obj_align(s_sleep, LV_ALIGN_TOP_MID, 0, y);
+    lv_obj_align(s_zzz, LV_ALIGN_TOP_LEFT, SLEEP_HEAD - 4, 4);
+    lv_obj_align(s_sleep, LV_ALIGN_TOP_LEFT, x, y);
+}
+
+/* The bob and the rising Zzz draw outside the widget box. A hidden widget
+ * ignores a later invalidate, so clear that footprint on the screen. */
+static void sleep_clear_rect(void) {
+    lv_area_t area;
+    int x;
+    int y;
+    sleep_origin(&x, &y);
+    area.x1 = x - SLEEP_EXT;
+    area.y1 = y - SLEEP_EXT;
+    area.x2 = x + SLEEP_W - 1 + SLEEP_EXT;
+    area.y2 = y + SLEEP_SPAN - 1 + SLEEP_EXT;
+    lv_obj_invalidate_area(lv_screen_active(), &area);
 }
 
 static void sleep_stop(void) {
-    if (!s_sleep || !s_asleep) {
+    if (!s_sleep) {
         return;
     }
-    s_asleep = 0;
+    if (!s_asleep && lv_obj_has_flag(s_sleep, LV_OBJ_FLAG_HIDDEN)) {
+        return;
+    }
     anim_delete(s_sleep);
     anim_delete(s_zzz);
+    /* Drop the bob while the widget can still mark its old box dirty. */
+    lv_obj_set_style_translate_y(s_sleep, 0, 0);
+    lv_obj_set_style_translate_y(s_zzz, 0, 0);
+    s_asleep = 0;
     lv_obj_set_hidden(s_sleep, true);
+    sleep_clear_rect();
 }
 
 static void sleep_show(void) {
@@ -839,11 +873,26 @@ static void sleep_show(void) {
     start_anim(s_zzz, sleep_zzz, 0, 100, 4200, 0);
 }
 
-static void sync_sleep(const desk_view_t *view, int failures, int lamp) {
-    if (!lv_obj_is_hidden(s_settings) || !desk_show_sleep(view, failures) || lamp == DESK_LAMP_RED) {
-        sleep_stop();
+/* Quiet rows are transparent. An opaque list in the face color covers the
+ * sleeper, including the gaps, once any agent is stored. */
+static void cover_agents(int on) {
+    on = on ? 1 : 0;
+    if (!s_agent_box || s_list_cover == on) {
         return;
     }
+    s_list_cover = on;
+    lv_obj_set_style_bg_color(s_agent_box, lv_color_hex(BG), 0);
+    lv_obj_set_style_bg_opa(s_agent_box, on ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+}
+
+static void sync_sleep(const desk_view_t *view, int failures, int lamp) {
+    int listed = view && view->known_count > 0;
+    if (!lv_obj_is_hidden(s_settings) || !desk_show_sleep(view, failures) || lamp == DESK_LAMP_RED) {
+        sleep_stop();
+        cover_agents(listed);
+        return;
+    }
+    cover_agents(0);
     sleep_show();
 }
 
@@ -1128,8 +1177,9 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_set_style_text_align(s_message, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(s_message, lv_color_hex(INK_DIM), 0);
     lv_obj_align(s_message, LV_ALIGN_TOP_MID, 0, MESSAGE_Y);
-    build_agent_rows(screen);
+    /* Sleeper first, so the list paints over it. */
     build_sleep(screen);
+    build_agent_rows(screen);
     dock = lv_obj_create(screen);
     lv_obj_set_size(dock, SCREEN_PX, BTN_H + EDGE_PX);
     lv_obj_align(dock, LV_ALIGN_BOTTOM_MID, 0, 0);
