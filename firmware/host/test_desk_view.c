@@ -475,9 +475,20 @@ int main(void) {
             "{\"phase\":\"idle\",\"last_event\":{\"title\":\"Caf\\u00e9\","
             "\"message\":\"hi \\u2014 \\\"ok\\\" \\nnext \\uD83D\\uDE00\"}}";
         check(desk_view_from_json(escaped, &view) == 0, "escaped parse");
-        check(strcmp(view.title, "Caf\xc3\xa9") == 0, "title unicode");
-        check(strcmp(view.message, "hi \xe2\x80\x94 \"ok\"  next \xf0\x9f\x98\x80") == 0,
-              "message unicode");
+        check(strcmp(view.title, "Cafe") == 0, "title folds e-acute");
+        check(strcmp(view.message, "hi - \"ok\"  next ") == 0, "dash kept, emoji dropped");
+        const char *glyphs =
+            "{\"phase\":\"idle\",\"last_event\":{\"message\":\"v1 face-down in Bambu "
+            "\\u25B6 click \\u2502 \\uE000\\u2022\\u00B0\"}}";
+        const char *raw = "{\"phase\":\"idle\",\"last_event\":{\"message\":\"hi \xf0\x9f\x98\x80 there\"}}";
+        check(desk_view_from_json(glyphs, &view) == 0, "glyph parse");
+        check(strcmp(view.message, "v1 face-down in Bambu -> click | \xe2\x80\xa2\xc2\xb0") == 0,
+              "arrow, box, private-use, bullet, degree");
+        check(desk_view_from_json(raw, &view) == 0, "raw utf-8 parse");
+        check(strcmp(view.message, "hi  there") == 0, "raw emoji dropped");
+        const char *uline = "{\"phase\":\"idle\",\"last_event\":{\"message\":\"a\\u000Ab\"}}";
+        check(desk_view_from_json(uline, &view) == 0, "unicode newline parse");
+        check(strcmp(view.message, "a b") == 0, "unicode newline becomes a space");
 
         desk_row_spans(396, 80, 12, 48, 1, &name_w, &aside_w);
         check(name_w == 80, "short name keeps its text width");
@@ -558,6 +569,58 @@ int main(void) {
         check(strcmp(aside, "roster update") == 0, "desky keeps its question");
         check(desk_agent_hot(&view, 1, &aside) == 1, "spool stays hot");
         check(strcmp(aside, "your turn") == 0, "spool is not given desky's question");
+    }
+
+    {
+        desk_view_t prev;
+        desk_view_t next;
+        const char *base =
+            "{\"phase\":\"running\",\"agents\":["
+            "{\"id\":\"scaffold\",\"title\":\"Scaffold\",\"status\":\"running\",\"message\":\"old wire\"},"
+            "{\"id\":\"spool\",\"title\":\"Spool\",\"status\":\"idle\"}"
+            "]}";
+        const char *aside_changed =
+            "{\"phase\":\"running\",\"agents\":["
+            "{\"id\":\"scaffold\",\"title\":\"Scaffold\",\"status\":\"running\",\"message\":\"new wire\"},"
+            "{\"id\":\"spool\",\"title\":\"Spool\",\"status\":\"idle\"}"
+            "]}";
+        const char *attention =
+            "{\"phase\":\"running\",\"agents\":["
+            "{\"id\":\"scaffold\",\"title\":\"Scaffold\",\"status\":\"running\",\"message\":\"old wire\"},"
+            "{\"id\":\"spool\",\"title\":\"Spool\",\"status\":\"running\",\"attention\":true}"
+            "]}";
+        const char *born =
+            "{\"phase\":\"running\",\"agents\":["
+            "{\"id\":\"alfred\",\"title\":\"Alfred\",\"status\":\"running\",\"message\":\"up\"},"
+            "{\"id\":\"scaffold\",\"title\":\"Scaffold\",\"status\":\"running\",\"message\":\"old wire\"},"
+            "{\"id\":\"spool\",\"title\":\"Spool\",\"status\":\"idle\"}"
+            "]}";
+        const char *reordered =
+            "{\"phase\":\"running\",\"agents\":["
+            "{\"id\":\"spool\",\"title\":\"Spool\",\"status\":\"idle\"},"
+            "{\"id\":\"scaffold\",\"title\":\"Scaffold\",\"status\":\"running\",\"message\":\"old wire\"}"
+            "]}";
+        const char *recolored =
+            "{\"phase\":\"running\",\"agents\":["
+            "{\"id\":\"scaffold\",\"title\":\"Scaffold\",\"status\":\"running\",\"message\":\"old wire\","
+            "\"color\":\"#3366cc\"},"
+            "{\"id\":\"spool\",\"title\":\"Spool\",\"status\":\"idle\"}"
+            "]}";
+        check(desk_unseen_updates(NULL, NULL) == 0, "unseen needs both views");
+        check(desk_view_from_json(base, &prev) == 0, "unseen base");
+        check(desk_view_from_json(base, &next) == 0, "unseen same parse");
+        check(desk_unseen_updates(&prev, &next) == 0, "same roster is not new");
+        check(desk_unseen_updates(NULL, &next) == 0, "missing prev is not new");
+        check(desk_view_from_json(aside_changed, &next) == 0, "unseen aside parse");
+        check(desk_unseen_updates(&prev, &next) == 1, "changed aside counts once");
+        check(desk_view_from_json(attention, &next) == 0, "unseen attention parse");
+        check(desk_unseen_updates(&prev, &next) == 1, "status and attention count once");
+        check(desk_view_from_json(born, &next) == 0, "unseen new agent parse");
+        check(desk_unseen_updates(&prev, &next) == 1, "new agent counts");
+        check(desk_view_from_json(reordered, &next) == 0, "unseen reorder parse");
+        check(desk_unseen_updates(&prev, &next) == 0, "reorder alone is not new");
+        check(desk_view_from_json(recolored, &next) == 0, "unseen recolor parse");
+        check(desk_unseen_updates(&prev, &next) == 0, "color alone is not new");
     }
 
     if (g_failed) {

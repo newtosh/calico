@@ -31,6 +31,9 @@ int main(void) {
     check(band.x1 == 0 && band.x2 == FACE_SCREEN - 1, "band is the full panel width");
     check(band.y1 == FACE_EDGE + FACE_BAR_H, "band starts under the status bar");
     check(band.y2 == FACE_DOCK_TOP - 1, "band stops above the dock");
+    check(FACE_BTN_H == 58, "dock button height is about 10% under 64");
+    check(FACE_DOCK_INSET == 8, "buttons sit 8px past the bezel");
+    check(FACE_DOCK_TOP == 398, "list stops above the inset dock");
     check((band.x1 % 2) == 0 && (band.y1 % 2) == 0, "band start is even");
     check((band.x2 % 2) == 1 && (band.y2 % 2) == 1, "band end is odd");
     check((width % 2) == 0 && (height % 2) == 0, "band size is even");

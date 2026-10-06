@@ -96,3 +96,6 @@ int desk_mark_shape(const char *shape);
  * highlighted, the aside is non-empty, and this agent was not already on
  * top with the same text. prev may be NULL. Any other row stays truncated. */
 int desk_aside_scroll(const desk_view_t *prev, const desk_view_t *view);
+/* Rows that are new, or whose status, attention, or aside changed.
+ * 0 when either view is missing. Color and order alone do not count. */
+int desk_unseen_updates(const desk_view_t *prev, const desk_view_t *view);

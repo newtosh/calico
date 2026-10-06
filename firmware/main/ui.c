@@ -34,10 +34,13 @@ enum {
     ROW_GAP = 12,
     /* Floor for the status text when a name would otherwise take the row. */
     ASIDE_MIN = 48,
-    BTN_H = 64,
-    BTN_W = 80,
+    /* 90% of 64x80. The case radius was clipping the old squares. */
+    BTN_H = 58,
+    BTN_W = 72,
+    /* Past the 16px glass bezel, so the printed corner misses the button. */
+    DOCK_INSET = 8,
     /* Top of the button row. The count sits in that row. */
-    DOCK_TOP = SCREEN_PX - EDGE_PX - BTN_H,
+    DOCK_TOP = SCREEN_PX - EDGE_PX - DOCK_INSET - BTN_H,
     INK = 0xefe7d6,
     INK_DIM = 0xa39b88,
     BG = 0x14160f,
@@ -45,6 +48,10 @@ enum {
     FIELD_EDGE = 0x6d6756,
     ROW = 0x2a2d24,
     ROW_ON = 0x3d4f32,
+    /* Hot agent row. FIELD (#2a2d24) sank into the #14160f face. This olive
+     * stays under the cream type. The sage edge is what reads across the desk. */
+    ROW_HOT = 0x527044,
+    ROW_HOT_INK = 0xd4ccba,
     ROW_MARK = 0x9bb57a,
     LAMP_AMBER = 0xe2a23a,
     LAMP_RED = 0xc4544a,
@@ -57,7 +64,9 @@ _Static_assert((int)SCREEN_PX == (int)FACE_SCREEN, "face band width");
 _Static_assert((int)EDGE_PX == (int)FACE_EDGE, "face band edge");
 _Static_assert((int)BAR_H == (int)FACE_BAR_H, "face band top");
 _Static_assert((int)BTN_H == (int)FACE_BTN_H, "face band dock");
+_Static_assert((int)DOCK_INSET == (int)FACE_DOCK_INSET, "face band inset");
 _Static_assert((int)DOCK_TOP == (int)FACE_DOCK_TOP, "face band bottom");
+_Static_assert(BTN_W == 72 && BTN_H == 58, "dock buttons are about 10% under 80x64");
 _Static_assert((int)MESSAGE_Y == (int)FACE_MESSAGE_Y, "sleep origin");
 
 static lv_obj_t *s_title;
@@ -125,6 +134,9 @@ static int s_last_lamp = DESK_LAMP_AMBER;
 static int s_status_seen_ok;
 static char s_phase_text[24];
 static char s_status_seen[24];
+static lv_obj_t *s_new_btn;
+static lv_obj_t *s_new_label;
+static int s_unseen;
 
 static void copy_text(char *dest, size_t dest_len, const char *src) {
     size_t i;
@@ -324,9 +336,16 @@ static void apply_mark(lv_obj_t *mark, uint32_t color, int shape) {
 
 static void place_agents(int message_line) {
     int y = message_line ? AGENT_NOTE_Y : AGENT_Y;
+    int h = DOCK_TOP - y;
     lv_obj_set_hidden(s_message, !message_line);
-    lv_obj_set_size(s_agent_box, SCREEN_PX - (EDGE_PX * 2), DOCK_TOP - y);
-    lv_obj_align(s_agent_box, LV_ALIGN_TOP_MID, 0, y);
+    /* Resizing the list clamps its scroll. Skip that when the box is already there. */
+    if ((int)lv_obj_get_y(s_agent_box) != y || (int)lv_obj_get_height(s_agent_box) != h) {
+        lv_obj_set_size(s_agent_box, SCREEN_PX - (EDGE_PX * 2), h);
+        lv_obj_align(s_agent_box, LV_ALIGN_TOP_MID, 0, y);
+    }
+    if (s_new_btn) {
+        lv_obj_align(s_new_btn, LV_ALIGN_TOP_MID, 0, y);
+    }
 }
 
 /* Face message stays centered only when no row is carrying it. */
@@ -437,8 +456,10 @@ static void build_agent_rows(lv_obj_t *screen) {
         lv_obj_set_style_pad_left(row, ROW_PAD, 0);
         lv_obj_set_style_pad_right(row, ROW_PAD, 0);
         lv_obj_set_style_pad_column(row, ROW_GAP, 0);
-        lv_obj_set_style_bg_color(row, lv_color_hex(FIELD), 0);
+        lv_obj_set_style_bg_color(row, lv_color_hex(ROW_HOT), 0);
         lv_obj_set_style_bg_opa(row, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_color(row, lv_color_hex(ROW_MARK), 0);
+        lv_obj_set_style_border_side(row, LV_BORDER_SIDE_LEFT, 0);
         lv_obj_set_style_border_width(row, 0, 0);
         lv_obj_set_style_radius(row, 8, 0);
         lv_obj_set_size(mark, MARK_PX, MARK_PX);
@@ -1137,6 +1158,8 @@ static void build_status_bar(lv_obj_t *screen) {
     paint_bars(0);
 }
 
+static void build_new_pill(lv_obj_t *screen);
+
 void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_t *screen = lv_screen_active();
     static const desk_view_t blank;
@@ -1181,13 +1204,13 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     build_sleep(screen);
     build_agent_rows(screen);
     dock = lv_obj_create(screen);
-    lv_obj_set_size(dock, SCREEN_PX, BTN_H + EDGE_PX);
+    lv_obj_set_size(dock, SCREEN_PX, BTN_H + EDGE_PX + DOCK_INSET);
     lv_obj_align(dock, LV_ALIGN_BOTTOM_MID, 0, 0);
     flatten(dock);
     lv_obj_set_style_bg_color(dock, lv_color_hex(DOCK), 0);
     lv_obj_set_style_bg_opa(dock, LV_OPA_COVER, 0);
-    lv_obj_set_style_pad_hor(dock, EDGE_PX, 0);
-    lv_obj_set_style_pad_bottom(dock, EDGE_PX, 0);
+    lv_obj_set_style_pad_hor(dock, EDGE_PX + DOCK_INSET, 0);
+    lv_obj_set_style_pad_bottom(dock, EDGE_PX + DOCK_INSET, 0);
     lv_obj_set_flex_flow(dock, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(dock, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
                           LV_FLEX_ALIGN_CENTER);
@@ -1199,6 +1222,7 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_set_style_text_color(s_count, lv_color_hex(INK_DIM), 0);
     settings_btn = icon_button(dock, &desk_icon_settings, on_open_settings, 0);
     lv_obj_set_size(settings_btn, BTN_W, BTN_H);
+    build_new_pill(screen);
 
     s_alert = lv_obj_create(screen);
     lv_obj_set_size(s_alert, SCREEN_PX, SCREEN_PX);
@@ -1451,12 +1475,93 @@ static void aside_begin(void) {
     }
 }
 
+static int agent_scrolled(void) {
+    if (!s_agent_box) {
+        return 0;
+    }
+    return lv_obj_get_scroll_y(s_agent_box) > 0;
+}
+
+static void show_unseen(void) {
+    if (!s_new_btn) {
+        return;
+    }
+    if (s_unseen < 1 || s_asleep || !agent_scrolled()) {
+        lv_obj_set_hidden(s_new_btn, true);
+        return;
+    }
+    if (s_unseen > 99) {
+        lv_label_set_text(s_new_label, "99+ new");
+    } else {
+        lv_label_set_text_fmt(s_new_label, "%d new", s_unseen);
+    }
+    lv_obj_set_hidden(s_new_btn, false);
+}
+
+static void on_agent_scroll(lv_event_t *event) {
+    if (lv_event_get_code(event) != LV_EVENT_SCROLL) {
+        return;
+    }
+    if (!agent_scrolled()) {
+        s_unseen = 0;
+    }
+    show_unseen();
+}
+
+static void on_new_jump(lv_event_t *event) {
+    if (lv_event_get_code(event) != LV_EVENT_CLICKED || !s_agent_box) {
+        return;
+    }
+    s_unseen = 0;
+    lv_obj_scroll_to_y(s_agent_box, 0, LV_ANIM_OFF);
+    show_unseen();
+}
+
+static void build_new_pill(lv_obj_t *screen) {
+    s_new_btn = lv_button_create(screen);
+    s_new_label = lv_label_create(s_new_btn);
+    lv_obj_set_size(s_new_btn, LV_SIZE_CONTENT, 32);
+    lv_obj_set_style_bg_color(s_new_btn, lv_color_hex(ROW_HOT), 0);
+    lv_obj_set_style_bg_opa(s_new_btn, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(s_new_btn, lv_color_hex(ROW_MARK), 0);
+    lv_obj_set_style_border_width(s_new_btn, 1, 0);
+    lv_obj_set_style_radius(s_new_btn, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_shadow_width(s_new_btn, 0, 0);
+    lv_obj_set_style_pad_hor(s_new_btn, 14, 0);
+    lv_obj_set_style_pad_ver(s_new_btn, 0, 0);
+    lv_label_set_text(s_new_label, "1 new");
+    lv_obj_set_style_text_font(s_new_label, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(s_new_label, lv_color_hex(INK), 0);
+    lv_obj_center(s_new_label);
+    lv_obj_clear_flag(s_new_label, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_flag(s_new_btn, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(s_new_btn, on_new_jump, LV_EVENT_CLICKED, NULL);
+    lv_obj_align(s_new_btn, LV_ALIGN_TOP_MID, 0, AGENT_Y);
+    lv_obj_set_hidden(s_new_btn, true);
+    lv_obj_add_event_cb(s_agent_box, on_agent_scroll, LV_EVENT_SCROLL, NULL);
+}
+
+static void note_unseen(const desk_view_t *view) {
+    int add = 0;
+    if (s_applied && agent_scrolled()) {
+        add = desk_unseen_updates(&s_applied_view, view);
+    }
+    if (!agent_scrolled()) {
+        s_unseen = 0;
+    } else if (add > 0) {
+        s_unseen = s_unseen > 999 - add ? 999 : s_unseen + add;
+    }
+}
+
 void ui_apply(const desk_view_t *view, int failures) {
     char count[32];
     int i;
     int lamp = present_status(desk_phase_label(view, failures), failures);
     int fresh;
     fresh = !s_applied || !desk_status_same(&s_applied_view, s_applied_failures, view, failures);
+    if (fresh) {
+        note_unseen(view);
+    }
     if (!s_mic_timer) {
         const char *note = centered_note(view);
         if (fresh || strcmp(lv_label_get_text(s_message), note) != 0) {
@@ -1502,6 +1607,8 @@ void ui_apply(const desk_view_t *view, int failures) {
                 }
                 lay_row_text(i, s_agent_labels[i], s_agent_aside[i], aside, scroll);
                 lv_obj_set_style_bg_opa(s_agent_rows[i], hot ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+                lv_obj_set_style_border_width(s_agent_rows[i], hot ? 2 : 0, 0);
+                lv_obj_set_style_text_color(s_agent_aside[i], lv_color_hex(hot ? ROW_HOT_INK : INK_DIM), 0);
                 lv_obj_set_hidden(s_agent_rows[i], false);
             }
         }
@@ -1514,11 +1621,15 @@ void ui_apply(const desk_view_t *view, int failures) {
         } else {
             lv_obj_set_hidden(s_alert, true);
         }
+        if (!agent_scrolled()) {
+            s_unseen = 0;
+        }
         s_applied_view = *view;
         s_applied_failures = failures;
         s_applied = 1;
     }
     sync_sleep(view, failures, lamp);
+    show_unseen();
 }
 
 int ui_status_current(const desk_view_t *view, int failures) {

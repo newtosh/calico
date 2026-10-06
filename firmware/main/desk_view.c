@@ -74,63 +74,254 @@ static void put_utf8(char *out, size_t out_len, size_t *n, unsigned int cp) {
     }
 }
 
-/* JSON string. \uXXXX (and a surrogate pair) becomes UTF-8. Newlines become
- * a space so a one-line aside does not grow a second row. */
+/* LVGL Montserrat on this panel: ASCII 0x20-0x7E, degree U+00B0, bullet U+2022.
+ * Anything else is an ASCII stand-in or dropped, so the label does not draw a box. */
+static int font_has(unsigned int cp) {
+    return (cp >= 0x20 && cp <= 0x7E) || cp == 0x00B0 || cp == 0x2022;
+}
+
+static int utf8_cont(unsigned char c) {
+    return (c & 0xC0) == 0x80;
+}
+
+static int utf8_cp(const char *s, unsigned int *cp) {
+    const unsigned char *u = (const unsigned char *)s;
+    unsigned int v;
+    if (u[0] < 0x80) {
+        *cp = u[0];
+        return u[0] ? 1 : 0;
+    }
+    if ((u[0] & 0xE0) == 0xC0 && utf8_cont(u[1])) {
+        v = ((unsigned int)(u[0] & 0x1F) << 6) | (u[1] & 0x3F);
+        if (v < 0x80) {
+            return 0;
+        }
+        *cp = v;
+        return 2;
+    }
+    if ((u[0] & 0xF0) == 0xE0 && utf8_cont(u[1]) && utf8_cont(u[2])) {
+        v = ((unsigned int)(u[0] & 0x0F) << 12) | ((unsigned int)(u[1] & 0x3F) << 6) | (u[2] & 0x3F);
+        if (v < 0x800 || (v >= 0xD800 && v <= 0xDFFF)) {
+            return 0;
+        }
+        *cp = v;
+        return 3;
+    }
+    if ((u[0] & 0xF8) == 0xF0 && utf8_cont(u[1]) && utf8_cont(u[2]) && utf8_cont(u[3])) {
+        v = ((unsigned int)(u[0] & 0x07) << 18) | ((unsigned int)(u[1] & 0x3F) << 12) |
+            ((unsigned int)(u[2] & 0x3F) << 6) | (u[3] & 0x3F);
+        if (v < 0x10000 || v > 0x10FFFF) {
+            return 0;
+        }
+        *cp = v;
+        return 4;
+    }
+    return 0;
+}
+
+static const char *fold_latin1(unsigned int cp) {
+    static const char *const map[] = {
+        "A",  "A",  "A", "A", "A", "A", "AE", "C", "E",  "E", "E", "E", "I", "I", "I", "I",
+        "D",  "N",  "O", "O", "O", "O", "O",  "x", "O",  "U", "U", "U", "U", "Y", "Th", "ss",
+        "a",  "a",  "a", "a", "a", "a", "ae", "c", "e",  "e", "e", "e", "i", "i", "i", "i",
+        "d",  "n",  "o", "o", "o", "o", "o",  "/", "o",  "u", "u", "u", "u", "y", "th", "y",
+    };
+    if (cp < 0xC0 || cp > 0xFF) {
+        return NULL;
+    }
+    return map[cp - 0xC0];
+}
+
+/* Multi-byte stand-in, or NULL when this codepoint is not one of those cases. */
+static const char *fold_extra(unsigned int cp) {
+    const char *latin = fold_latin1(cp);
+    if (latin) {
+        return latin;
+    }
+    if (cp == 0x00A0 || cp == 0x202F || cp == 0x205F || cp == 0x3000 || cp == 0x2028 || cp == 0x2029 ||
+        (cp >= 0x2000 && cp <= 0x200A)) {
+        return " ";
+    }
+    if ((cp >= 0x2010 && cp <= 0x2015) || cp == 0x2212 || cp == 0xFE58 || cp == 0xFE63 || cp == 0xFF0D ||
+        cp == 0x00AD) {
+        return "-";
+    }
+    if (cp == 0x2018 || cp == 0x2019 || cp == 0x201A || cp == 0x201B || cp == 0x2032 || cp == 0x00B4) {
+        return "'";
+    }
+    if (cp == 0x201C || cp == 0x201D || cp == 0x201E || cp == 0x201F || cp == 0x2033 || cp == 0x00AB ||
+        cp == 0x00BB) {
+        return "\"";
+    }
+    if (cp == 0x2026) {
+        return "...";
+    }
+    if (cp == 0x00B7 || cp == 0x2023 || cp == 0x2043 || cp == 0x2219 || cp == 0x25E6 || cp == 0x25CF ||
+        cp == 0x25CB || cp == 0x25AA || cp == 0x25AB || cp == 0x30FB || cp == 0x2027) {
+        return "*";
+    }
+    if (cp == 0x2190 || cp == 0x2B05 || cp == 0x25C0 || cp == 0x25C4) {
+        return "<-";
+    }
+    if (cp == 0x2192 || cp == 0x2B95 || cp == 0x27A1 || cp == 0x2794 || cp == 0x25B6 || cp == 0x25B8 ||
+        cp == 0x25BA || cp == 0x25B9) {
+        return "->";
+    }
+    if (cp == 0x2191 || cp == 0x2B06 || cp == 0x25B2) {
+        return "^";
+    }
+    if (cp == 0x2193 || cp == 0x2B07 || cp == 0x25BC) {
+        return "v";
+    }
+    if (cp == 0x2194 || cp == 0x21D4) {
+        return "<->";
+    }
+    if (cp == 0x21D2) {
+        return "=>";
+    }
+    if (cp == 0x0152) {
+        return "OE";
+    }
+    if (cp == 0x0153) {
+        return "oe";
+    }
+    if (cp == 0x2500 || cp == 0x2501 || cp == 0x2504 || cp == 0x2505 || cp == 0x2508 || cp == 0x2509 ||
+        cp == 0x254C || cp == 0x254D) {
+        return "-";
+    }
+    if (cp == 0x2502 || cp == 0x2503 || cp == 0x2506 || cp == 0x2507 || cp == 0x250A || cp == 0x250B ||
+        cp == 0x254E || cp == 0x254F) {
+        return "|";
+    }
+    if (cp >= 0x2500 && cp <= 0x257F) {
+        return "+";
+    }
+    return NULL;
+}
+
+static int write_all(char *out, size_t out_len, size_t *n, const char *s) {
+    size_t len = strlen(s);
+    size_t i;
+    if (*n + len >= out_len) {
+        return 0;
+    }
+    for (i = 0; i < len; i++) {
+        out[(*n)++] = s[i];
+    }
+    return 1;
+}
+
+/* 1 to keep reading. 0 when the buffer is full. */
+static int panel_write(char *out, size_t out_len, size_t *n, unsigned int cp) {
+    const char *extra;
+    char wide[2];
+    size_t before;
+    if (cp == 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) {
+        return 1;
+    }
+    if (cp == '\n' || cp == '\r' || cp == '\t') {
+        return write_all(out, out_len, n, " ");
+    }
+    if (cp < 0x20 || cp == 0x7F) {
+        return 1;
+    }
+    /* Private-use, variation selectors, and zero-width marks are not glyphs here. */
+    if ((cp >= 0xE000 && cp <= 0xF8FF) || (cp >= 0xF0000 && cp <= 0xFFFFD) ||
+        (cp >= 0x100000 && cp <= 0x10FFFD) || (cp >= 0xFE00 && cp <= 0xFE0F) || cp == 0x200B ||
+        cp == 0x200C || cp == 0x200D || cp == 0x200E || cp == 0x200F || cp == 0xFEFF) {
+        return 1;
+    }
+    if (cp >= 0xFF01 && cp <= 0xFF5E) {
+        wide[0] = (char)(cp - 0xFEE0);
+        wide[1] = '\0';
+        return write_all(out, out_len, n, wide);
+    }
+    if (font_has(cp)) {
+        before = *n;
+        put_utf8(out, out_len, n, cp);
+        return *n != before;
+    }
+    extra = fold_extra(cp);
+    if (!extra) {
+        return 1;
+    }
+    return write_all(out, out_len, n, extra);
+}
+
+/* JSON string. \uXXXX (and a surrogate pair) is decoded, then folded onto the
+ * panel font. Newlines become a space so a one-line aside does not grow a second row. */
 static void copy_string(const char *value, char *out, size_t out_len) {
     size_t n = 0;
     if (out_len == 0) {
         return;
     }
-    while (*value && *value != '"' && n + 1 < out_len) {
+    while (*value && *value != '"') {
         unsigned int cp;
         int i;
-        if (*value != '\\') {
-            out[n++] = *value++;
+        int used;
+        if (*value == '\\') {
+            if (!value[1]) {
+                break;
+            }
+            value++;
+            if (*value == 'u') {
+                cp = 0;
+                value++;
+                for (i = 0; i < 4; i++) {
+                    int h = hex_nibble(value[i]);
+                    if (h < 0) {
+                        cp = 0;
+                        break;
+                    }
+                    cp = (cp << 4) | (unsigned int)h;
+                }
+                if (i == 4) {
+                    value += 4;
+                    if (cp >= 0xD800 && cp <= 0xDBFF && value[0] == '\\' && value[1] == 'u') {
+                        unsigned int low = 0;
+                        int ok = 1;
+                        for (i = 0; i < 4; i++) {
+                            int h = hex_nibble(value[2 + i]);
+                            if (h < 0) {
+                                ok = 0;
+                                break;
+                            }
+                            low = (low << 4) | (unsigned int)h;
+                        }
+                        if (ok && low >= 0xDC00 && low <= 0xDFFF) {
+                            cp = 0x10000u + ((cp - 0xD800u) << 10) + (low - 0xDC00u);
+                            value += 6;
+                        }
+                    }
+                    if (!panel_write(out, out_len, &n, cp)) {
+                        break;
+                    }
+                }
+                continue;
+            }
+            if (*value == 'n' || *value == 'r' || *value == 't') {
+                cp = ' ';
+            } else if (*value == 'b' || *value == 'f') {
+                value++;
+                continue;
+            } else {
+                cp = (unsigned char)*value;
+            }
+            value++;
+            if (!panel_write(out, out_len, &n, cp)) {
+                break;
+            }
             continue;
         }
-        if (!value[1]) {
+        used = utf8_cp(value, &cp);
+        if (used <= 0) {
+            value++;
+            continue;
+        }
+        value += used;
+        if (!panel_write(out, out_len, &n, cp)) {
             break;
         }
-        value++;
-        if (*value == 'u') {
-            cp = 0;
-            value++;
-            for (i = 0; i < 4; i++) {
-                int h = hex_nibble(value[i]);
-                if (h < 0) {
-                    cp = 0;
-                    break;
-                }
-                cp = (cp << 4) | (unsigned int)h;
-            }
-            if (i == 4) {
-                value += 4;
-                if (cp >= 0xD800 && cp <= 0xDBFF && value[0] == '\\' && value[1] == 'u') {
-                    unsigned int low = 0;
-                    int ok = 1;
-                    for (i = 0; i < 4; i++) {
-                        int h = hex_nibble(value[2 + i]);
-                        if (h < 0) {
-                            ok = 0;
-                            break;
-                        }
-                        low = (low << 4) | (unsigned int)h;
-                    }
-                    if (ok && low >= 0xDC00 && low <= 0xDFFF) {
-                        cp = 0x10000u + ((cp - 0xD800u) << 10) + (low - 0xDC00u);
-                        value += 6;
-                    }
-                }
-                put_utf8(out, out_len, &n, cp);
-            }
-            continue;
-        }
-        if (*value == 'n' || *value == 'r' || *value == 't') {
-            out[n++] = ' ';
-        } else if (*value != 'b' && *value != 'f') {
-            out[n++] = *value;
-        }
-        value++;
     }
     out[n] = '\0';
 }
@@ -622,6 +813,55 @@ int desk_agent_hot(const desk_view_t *view, int index, const char **aside) {
         *aside = view->message;
     }
     return needs || owns;
+}
+
+static int agent_match(const desk_agent_t *agent, const desk_agent_t *other) {
+    if (agent->id[0] && other->id[0]) {
+        return strcmp(agent->id, other->id) == 0;
+    }
+    if (!agent->id[0] && !other->id[0] && agent->title[0] && other->title[0]) {
+        return strcmp(agent->title, other->title) == 0;
+    }
+    return 0;
+}
+
+static int find_agent(const desk_view_t *view, const desk_agent_t *agent, int prefer) {
+    int i;
+    for (i = 0; i < view->agent_count; i++) {
+        if (agent_match(agent, &view->agents[i])) {
+            return i;
+        }
+    }
+    if (!agent->id[0] && !agent->title[0] && prefer >= 0 && prefer < view->agent_count &&
+        !view->agents[prefer].id[0] && !view->agents[prefer].title[0]) {
+        return prefer;
+    }
+    return -1;
+}
+
+int desk_unseen_updates(const desk_view_t *prev, const desk_view_t *view) {
+    int i;
+    int n = 0;
+    if (!prev || !view) {
+        return 0;
+    }
+    for (i = 0; i < view->agent_count; i++) {
+        const desk_agent_t *agent = &view->agents[i];
+        int old = find_agent(prev, agent, i);
+        const char *aside = "";
+        const char *was = "";
+        if (old < 0) {
+            n++;
+            continue;
+        }
+        desk_agent_hot(view, i, &aside);
+        desk_agent_hot(prev, old, &was);
+        if (strcmp(agent->status, prev->agents[old].status) != 0 ||
+            agent->attention != prev->agents[old].attention || strcmp(aside, was) != 0) {
+            n++;
+        }
+    }
+    return n;
 }
 
 int desk_aside_scroll(const desk_view_t *prev, const desk_view_t *view) {

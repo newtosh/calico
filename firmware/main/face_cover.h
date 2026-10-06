@@ -7,8 +7,11 @@ enum {
     FACE_SCREEN = 480,
     FACE_EDGE = 16,
     FACE_BAR_H = 32,
-    FACE_BTN_H = 64,
-    FACE_DOCK_TOP = FACE_SCREEN - FACE_EDGE - FACE_BTN_H,
+    /* 90% of the old 64px dock button, so the case radius clears the corner. */
+    FACE_BTN_H = 58,
+    /* Past the 16px glass bezel. The printed case clips a button on that line. */
+    FACE_DOCK_INSET = 8,
+    FACE_DOCK_TOP = FACE_SCREEN - FACE_EDGE - FACE_DOCK_INSET - FACE_BTN_H,
     FACE_MESSAGE_Y = 74,
     FACE_SLEEP_HEAD = 96,
     /* Head plus the gap the Zzz used to occupy above it. */

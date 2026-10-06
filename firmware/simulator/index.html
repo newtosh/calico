@@ -14,6 +14,7 @@
         font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
       }
       #panel {
+        position: relative;
         width: 480px;
         height: 480px;
         box-sizing: border-box;
@@ -205,7 +206,11 @@
         border-radius: 8px;
       }
       .agent.hot {
-        background: #2a2d24;
+        background: #527044;
+        box-shadow: inset 2px 0 0 #9bb57a;
+      }
+      .agent.hot .aside {
+        color: #d4ccba;
       }
       .agent .name {
         flex: 0 1 auto;
@@ -311,7 +316,7 @@
       #chrome {
         width: 100%;
         box-sizing: border-box;
-        padding: 0 16px 16px;
+        padding: 0 24px 24px;
         background: #0c0e09;
       }
       #panel.needs #chrome {
@@ -330,8 +335,8 @@
       }
       #mic,
       #settings {
-        width: 80px;
-        height: 64px;
+        width: 72px;
+        height: 58px;
         flex: none;
         padding: 0;
         display: grid;
@@ -350,6 +355,20 @@
       }
       #count.idle {
         color: #a39b88;
+      }
+      #newjump {
+        position: absolute;
+        top: 86px;
+        left: 50%;
+        z-index: 3;
+        height: 32px;
+        padding: 0 14px;
+        transform: translateX(-50%);
+        border: 1px solid #9bb57a;
+        border-radius: 999px;
+        background: #527044;
+        color: #efe7d6;
+        font-size: 16px;
       }
       #sleeper {
         display: none;
@@ -515,6 +534,7 @@
         <b>Zzz</b>
       </div>
       <div id="agents"></div>
+      <button id="newjump" type="button" hidden>1 new</button>
       </div>
       <div id="chrome">
         <div id="dock">
@@ -568,6 +588,56 @@
       }
       agents.addEventListener("pointerup", endDrag);
       agents.addEventListener("pointercancel", endDrag);
+
+      const newjump = document.getElementById("newjump");
+      let prevStatus = null;
+      let unseen = 0;
+      let settling = false;
+
+      function countUpdates(prev, next) {
+        const prevList = (prev && prev.agents) || [];
+        const nextList = (next && next.agents) || [];
+        let n = 0;
+        nextList.forEach((agent) => {
+          const key = agent.id || agent.title || "";
+          const old = key ? prevList.find((row) => (row.id || row.title || "") === key) : null;
+          if (!old) {
+            n += 1;
+            return;
+          }
+          if (
+            (agent.status || "") !== (old.status || "") ||
+            !!agent.attention !== !!old.attention ||
+            rowAside(agent, next) !== rowAside(old, prev)
+          ) {
+            n += 1;
+          }
+        });
+        return n;
+      }
+
+      function paintNew() {
+        const away =
+          agents.scrollTop > 0 &&
+          !panel.classList.contains("asleep") &&
+          !panel.classList.contains("needs");
+        newjump.hidden = !away || unseen < 1;
+        if (newjump.hidden) return;
+        newjump.textContent = unseen > 99 ? "99+ new" : unseen + " new";
+        newjump.style.top = message.textContent ? "98px" : "86px";
+      }
+
+      agents.addEventListener("scroll", () => {
+        if (settling) return;
+        if (agents.scrollTop <= 0) unseen = 0;
+        paintNew();
+      });
+      newjump.addEventListener("click", (event) => {
+        event.stopPropagation();
+        unseen = 0;
+        agents.scrollTop = 0;
+        paintNew();
+      });
 
       function statusText(phaseLabel, fail) {
         if (phaseLabel === "NO NETWORK" || phaseLabel === "SCAN FAILED") return phaseLabel;
@@ -730,7 +800,10 @@
           panel.classList.toggle("asleep", quiet && list.length === 0);
           const top = list[0];
           const topAside = top ? rowAside(top, status) : "";
+          const keep = agents.scrollTop;
+          const added = keep > 0 && prevStatus ? countUpdates(prevStatus, status) : 0;
           syncMarquee(top, topAside, !!(top && (agentNeeds(top) || topAside)));
+          settling = true;
           agents.replaceChildren();
           let placed = false;
           list.forEach((agent, index) => {
@@ -753,7 +826,12 @@
             agents.append(row);
           });
           message.textContent = placed ? "" : note;
+          agents.scrollTop = keep;
+          settling = false;
+          unseen = agents.scrollTop > 0 ? unseen + added : 0;
+          prevStatus = status;
           panel.classList.toggle("needs", label(status) === "NEEDS YOU");
+          paintNew();
         } catch (err) {
           failures = Math.min(3, failures + 1);
           pollMs = 2000;
