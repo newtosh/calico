@@ -46,15 +46,32 @@ enum {
     /* Top of the dock strip. Buttons sit DOCK_GAP below it. The count sits with them. */
     DOCK_TOP = SCREEN_PX - EDGE_PX - DOCK_INSET - DOCK_GAP - BTN_H,
     /* Under the status strip. The printed case clips the outer 24px (the
-     * 16px bezel plus the 8px lip the dock already clears). The halo's outer
-     * edge sits on that line. The card border is one halo thickness inside
-     * it, so the rounded bottom and Dismiss all stay on the glass. The old
-     * card ran 36px past the panel and the lip cut both. */
+     * 16px bezel plus the 8px lip the dock already clears). The card stays
+     * 30px in, so the rounded bottom and Dismiss all stay on the glass.
+     * Three 2px rings step out from that stroke and stop on the case line. */
     SHEET_SAFE = EDGE_PX + DOCK_INSET,
-    SHEET_HALO_PX = 6,
-    SHEET_INSET = SHEET_SAFE + SHEET_HALO_PX,
     SHEET_Y = EDGE_PX + BAR_H,
+    SHEET_RADIUS = 36,
+    /* Same stroke on every side. The old 6px rim sat only on the sides and
+     * bottom, so the bottom read as a thicker border. */
+    SHEET_BORDER = 3,
+    SHEET_RING_N = 3,
+    SHEET_RING_W = 2,
+    /* Outer ring first. Opacities are the border itself; the rings do not
+     * overlap, so these are the fringe you see. */
+    SHEET_RING_OUT0 = 6,
+    SHEET_RING_OPA0 = 12,
+    SHEET_RING_OUT1 = 4,
+    SHEET_RING_OPA1 = 32,
+    SHEET_RING_OUT2 = 2,
+    SHEET_RING_OPA2 = 72,
+    SHEET_INSET = SHEET_SAFE + SHEET_RING_OUT0,
     SHEET_BOTTOM = SCREEN_PX - SHEET_INSET,
+    /* Inside the stroke: 3px at 36/255, then 7px at 14/255. */
+    SHEET_INNER_NEAR = 3,
+    SHEET_INNER_NEAR_OPA = 36,
+    SHEET_INNER_FAR = 7,
+    SHEET_INNER_FAR_OPA = 14,
     SHEET_MARK = 120,
     /* Two solid discs behind the silhouette. A blurred shadow would want
      * another full frame; these do not. */
@@ -65,8 +82,6 @@ enum {
     /* 98%. LV_OPA_90 (and the sim's 0.92) still left roster type readable. */
     SHEET_OPA = 250,
     PEEK_OPA = 242,
-    SHEET_HALO_OPA = 160,
-    SHEET_BORDER = 3,
     SHEET_PAD_TOP = 8,
     SHEET_PAD_H = 20,
     SHEET_PAD_BOTTOM = 12,
@@ -103,9 +118,16 @@ _Static_assert((int)DOCK_INSET == (int)FACE_DOCK_INSET, "face band inset");
 _Static_assert((int)DOCK_GAP == (int)FACE_DOCK_GAP, "face band gap");
 _Static_assert((int)DOCK_TOP == (int)FACE_DOCK_TOP, "face band bottom");
 _Static_assert(BTN_W == 72 && BTN_H == 58, "dock buttons are about 10% under 80x64");
-_Static_assert(SHEET_SAFE == 24, "sheet halo meets the dock case line");
-_Static_assert(SHEET_INSET == 30, "card border sits inside the halo");
-_Static_assert(SHEET_BOTTOM + SHEET_HALO_PX == SCREEN_PX - 24, "halo ends on the case line");
+_Static_assert(SHEET_SAFE == 24, "outer glow meets the dock case line");
+_Static_assert(SHEET_INSET == 30, "card border stays on the glass");
+_Static_assert(SHEET_RING_OUT0 == SHEET_INSET - SHEET_SAFE, "outer ring ends on the case line");
+_Static_assert(SHEET_RING_OUT0 - SHEET_RING_OUT1 == SHEET_RING_W, "mid ring tiles against the outer");
+_Static_assert(SHEET_RING_OUT1 - SHEET_RING_OUT2 == SHEET_RING_W, "inner ring tiles against the mid");
+_Static_assert(SHEET_RING_OUT2 == SHEET_RING_W, "inner ring starts at the stroke");
+_Static_assert(SHEET_RING_OPA0 < SHEET_RING_OPA1 && SHEET_RING_OPA1 < SHEET_RING_OPA2,
+               "glow fades as it leaves the card");
+_Static_assert(SHEET_BORDER == 3, "stroke weight stays even on every side");
+_Static_assert(SHEET_INNER_NEAR_OPA > SHEET_INNER_FAR_OPA, "inner highlight is stronger at the stroke");
 _Static_assert(SHEET_OPA >= 248, "sheet stays opaque enough to hide roster type");
 _Static_assert((int)MESSAGE_Y == (int)FACE_MESSAGE_Y, "sleep origin");
 
@@ -113,7 +135,9 @@ static lv_obj_t *s_title;
 static lv_obj_t *s_message;
 static lv_obj_t *s_count;
 static lv_obj_t *s_sheet;
-static lv_obj_t *s_sheet_halo;
+static lv_obj_t *s_sheet_ring[SHEET_RING_N];
+static const int k_sheet_ring_out[SHEET_RING_N] = {SHEET_RING_OUT0, SHEET_RING_OUT1, SHEET_RING_OUT2};
+static const lv_opa_t k_sheet_ring_opa[SHEET_RING_N] = {SHEET_RING_OPA0, SHEET_RING_OPA1, SHEET_RING_OPA2};
 static lv_obj_t *s_peek1;
 static lv_obj_t *s_peek2;
 static lv_obj_t *s_sheet_glow;
@@ -734,9 +758,26 @@ static void show_unread(int count) {
 
 static void anim_delete(void *var);
 
+static void sheet_rings_show(int show) {
+    int i;
+    for (i = 0; i < SHEET_RING_N; i++) {
+        if (!s_sheet_ring[i]) {
+            continue;
+        }
+        if (show) {
+            lv_obj_clear_flag(s_sheet_ring[i], LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(s_sheet_ring[i], LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+}
+
 static void sheet_place(int y) {
-    if (s_sheet_halo) {
-        lv_obj_set_y(s_sheet_halo, y);
+    int i;
+    for (i = 0; i < SHEET_RING_N; i++) {
+        if (s_sheet_ring[i]) {
+            lv_obj_set_y(s_sheet_ring[i], y - k_sheet_ring_out[i]);
+        }
     }
     if (s_sheet) {
         lv_obj_set_y(s_sheet, y);
@@ -789,9 +830,7 @@ static void sheet_hide_now(void) {
     anim_delete(s_sheet);
     sheet_place(SHEET_PARK);
     lv_obj_set_hidden(s_sheet, true);
-    if (s_sheet_halo) {
-        lv_obj_set_hidden(s_sheet_halo, true);
-    }
+    sheet_rings_show(0);
 }
 
 static void sheet_leave_done(lv_timer_t *timer) {
@@ -816,9 +855,7 @@ static void sheet_leave_done(lv_timer_t *timer) {
         sheet_place(SHEET_PARK);
         lv_obj_set_hidden(s_sheet, true);
     }
-    if (s_sheet_halo) {
-        lv_obj_set_hidden(s_sheet_halo, true);
-    }
+    sheet_rings_show(0);
     if (s_on_dismiss) {
         s_on_dismiss(id[0] ? id : NULL);
     }
@@ -931,14 +968,18 @@ static uint32_t sheet_color(const desk_agent_t *agent) {
 }
 
 static void sheet_front(void) {
+    int i;
+    /* Rings first, then the peeks, so a stack tab is not washed by the top glow. */
+    for (i = 0; i < SHEET_RING_N; i++) {
+        if (s_sheet_ring[i]) {
+            lv_obj_move_foreground(s_sheet_ring[i]);
+        }
+    }
     if (s_peek2) {
         lv_obj_move_foreground(s_peek2);
     }
     if (s_peek1) {
         lv_obj_move_foreground(s_peek1);
-    }
-    if (s_sheet_halo) {
-        lv_obj_move_foreground(s_sheet_halo);
     }
     if (s_sheet) {
         lv_obj_move_foreground(s_sheet);
@@ -956,9 +997,7 @@ static void sheet_rise(void) {
     s_sheet_up = 1;
     sheet_place(SHEET_PARK);
     lv_obj_set_hidden(s_sheet, false);
-    if (s_sheet_halo) {
-        lv_obj_set_hidden(s_sheet_halo, false);
-    }
+    sheet_rings_show(1);
     sheet_front();
     lv_anim_init(&a);
     lv_anim_set_var(&a, s_sheet);
@@ -980,9 +1019,7 @@ static void sheet_open(void) {
     anim_delete(s_sheet);
     sheet_place(s_sheet_rest);
     lv_obj_set_hidden(s_sheet, false);
-    if (s_sheet_halo) {
-        lv_obj_set_hidden(s_sheet_halo, false);
-    }
+    sheet_rings_show(1);
     sheet_front();
 }
 
@@ -1026,18 +1063,29 @@ static void sheet_paint(const desk_view_t *view, const int *stack, int at, int n
     s_sheet_rest = SHEET_Y + (steps * SHEET_PEEK);
     if (s_sheet) {
         int h = SHEET_BOTTOM - s_sheet_rest;
-        lv_obj_set_height(s_sheet, h > 0 ? h : 1);
-    }
-    if (s_sheet_halo && s_sheet) {
-        lv_obj_set_height(s_sheet_halo, lv_obj_get_height(s_sheet) + SHEET_HALO_PX);
+        int i;
+        if (h < 1) {
+            h = 1;
+        }
+        lv_obj_set_height(s_sheet, h);
+        for (i = 0; i < SHEET_RING_N; i++) {
+            if (s_sheet_ring[i]) {
+                lv_obj_set_height(s_sheet_ring[i], h + (k_sheet_ring_out[i] * 2));
+            }
+        }
     }
     apply_mark(s_sheet_mark, color, desk_mark_shape(agent->shape));
     lv_obj_set_style_bg_color(s_sheet_glow, lv_color_hex(color), 0);
     if (s_sheet_glow_core) {
         lv_obj_set_style_bg_color(s_sheet_glow_core, lv_color_hex(color), 0);
     }
-    if (s_sheet_halo) {
-        lv_obj_set_style_bg_color(s_sheet_halo, lv_color_hex(color), 0);
+    {
+        int ring;
+        for (ring = 0; ring < SHEET_RING_N; ring++) {
+            if (s_sheet_ring[ring]) {
+                lv_obj_set_style_border_color(s_sheet_ring[ring], lv_color_hex(color), 0);
+            }
+        }
     }
     lv_obj_set_style_border_color(s_sheet, lv_color_hex(color), 0);
     if (s_sheet_count) {
@@ -1737,6 +1785,49 @@ static void build_status_bar(lv_obj_t *screen) {
 
 static void build_new_pill(lv_obj_t *screen);
 
+static void paint_edge(lv_layer_t *layer, const lv_area_t *area, int radius, int width, lv_color_t color,
+                       lv_opa_t opa) {
+    lv_draw_rect_dsc_t dsc;
+    if (!layer || width < 1 || area->x2 <= area->x1 || area->y2 <= area->y1) {
+        return;
+    }
+    lv_draw_rect_dsc_init(&dsc);
+    dsc.bg_opa = LV_OPA_TRANSP;
+    dsc.radius = radius;
+    dsc.border_width = width;
+    dsc.border_opa = opa;
+    dsc.border_color = color;
+    dsc.border_side = LV_BORDER_SIDE_FULL;
+    lv_draw_rect(layer, &dsc, area);
+}
+
+/* Two border bands inside the fill. No shadow buffer. Drawn with the card,
+ * under the mark and the type. */
+static void draw_sheet_inner(lv_event_t *event) {
+    lv_obj_t *obj = lv_event_get_target(event);
+    lv_layer_t *layer = lv_event_get_layer(event);
+    lv_area_t area;
+    lv_area_t far;
+    lv_color_t color;
+    int radius;
+    if (!layer) {
+        return;
+    }
+    lv_obj_get_coords(obj, &area);
+    area.x1 += SHEET_BORDER;
+    area.y1 += SHEET_BORDER;
+    area.x2 -= SHEET_BORDER;
+    area.y2 -= SHEET_BORDER;
+    radius = SHEET_RADIUS - SHEET_BORDER;
+    color = lv_obj_get_style_border_color(obj, LV_PART_MAIN);
+    paint_edge(layer, &area, radius, SHEET_INNER_NEAR, color, SHEET_INNER_NEAR_OPA);
+    far.x1 = area.x1 + SHEET_INNER_NEAR;
+    far.y1 = area.y1 + SHEET_INNER_NEAR;
+    far.x2 = area.x2 - SHEET_INNER_NEAR;
+    far.y2 = area.y2 - SHEET_INNER_NEAR;
+    paint_edge(layer, &far, radius - SHEET_INNER_NEAR, SHEET_INNER_FAR, color, SHEET_INNER_FAR_OPA);
+}
+
 static lv_obj_t *make_disc(lv_obj_t *parent, int size, lv_opa_t opa) {
     lv_obj_t *disc = lv_obj_create(parent);
     lv_obj_set_size(disc, size, size);
@@ -1749,6 +1840,27 @@ static lv_obj_t *make_disc(lv_obj_t *parent, int size, lv_opa_t opa) {
     lv_obj_set_style_pad_all(disc, 0, 0);
     lv_obj_clear_flag(disc, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     return disc;
+}
+
+/* A 2px border on a round-rect that sticks out `outset` px on every side.
+ * The center stays clear. Filled slabs were the heavy bottom rim. */
+static lv_obj_t *make_ring(lv_obj_t *screen, int outset, lv_opa_t opa) {
+    lv_obj_t *ring = lv_obj_create(screen);
+    int w = (SCREEN_PX - (SHEET_INSET * 2)) + (outset * 2);
+    int h = (SHEET_BOTTOM - SHEET_Y) + (outset * 2);
+    lv_obj_set_size(ring, w, h);
+    lv_obj_set_pos(ring, SHEET_INSET - outset, SCREEN_PX);
+    lv_obj_set_style_bg_opa(ring, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(ring, SHEET_RING_W, 0);
+    lv_obj_set_style_border_opa(ring, opa, 0);
+    lv_obj_set_style_border_color(ring, lv_color_hex(DESK_MARK_NEUTRAL), 0);
+    lv_obj_set_style_radius(ring, SHEET_RADIUS + outset, 0);
+    lv_obj_set_style_outline_width(ring, 0, 0);
+    lv_obj_set_style_shadow_width(ring, 0, 0);
+    lv_obj_set_style_pad_all(ring, 0, 0);
+    lv_obj_clear_flag(ring, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(ring, LV_OBJ_FLAG_HIDDEN);
+    return ring;
 }
 
 static lv_obj_t *make_peek(lv_obj_t *screen, int inset) {
@@ -1833,22 +1945,16 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     lv_obj_set_size(settings_btn, BTN_W, BTN_H);
     build_new_pill(screen);
 
+    /* Outer ring first. Peeks are created after, so a stack tab stays in front. */
+    {
+        int ring;
+        for (ring = 0; ring < SHEET_RING_N; ring++) {
+            s_sheet_ring[ring] = make_ring(screen, k_sheet_ring_out[ring], k_sheet_ring_opa[ring]);
+        }
+    }
     /* Each card behind steps in 12px, then 24px, from the front card. */
     s_peek2 = make_peek(screen, SHEET_INSET + 24);
     s_peek1 = make_peek(screen, SHEET_INSET + 12);
-    s_sheet_halo = lv_obj_create(screen);
-    lv_obj_set_size(s_sheet_halo, SCREEN_PX - (SHEET_SAFE * 2),
-                    (SHEET_BOTTOM - SHEET_Y) + SHEET_HALO_PX);
-    lv_obj_set_pos(s_sheet_halo, SHEET_SAFE, SCREEN_PX);
-    lv_obj_set_style_bg_color(s_sheet_halo, lv_color_hex(DESK_MARK_NEUTRAL), 0);
-    lv_obj_set_style_bg_opa(s_sheet_halo, SHEET_HALO_OPA, 0);
-    lv_obj_set_style_radius(s_sheet_halo, 36 + SHEET_HALO_PX, 0);
-    lv_obj_set_style_border_width(s_sheet_halo, 0, 0);
-    lv_obj_set_style_outline_width(s_sheet_halo, 0, 0);
-    lv_obj_set_style_shadow_width(s_sheet_halo, 0, 0);
-    lv_obj_set_style_pad_all(s_sheet_halo, 0, 0);
-    lv_obj_clear_flag(s_sheet_halo, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_flag(s_sheet_halo, LV_OBJ_FLAG_HIDDEN);
     s_sheet = lv_obj_create(screen);
     lv_obj_set_size(s_sheet, SCREEN_PX - (SHEET_INSET * 2), SHEET_BOTTOM - SHEET_Y);
     lv_obj_set_pos(s_sheet, SHEET_INSET, SCREEN_PX);
@@ -1859,7 +1965,8 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     lv_obj_set_style_border_color(s_sheet, lv_color_hex(DESK_MARK_NEUTRAL), 0);
     lv_obj_set_style_outline_width(s_sheet, 0, 0);
     lv_obj_set_style_shadow_width(s_sheet, 0, 0);
-    lv_obj_set_style_radius(s_sheet, 36, 0);
+    lv_obj_set_style_radius(s_sheet, SHEET_RADIUS, 0);
+    lv_obj_add_event_cb(s_sheet, draw_sheet_inner, LV_EVENT_DRAW_MAIN_END, NULL);
     lv_obj_set_style_pad_top(s_sheet, SHEET_PAD_TOP, 0);
     lv_obj_set_style_pad_hor(s_sheet, SHEET_PAD_H, 0);
     lv_obj_set_style_pad_bottom(s_sheet, SHEET_PAD_BOTTOM, 0);

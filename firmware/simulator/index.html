@@ -459,28 +459,64 @@
         right: 54px;
         top: 48px;
       }
-      /* Halo outer edge is the 24px case line. The card border is 6px inside it. */
-      #sheet-halo {
+      /* Outer glow. The box is 6px outside the card and ends on the 24px case line.
+         Three 2px borders, faintest on the outside. Same weight on every side. */
+      #sheet-glow {
         position: absolute;
         left: 24px;
         right: 24px;
-        top: 48px;
+        top: 42px;
         bottom: 24px;
-        z-index: 3;
-        border-radius: 42px;
-        background: rgba(163, 155, 136, 0.63);
+        z-index: 2;
         pointer-events: none;
         transform: translateY(110%);
         transition: transform 280ms ease-out, top 280ms ease-out;
       }
-      #sheet-halo.stack1 {
-        top: 62px;
+      #sheet-glow.stack1 {
+        top: 56px;
       }
-      #sheet-halo.stack2 {
-        top: 76px;
+      #sheet-glow.stack2 {
+        top: 70px;
       }
-      #sheet-halo.up {
+      #sheet-glow.up {
         transform: translateY(0);
+      }
+      #sheet-glow i {
+        position: absolute;
+        box-sizing: border-box;
+        background: transparent;
+        border: 2px solid transparent;
+        pointer-events: none;
+      }
+      #sheet-glow .far {
+        inset: 0;
+        border-radius: 42px;
+      }
+      #sheet-glow .mid {
+        inset: 2px;
+        border-radius: 40px;
+      }
+      #sheet-glow .near {
+        inset: 4px;
+        border-radius: 38px;
+      }
+      #sheet-inner-far,
+      #sheet-inner-near {
+        position: absolute;
+        box-sizing: border-box;
+        background: transparent;
+        border-style: solid;
+        pointer-events: none;
+      }
+      #sheet-inner-near {
+        inset: 0;
+        border-width: 3px;
+        border-radius: 33px;
+      }
+      #sheet-inner-far {
+        inset: 3px;
+        border-width: 7px;
+        border-radius: 30px;
       }
       #sheet {
         position: absolute;
@@ -672,10 +708,12 @@
       <div id="agents"></div>
       <button id="newjump" type="button" hidden>1 new</button>
       </div>
+      <div id="sheet-glow" aria-hidden="true"><i class="far"></i><i class="mid"></i><i class="near"></i></div>
       <div id="peek2" class="peek" hidden></div>
       <div id="peek1" class="peek" hidden></div>
-      <div id="sheet-halo"></div>
       <div id="sheet">
+        <i id="sheet-inner-far"></i>
+        <i id="sheet-inner-near"></i>
         <div class="glow">
           <i class="glow-outer"></i>
           <i class="glow-core"></i>
@@ -1017,7 +1055,9 @@
       const sheetAll = document.getElementById("sheet-all");
       const peek1 = document.getElementById("peek1");
       const peek2 = document.getElementById("peek2");
-      const sheetRim = document.getElementById("sheet-halo");
+      const sheetGlow = document.getElementById("sheet-glow");
+      const sheetInnerNear = document.getElementById("sheet-inner-near");
+      const sheetInnerFar = document.getElementById("sheet-inner-far");
       const glowOuter = sheet.querySelector(".glow-outer");
       const glowCore = sheet.querySelector(".glow-core");
       let latest = null;
@@ -1056,7 +1096,7 @@
         peek1.classList.remove("show");
         peek2.classList.remove("show");
         sheet.classList.remove("stack1", "stack2");
-        sheetRim.classList.remove("stack1", "stack2");
+        sheetGlow.classList.remove("stack1", "stack2");
       }
 
       function paintSheet(status) {
@@ -1070,7 +1110,7 @@
         if (!show || waiters.length < 1) {
           if (!sheetLeaving) {
             sheet.classList.remove("up");
-            sheetRim.classList.remove("up");
+            sheetGlow.classList.remove("up");
             hidePeeks();
             sheetSeen = [];
             sheetFocus = "";
@@ -1093,7 +1133,11 @@
         sheetFocus = agent.id;
         sheetSeen = waiters.map((item) => item.id);
         sheet.style.borderColor = color;
-        sheetRim.style.background = hexAlpha(color, 0.63);
+        sheetGlow.querySelector(".far").style.borderColor = hexAlpha(color, 12 / 255);
+        sheetGlow.querySelector(".mid").style.borderColor = hexAlpha(color, 32 / 255);
+        sheetGlow.querySelector(".near").style.borderColor = hexAlpha(color, 72 / 255);
+        sheetInnerNear.style.borderColor = hexAlpha(color, 36 / 255);
+        sheetInnerFar.style.borderColor = hexAlpha(color, 14 / 255);
         glowOuter.style.background = color;
         glowCore.style.background = color;
         mark.className = "mark " + markShape(agent && agent.shape);
@@ -1111,8 +1155,8 @@
         sheetAll.hidden = waiters.length < 2;
         sheet.classList.toggle("stack1", steps === 1);
         sheet.classList.toggle("stack2", steps >= 2);
-        sheetRim.classList.toggle("stack1", steps === 1);
-        sheetRim.classList.toggle("stack2", steps >= 2);
+        sheetGlow.classList.toggle("stack1", steps === 1);
+        sheetGlow.classList.toggle("stack2", steps >= 2);
         peek1.hidden = steps < 1;
         peek2.hidden = steps < 2;
         peek1.classList.toggle("show", steps >= 1);
@@ -1126,7 +1170,7 @@
           peek2.style.borderColor = markColor(waiters[sheetAt + 2].color);
         }
         sheet.classList.add("up");
-        sheetRim.classList.add("up");
+        sheetGlow.classList.add("up");
       }
 
       function leaveSheet(body) {
@@ -1134,7 +1178,7 @@
         sheetLeaving = true;
         sheetHold = true;
         sheet.classList.remove("up");
-        sheetRim.classList.remove("up");
+        sheetGlow.classList.remove("up");
         hidePeeks();
         setTimeout(() => {
           sheetLeaving = false;
