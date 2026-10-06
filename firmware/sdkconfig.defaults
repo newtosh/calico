@@ -23,11 +23,10 @@ CONFIG_LV_FONT_MONTSERRAT_20=y
 CONFIG_LV_FONT_MONTSERRAT_24=y
 CONFIG_LV_FONT_MONTSERRAT_28=y
 CONFIG_LV_FONT_MONTSERRAT_48=y
-# The 50-line stripes themselves are pinned in DMA RAM at boot (main.c),
-# so a flush does not allocate another copy. This reserve still keeps
-# ordinary malloc off the internal pool Wi-Fi uses. Default 32KB was too
-# small when the copy existed. 512 stops ordinary mallocs under 16KB
-# from spending the reserve.
+# One 20-line stripe is pinned in DMA RAM at boot (main.c). A flush does
+# not allocate another copy, and the pin is small enough that the STA
+# can still take this pool. Two 50-line stripes left only 29KB. 512 stops
+# ordinary mallocs under 16KB from spending the reserve.
 CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=65536
 CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=512
 # Dynamic Wi-Fi buffers are internal. RX stays at the static RX count (10).

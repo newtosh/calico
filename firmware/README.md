@@ -13,7 +13,7 @@ idf.py build
 idf.py -p PORT flash monitor
 ```
 
-The managed BSP is `waveshare/esp32_s3_touch_amoled_2_16` `^2.0.1` with LVGL 9, declared in `main/idf_component.yml`. `sdkconfig.defaults` matches the official LVGL example: 16 MB flash, octal PSRAM, Montserrat 16/20/24, plus 28 and 48 for the desk face. It also reserves 64KB of internal RAM and caps Wi-Fi dynamic RX/TX buffers. The 50-line LVGL stripes are allocated in DMA-capable internal RAM before Wi-Fi starts, so a flush is not a second copy that fails after the STA joins.
+The managed BSP is `waveshare/esp32_s3_touch_amoled_2_16` `^2.0.1` with LVGL 9, declared in `main/idf_component.yml`. `sdkconfig.defaults` matches the official LVGL example: 16 MB flash, octal PSRAM, Montserrat 16/20/24, plus 28 and 48 for the desk face. It also reserves 64KB of internal RAM and caps Wi-Fi dynamic RX/TX buffers. One 20-line LVGL stripe is allocated in DMA-capable internal RAM before Wi-Fi starts, so a flush is not a PSRAM copy and the STA still has the internal block two 50-line stripes took.
 
 ## Upright
 
@@ -110,6 +110,8 @@ gcc -Wall -Werror -I firmware/main firmware/host/test_desk_status.c firmware/mai
 /tmp/test_desk_status
 gcc -Wall -Werror -I firmware/main firmware/host/test_face_cover.c firmware/main/face_cover.c -o /tmp/test_face_cover
 /tmp/test_face_cover
+gcc -Wall -Werror -I firmware/main firmware/host/test_dma_stripe.c -o /tmp/test_dma_stripe
+/tmp/test_dma_stripe
 ```
 
 Open `firmware/simulator/index.html` in a browser. It polls `http://127.0.0.1:8787` unless you pass `?base=http://192.168.1.20:8787`. Wheel or drag scrolls the agent list inside the face. The bar and the dock stay fixed.
