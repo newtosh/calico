@@ -61,7 +61,7 @@ The CO5300 is written over QSPI. The BSP flush is write-only, and the extracted 
 
 A frame is still available on demand. `CONFIG_LV_USE_SNAPSHOT` renders the active screen into a caller-owned PSRAM buffer (480×480 RGB565 is 460800 bytes, plus stride slack). The LVGL lock is held only for that render. The poll task then POSTs a top-down BMP (`BI_BITFIELDS`, RGB565 masks) to the companion and frees the buffer. If the PSRAM alloc fails, the poll logs nothing extra and skips the frame. It does not fall back to internal RAM. Settings open skips the snapshot so the bearer field is not uploaded, and the request stays pending for a later poll.
 
-The DMA stripe is unchanged. If `sdkconfig` was generated before `CONFIG_LV_USE_SNAPSHOT=y` landed in `sdkconfig.defaults`, delete `sdkconfig` and reconfigure. Do not add another stripe.
+The DMA stripe is unchanged. A stale `firmware/sdkconfig` with snapshot off must be deleted and reconfigured before capture compiles in. Do not add another stripe.
 
 From the companion host, with the panel's bearer:
 

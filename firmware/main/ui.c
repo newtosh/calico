@@ -6,9 +6,6 @@
 #include "lvgl.h"
 
 #include "esp_heap_caps.h"
-#if LV_USE_SNAPSHOT
-#include "lv_snapshot.h"
-#endif
 
 #include <stdint.h>
 #include <stdio.h>
