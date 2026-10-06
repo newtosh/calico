@@ -5,6 +5,7 @@
 #include "bsp/esp-bsp.h"
 #include "esp_check.h"
 #include "esp_err.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_lv_adapter.h"
 #include "esp_system.h"
@@ -266,6 +267,44 @@ static void on_rotlock(int locked) {
     s_rot_locked = 0;
 }
 
+/* BSP 2.0.1 keeps two 50-line stripes in PSRAM. IDF 5.5 then allocates a
+ * same-sized internal DMA copy on every flush (setup_dma_priv_buffer).
+ * That copy fits at boot and fails once the STA has taken internal RAM,
+ * so the CO5300 keeps the idle face under the list. Pin the same 50-line
+ * geometry in DMA RAM now, before Wi-Fi, and the flush pointer needs no copy.
+ * 50 lines is the #24 baseline. A full-frame buffer stalled scroll (#23). */
+static void pin_dma_draw_buffers(void) {
+    lv_display_t *disp = lv_display_get_default();
+    const int try_lines[] = {50, 20};
+    int i;
+    if (!disp) {
+        ESP_LOGE("desk", "no display for DMA buffers");
+        return;
+    }
+    for (i = 0; i < 2; i++) {
+        int lines = try_lines[i];
+        size_t bytes = (size_t)BSP_LCD_H_RES * (size_t)lines * (BSP_LCD_BITS_PER_PIXEL / 8);
+        void *a = heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
+        void *b = heap_caps_aligned_alloc(64, bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
+        int n = 0;
+        if (a && b) {
+            lv_display_set_buffers(disp, a, b, (uint32_t)bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);
+            n = 2;
+        } else if (a || b) {
+            lv_display_set_buffers(disp, a ? a : b, NULL, (uint32_t)bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);
+            n = 1;
+        }
+        if (n) {
+            ESP_LOGI("desk", "DMA draw buffer %u bytes x%d (%d lines), largest internal %u",
+                     (unsigned)bytes, n, lines,
+                     (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA));
+            return;
+        }
+        ESP_LOGW("desk", "DMA draw buffer %u bytes (%d lines) failed", (unsigned)bytes, lines);
+    }
+    ESP_LOGE("desk", "DMA draw buffer not pinned; flushes will copy from PSRAM");
+}
+
 static void load_rotlock(void) {
     char stored[8];
     int quarter = 0;
@@ -325,6 +364,7 @@ void app_main(void) {
     }
     bsp_display_start();
     if (lock_lvgl()) {
+        pin_dma_draw_buffers();
         hook_touch();
         load_rotlock();
         unlock_lvgl();

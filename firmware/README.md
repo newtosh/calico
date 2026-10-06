@@ -13,7 +13,7 @@ idf.py build
 idf.py -p PORT flash monitor
 ```
 
-The managed BSP is `waveshare/esp32_s3_touch_amoled_2_16` `^2.0.1` with LVGL 9, declared in `main/idf_component.yml`. `sdkconfig.defaults` matches the official LVGL example: 16 MB flash, octal PSRAM, Montserrat 16/20/24, plus 28 and 48 for the desk face. It also reserves 64KB of internal RAM for the SPI DMA color copy and caps Wi-Fi dynamic RX/TX buffers so that copy can still be allocated.
+The managed BSP is `waveshare/esp32_s3_touch_amoled_2_16` `^2.0.1` with LVGL 9, declared in `main/idf_component.yml`. `sdkconfig.defaults` matches the official LVGL example: 16 MB flash, octal PSRAM, Montserrat 16/20/24, plus 28 and 48 for the desk face. It also reserves 64KB of internal RAM and caps Wi-Fi dynamic RX/TX buffers. The 50-line LVGL stripes are allocated in DMA-capable internal RAM before Wi-Fi starts, so a flush is not a second copy that fails after the STA joins.
 
 ## Upright
 
