@@ -321,7 +321,7 @@ int main(void) {
         check(strcmp(view.agents[1].status, "idle") == 0, "idle status kept");
         check(desk_view_from_json(needs_row, &again) == 0, "status row parse");
         check(again.running_count == view.running_count, "status swap keeps the running count");
-        check(again.needs_you == view.needs_you, "top flag stays");
+        check(again.needs_you == 1, "needs you row raises the alert");
         check(desk_view_same(&view, &again) == 0, "agent status is a view change");
         check(desk_view_from_json(flipped, &again) == 0, "flipped parse");
         check(desk_view_same(&view, &again) == 0, "agent order is a view change");
@@ -493,6 +493,71 @@ int main(void) {
         desk_row_spans(-4, -8, -2, -3, 1, &name_w, &aside_w);
         check(name_w == 0 && aside_w == 0, "negative spans are empty");
         desk_row_spans(396, 80, 12, 48, 1, NULL, NULL);
+    }
+
+    {
+        desk_view_t plain;
+        const char *aside = "x";
+        const char *stuck =
+            "{\"phase\":\"running\",\"needs_you\":false,\"unread\":2,\"agents\":["
+            "{\"id\":\"desky\",\"title\":\"Desky\",\"status\":\"running\"},"
+            "{\"id\":\"spool\",\"title\":\"Spool\",\"status\":\"idle\"}"
+            "],\"last_event\":{\"type\":\"note\",\"title\":\"\",\"message\":\"\"}}";
+        const char *waiting =
+            "{\"phase\":\"needs_you\",\"needs_you\":true,\"unread\":1,\"agents\":["
+            "{\"id\":\"desky\",\"title\":\"Desky\",\"status\":\"needs_you\",\"attention\":true,"
+            "\"message\":\"roster update\"},"
+            "{\"id\":\"spool\",\"title\":\"Spool\",\"status\":\"idle\"}"
+            "],\"last_event\":{\"type\":\"note\",\"agent_id\":\"\",\"title\":\"\",\"message\":\"\"}}";
+        const char *bound =
+            "{\"phase\":\"needs_you\",\"needs_you\":true,\"agents\":["
+            "{\"id\":\"desky\",\"title\":\"Desky\",\"status\":\"needs_you\"},"
+            "{\"id\":\"spool\",\"title\":\"Spool\",\"status\":\"idle\"}"
+            "],\"last_event\":{\"type\":\"agent.needs_you\",\"agent_id\":\"desky\","
+            "\"title\":\"Roster\",\"message\":\"Spool update\"}}";
+        const char *attention_only =
+            "{\"phase\":\"running\",\"needs_you\":false,\"agents\":["
+            "{\"id\":\"desky\",\"title\":\"Desky\",\"status\":\"running\",\"attention\":true}"
+            "]}";
+        check(desk_view_from_json(stuck, &view) == 0, "badge only parse");
+        check(desk_agent_hot(&view, 0, &aside) == 0, "running desky is not hot");
+        check(aside[0] == '\0', "empty note is not an aside");
+        check(desk_agent_hot(&view, 1, &aside) == 0, "idle spool is not hot");
+        check(desk_view_from_json(waiting, &view) == 0, "waiter parse");
+        check(view.needs_you == 1, "waiter raises the alert");
+        check(strcmp(desk_phase_label(&view, 0), "NEEDS YOU") == 0, "waiter lamp");
+        check(desk_agent_hot(&view, 0, &aside) == 1, "desky is hot");
+        check(strcmp(aside, "roster update") == 0, "desky aside is the question");
+        check(desk_agent_hot(&view, 1, &aside) == 0, "spool stays quiet");
+        plain = view;
+        plain.agents[0].message[0] = '\0';
+        check(desk_status_same(&view, 0, &plain, 0) == 0, "agent message is a status change");
+        plain = view;
+        plain.unread = view.unread + 1;
+        check(desk_status_same(&view, 0, &plain, 0) == 0, "unread alone is a status change");
+        plain = view;
+        plain.agents[0].attention = 0;
+        check(desk_status_same(&view, 0, &plain, 0) == 0, "attention flag is a status change");
+        check(desk_view_from_json(bound, &view) == 0, "bound parse");
+        check(strcmp(view.event_agent, "desky") == 0, "event agent id");
+        check(desk_agent_hot(&view, 0, &aside) == 1, "id binds the question");
+        check(strcmp(aside, "Spool update") == 0, "mismatched title still shows");
+        check(desk_agent_hot(&view, 1, &aside) == 0, "spool does not take desky's question");
+        check(desk_view_from_json(attention_only, &view) == 0, "attention flag parse");
+        check(view.agents[0].attention == 1, "attention field");
+        check(view.needs_you == 1, "attention raises the alert");
+        check(desk_agent_hot(&view, 0, &aside) == 1, "attention is hot with no message");
+        check(aside[0] == '\0', "attention without text has no aside");
+        const char *both =
+            "{\"phase\":\"needs_you\",\"needs_you\":true,\"agents\":["
+            "{\"id\":\"desky\",\"title\":\"Desky\",\"status\":\"needs_you\",\"message\":\"roster update\"},"
+            "{\"id\":\"spool\",\"title\":\"Spool\",\"status\":\"needs_you\",\"message\":\"your turn\"}"
+            "],\"last_event\":{\"agent_id\":\"desky\",\"title\":\"Roster\",\"message\":\"roster update\"}}";
+        check(desk_view_from_json(both, &view) == 0, "two waiters parse");
+        check(desk_agent_hot(&view, 0, &aside) == 1, "desky stays hot");
+        check(strcmp(aside, "roster update") == 0, "desky keeps its question");
+        check(desk_agent_hot(&view, 1, &aside) == 1, "spool stays hot");
+        check(strcmp(aside, "your turn") == 0, "spool is not given desky's question");
     }
 
     if (g_failed) {

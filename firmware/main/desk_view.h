@@ -30,6 +30,9 @@ typedef struct {
     char color[32];
     char shape[16];
     char status[16];
+    /* Last lifecycle message for this row. Wins over last_event. */
+    char message[160];
+    int attention;
 } desk_agent_t;
 
 typedef struct {
@@ -39,6 +42,8 @@ typedef struct {
     int unread;
     char title[96];
     char message[160];
+    /* last_event.agent_id, so a question binds to that row. */
+    char event_agent[40];
     int running_count;
     int known_count;
     desk_agent_t agents[DESK_AGENT_MAX];
@@ -69,8 +74,9 @@ int desk_unread_count(const desk_view_t *view);
 void desk_row_spans(int avail, int name_px, int gap, int min_aside, int show_aside, int *name_w,
                     int *aside_w);
 /* 1 when this agent row should be filled. *aside (optional) is the face
- * message beside the name, or "". needs_you fills the row even with no
- * message. A running or idle row fills only when it shows one. */
+ * message beside the name, or "". The agent's own message wins. Otherwise
+ * last_event binds by agent id, then by title. needs_you fills the row even
+ * with no message. A running or idle row fills only when it shows one. */
 int desk_agent_hot(const desk_view_t *view, int index, const char **aside);
 void desk_count_text(const desk_view_t *view, char *out, size_t out_len);
 int desk_panel_from_json(const char *json, desk_panel_t *out);

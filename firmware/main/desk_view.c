@@ -178,6 +178,7 @@ static const char *object_end(const char *open) {
 }
 
 static void read_agents(const char *json, desk_view_t *out);
+static int read_bool_field(const char *start, const char *end, const char *key);
 static const char *find_top_key(const char *json, const char *key);
 static int read_top_int(const char *json, const char *key, int *out);
 
@@ -210,6 +211,7 @@ int desk_view_from_json(const char *json, desk_view_t *out) {
                 end = object_end(value);
                 read_string_field(value, end, "title", out->title, sizeof(out->title));
                 read_string_field(value, end, "message", out->message, sizeof(out->message));
+                read_string_field(value, end, "agent_id", out->event_agent, sizeof(out->event_agent));
             }
         }
     }
@@ -403,11 +405,31 @@ static void read_agents(const char *json, desk_view_t *out) {
             read_string_field(p, end, "title", agent->title, sizeof(agent->title));
             read_string_field(p, end, "color", agent->color, sizeof(agent->color));
             read_string_field(p, end, "shape", agent->shape, sizeof(agent->shape));
+            read_string_field(p, end, "message", agent->message, sizeof(agent->message));
             copy_string(status, agent->status, sizeof(agent->status));
+            agent->attention = read_bool_field(p, end, "attention") ||
+                               strcmp(agent->status, "needs_you") == 0;
+            if (agent->attention) {
+                out->needs_you = 1;
+            }
             out->agent_count++;
         }
         p = end;
     }
+}
+
+static int read_bool_field(const char *start, const char *end, const char *key) {
+    const char *key_at = find_key(start, end, key);
+    const char *p;
+    if (!key_at) {
+        return 0;
+    }
+    p = skip_ws(key_at + strlen(key) + 2);
+    if (p >= end || *p != ':') {
+        return 0;
+    }
+    p = skip_ws(p + 1);
+    return p < end && strncmp(p, "true", 4) == 0;
 }
 
 int desk_mark_color(const char *color, uint32_t *out) {
@@ -538,6 +560,32 @@ const char *desk_face_title(const desk_view_t *view) {
     return view->title;
 }
 
+static int agent_needs(const desk_agent_t *agent) {
+    return agent->attention || strcmp(agent->status, "needs_you") == 0;
+}
+
+static int title_hits(const desk_view_t *view, const char *title) {
+    int i;
+    if (!title || !title[0]) {
+        return 0;
+    }
+    for (i = 0; i < view->agent_count; i++) {
+        if (strcmp(view->agents[i].title, title) == 0 || strcmp(view->agents[i].id, title) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int needs_rows(const desk_view_t *view) {
+    int i;
+    int n = 0;
+    for (i = 0; i < view->agent_count; i++) {
+        n += agent_needs(&view->agents[i]);
+    }
+    return n;
+}
+
 int desk_agent_hot(const desk_view_t *view, int index, const char **aside) {
     const desk_agent_t *agent;
     const char *title;
@@ -550,13 +598,24 @@ int desk_agent_hot(const desk_view_t *view, int index, const char **aside) {
         return 0;
     }
     agent = &view->agents[index];
-    needs = strcmp(agent->status, "needs_you") == 0;
+    needs = agent_needs(agent);
+    if (agent->message[0]) {
+        if (aside) {
+            *aside = agent->message;
+        }
+        return 1;
+    }
     title = desk_face_title(view);
     if (view->message[0]) {
-        if (title[0]) {
-            owns = strcmp(agent->title, title) == 0 || strcmp(agent->id, title) == 0;
-        } else {
-            owns = needs;
+        if (view->event_agent[0] && strcmp(agent->id, view->event_agent) == 0) {
+            owns = 1;
+        } else if (title[0] &&
+                   (strcmp(agent->title, title) == 0 || strcmp(agent->id, title) == 0)) {
+            owns = 1;
+        } else if (!title[0] && needs) {
+            owns = 1;
+        } else if (needs && needs_rows(view) == 1 && !title_hits(view, title)) {
+            owns = 1;
         }
     }
     if (owns && aside) {

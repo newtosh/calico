@@ -642,12 +642,23 @@
         return event.title;
       }
 
+      function agentNeeds(agent) {
+        return !!(agent && (agent.attention === true || agent.status === "needs_you"));
+      }
+
       function rowAside(agent, status) {
+        if (agent && agent.message) return agent.message;
         const note = (status.last_event && status.last_event.message) || "";
         const title = faceTitle(status.last_event);
+        const eventAgent = (status.last_event && status.last_event.agent_id) || "";
         if (!note) return "";
+        if (eventAgent && agent.id === eventAgent) return note;
         if (title && (agent.title === title || agent.id === title)) return note;
-        return !title && agent.status === "needs_you" ? note : "";
+        if (!title && agentNeeds(agent)) return note;
+        const list = status.agents || [];
+        const waiters = list.filter(agentNeeds);
+        const titled = title && list.some((row) => row.title === title || row.id === title);
+        return agentNeeds(agent) && waiters.length === 1 && !titled ? note : "";
       }
 
       function syncMarquee(agent, aside, hot) {
@@ -690,7 +701,8 @@
 
       function label(status) {
         if (failures >= 3) return "link down";
-        if (status.needs_you || status.phase === "needs_you") return "NEEDS YOU";
+        const waiting = (status.agents || []).some(agentNeeds);
+        if (status.needs_you || status.phase === "needs_you" || waiting) return "NEEDS YOU";
         if (status.phase === "running") return "RUNNING";
         return "IDLE";
       }
@@ -718,7 +730,7 @@
           panel.classList.toggle("asleep", quiet && list.length === 0);
           const top = list[0];
           const topAside = top ? rowAside(top, status) : "";
-          syncMarquee(top, topAside, !!(top && (top.status === "needs_you" || topAside)));
+          syncMarquee(top, topAside, !!(top && (agentNeeds(top) || topAside)));
           agents.replaceChildren();
           let placed = false;
           list.forEach((agent, index) => {
@@ -728,7 +740,7 @@
             const asideText = rowAside(agent, status);
             const scrolling =
               index === 0 && marquee.until > Date.now() && marquee.text === asideText;
-            row.className = "agent" + (agent.status === "needs_you" || asideText ? " hot" : "");
+            row.className = "agent" + (agentNeeds(agent) || asideText ? " hot" : "");
             mark.className = "mark " + markShape(agent.shape);
             mark.style.background = markColor(agent.color);
             name.className = "name";
@@ -741,7 +753,7 @@
             agents.append(row);
           });
           message.textContent = placed ? "" : note;
-          panel.classList.toggle("needs", status.needs_you === true);
+          panel.classList.toggle("needs", label(status) === "NEEDS YOU");
         } catch (err) {
           failures = Math.min(3, failures + 1);
           pollMs = 2000;

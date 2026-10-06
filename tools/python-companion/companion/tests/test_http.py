@@ -64,11 +64,14 @@ def test_webhook_updates_status_and_auth() -> None:
             {"type": "agent.needs_you", "agent_id": "a1"},
             "secret",
         )
+        waiting = json.loads(urlopen(base + "/api/status").read())
+        assert waiting["needs_you"] is True
+        assert waiting["unread"] == 1
         cleared = post(base + "/api/dismiss", {}, "secret")
         assert cleared.status == 204
         body = json.loads(urlopen(base + "/api/status").read())
         assert body["needs_you"] is False
-        assert body["unread"] == 2
+        assert body["unread"] == 0
         denied_badge = post(base + "/api/unread/dismiss", {})
         assert denied_badge.status == 401
         badge = post(base + "/api/unread/dismiss", {}, "secret")

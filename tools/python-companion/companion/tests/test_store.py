@@ -59,42 +59,45 @@ def test_status_returns_every_stored_agent() -> None:
     assert agents[16]["title"] == "Agent 16"
 
 
-def test_unread_counts_stored_events_and_clears() -> None:
+def test_unread_counts_attention_and_clears_with_it() -> None:
     store = DeskStore()
     assert store.status()["unread"] == 0
     store.apply_event(EventIn(type="agent.launched", agent_id="a1", title="Scaffold"))
-    assert store.status()["unread"] == 1
+    assert store.status()["unread"] == 0
     store.apply_event(EventIn(type="agent.launched", agent_id="a1", title="Scaffold"))
-    assert store.status()["unread"] == 1
+    assert store.status()["unread"] == 0
     store.apply_event(EventIn(type="agent.finished", agent_id="a1"))
-    assert store.status()["unread"] == 1
+    assert store.status()["unread"] == 0
     store.apply_event(EventIn(type="agent.launched", agent_id="a1", title="Scaffold"))
-    assert store.status()["unread"] == 1
+    assert store.status()["unread"] == 0
     store.apply_event(EventIn(type="note", title="Remember", message="milk"))
+    assert store.status()["unread"] == 1
     store.apply_event(EventIn(type="agent.needs_you", agent_id="a1", message="Pick one"))
-    assert store.status()["unread"] == 3
+    assert store.status()["unread"] == 1
     store.dismiss()
     after = store.status()
     assert after["needs_you"] is False
-    assert after["unread"] == 3
-    store.clear_unread()
-    assert store.status()["unread"] == 0
+    assert after["unread"] == 0
     store.clear_unread()
     assert store.status()["unread"] == 0
 
 
-def test_unread_persists_and_cursor_changes_count(tmp_path: Path) -> None:
+def test_unread_persists_and_cursor_does_not_bump_it(tmp_path: Path) -> None:
     path = tmp_path / "desk.sqlite"
     store = DeskStore(sqlite_path=str(path))
     store.apply_event(EventIn(type="agent.launched", agent_id="a1", title="Scaffold"))
     assert store.apply_cursor_item("bc-1", "Readme", "running", "2026-10-02T13:00:00Z") is True
     assert store.apply_cursor_item("bc-1", "Readme", "running", "2026-10-02T13:00:02Z") is False
     assert store.apply_cursor_item("bc-1", "Readme", "idle", "2026-10-02T13:01:00Z") is True
-    assert store.status()["unread"] == 2
+    assert store.status()["unread"] == 0
+    store.apply_event(EventIn(type="agent.needs_you", agent_id="a1", message="Pick one"))
+    assert store.status()["unread"] == 1
+    assert DeskStore(sqlite_path=str(path)).status()["unread"] == 1
     store.clear_unread()
-    reopened = DeskStore(sqlite_path=str(path))
-    assert reopened.status()["unread"] == 0
-    reopened.apply_event(EventIn(type="note", message="later"))
+    assert store.status()["unread"] == 1
+    store.dismiss()
+    assert DeskStore(sqlite_path=str(path)).status()["unread"] == 0
+    store.apply_event(EventIn(type="note", message="later"))
     assert DeskStore(sqlite_path=str(path)).status()["unread"] == 1
 
 
@@ -228,6 +231,13 @@ def test_omitted_identity_stays_empty_and_cursor_does_not_invent_it() -> None:
     )
     assert store.apply_cursor_item("bc-1", "Readme", "idle", "2026-10-02T13:01:00Z") is False
     store.apply_event(EventIn(type="agent.finished", agent_id="bc-1"))
+    held = store.status()["agents"]
+    assert isinstance(held, list)
+    waiting = next(item for item in held if item["id"] == "bc-1")
+    assert waiting["status"] == "needs_you"
+    assert waiting["attention"] is True
+    assert store.apply_cursor_item("bc-1", "Readme", "running", _stamp(timedelta(0))) is False
+    store.dismiss()
     assert store.apply_cursor_item("bc-1", "Readme", "running", _stamp(timedelta(0))) is True
     still = store.status()["agents"]
     assert isinstance(still, list)
@@ -345,3 +355,121 @@ def test_cursor_item_does_not_repeat(tmp_path: Path) -> None:
     assert store.apply_cursor_item("bc-1", "Readme", "running", fresh) is False
     reloaded = DeskStore(sqlite_path=path)
     assert reloaded.status()["phase"] == "running"
+
+
+def test_attention_survives_finish_and_dismiss_clears_only_that_row() -> None:
+    store = DeskStore()
+    store.apply_event(
+        EventIn(type="agent.launched", agent_id="spool", title="Spool", message="keep")
+    )
+    store.apply_event(EventIn(type="agent.launched", agent_id="desky", title="Desky"))
+    store.apply_event(
+        EventIn(type="agent.needs_you", agent_id="desky", title="Roster", message="roster update")
+    )
+    body = store.status()
+    assert body["phase"] == "needs_you"
+    assert body["unread"] == 1
+    desky = next(item for item in body["agents"] if item["id"] == "desky")
+    assert desky["status"] == "needs_you"
+    assert desky["attention"] is True
+    assert desky["message"] == "roster update"
+    last = body["last_event"]
+    assert isinstance(last, dict)
+    assert last["title"] == "Desky"
+    assert last["message"] == "roster update"
+    assert last["agent_id"] == "desky"
+
+    store.apply_event(EventIn(type="agent.finished", agent_id="desky"))
+    held = store.status()
+    assert held["needs_you"] is True
+    assert held["unread"] == 1
+    desky = next(item for item in held["agents"] if item["id"] == "desky")
+    assert desky["attention"] is True
+    assert desky["status"] == "needs_you"
+    assert desky["message"] == "roster update"
+    spool = next(item for item in held["agents"] if item["id"] == "spool")
+    assert spool["status"] == "running"
+    assert spool["message"] == "keep"
+    assert spool["attention"] is False
+
+    store.dismiss()
+    quiet = store.status()
+    assert quiet["needs_you"] is False
+    assert quiet["unread"] == 0
+    assert quiet["phase"] == "running"
+    desky = next(item for item in quiet["agents"] if item["id"] == "desky")
+    assert desky["attention"] is False
+    assert desky["status"] == "idle"
+    assert desky["message"] == ""
+    spool = next(item for item in quiet["agents"] if item["id"] == "spool")
+    assert spool["status"] == "running"
+    assert spool["message"] == "keep"
+
+
+def test_refresh_updates_message_without_unread(tmp_path: Path) -> None:
+    path = tmp_path / "desk.sqlite"
+    store = DeskStore(sqlite_path=str(path))
+    store.apply_event(
+        EventIn(type="agent.launched", agent_id="desky", title="Desky", message="started")
+    )
+    store.apply_event(EventIn(type="agent.needs_you", agent_id="desky", message="roster update"))
+    assert store.status()["unread"] == 1
+    logged = len(store.status()["events"])
+    store._agents["desky"].updated_at = _stamp(timedelta(seconds=121))
+    store.apply_event(
+        EventIn(type="agent.launched", agent_id="desky", title="Desky", message="still going")
+    )
+    body = store.status()
+    assert body["unread"] == 1
+    assert body["needs_you"] is True
+    assert len(body["events"]) == logged + 1
+    desky = next(item for item in body["agents"] if item["id"] == "desky")
+    assert desky["message"] == "still going"
+    assert desky["status"] == "needs_you"
+    assert desky["attention"] is True
+    store.apply_event(EventIn(type="agent.launched", agent_id="desky", message="still going"))
+    again = store.status()
+    assert len(again["events"]) == logged + 1
+    assert again["agents"][0]["status"] == "needs_you"
+    assert DeskStore(sqlite_path=str(path)).status()["agents"][0]["message"] == "still going"
+
+
+def test_two_waiters_keep_their_own_asides() -> None:
+    store = DeskStore()
+    store.apply_event(EventIn(type="agent.launched", agent_id="desky", title="Desky"))
+    store.apply_event(EventIn(type="agent.launched", agent_id="spool", title="Spool"))
+    store.apply_event(
+        EventIn(type="agent.needs_you", agent_id="desky", title="Roster", message="roster update")
+    )
+    store.apply_event(
+        EventIn(type="agent.needs_you", agent_id="spool", title="Other", message="your turn")
+    )
+    body = store.status()
+    assert body["unread"] == 2
+    agents = {item["id"]: item for item in body["agents"]}
+    assert agents["desky"]["title"] == "Desky"
+    assert agents["desky"]["message"] == "roster update"
+    assert agents["spool"]["title"] == "Spool"
+    assert agents["spool"]["message"] == "your turn"
+    last = body["last_event"]
+    assert isinstance(last, dict)
+    assert last["agent_id"] == "spool"
+    assert last["title"] == "Spool"
+    assert last["message"] == "your turn"
+    store.clear_unread()
+    assert store.status()["unread"] == 2
+    store.dismiss()
+    quiet = store.status()
+    assert quiet["unread"] == 0
+    assert quiet["needs_you"] is False
+
+
+def test_stale_unread_clears_when_nothing_is_waiting(tmp_path: Path) -> None:
+    path = tmp_path / "desk.sqlite"
+    store = DeskStore(sqlite_path=str(path))
+    store.apply_event(EventIn(type="agent.launched", agent_id="desky", title="Desky"))
+    store._unread = 2
+    store._persist()
+    assert store.status()["unread"] == 0
+    assert store.status()["agents"][0]["status"] == "running"
+    assert DeskStore(sqlite_path=str(path)).status()["unread"] == 0

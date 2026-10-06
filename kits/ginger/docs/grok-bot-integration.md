@@ -74,9 +74,22 @@ Sampled from the center of each swatch in a Grok Bot picker screenshot, left to 
 
 Grok Bot’s own webhook body, as used by this companion today, has no icon, accent, or avatar. Cursor’s `GET /v1/agents` list items (`id`, `name`, `status`, `env`, `url`, `createdAt`, `updatedAt`, `latestRunId`) do not either. The poll forwards `color`, `shape`, and `icon` only when those exact string keys are present. It does not turn `url` into an icon, and it does not invent a color. A later poll that omits them leaves a webhook-set identity in place.
 
-`agent.launched` marks that agent running. `agent.finished` marks it idle. `agent.needs_you` fills the panel and the dashboard with NEEDS YOU until `POST /api/dismiss` or a tap on the panel. `note` is a line in the event list and does not change agents. A `running` row whose `updated_at` is more than 2 minutes old is reported as `idle`, and the phase and running count follow. `needs_you` does not age out. A later `agent.launched` refreshes `updated_at`, so that row counts as running again.
+Each agent in `GET /api/status` has `attention` (bool) and `message` (the last text for that row). `status` is `needs_you` while `attention` is set, otherwise `running` or `idle`. The top-level `phase` and `needs_you` follow the rows. There is no Grok Bot unread API. The badge is this companion's count.
 
-The server assigns `id` and `at` and returns the event with status 201. Unknown `type`, or an agent event with an empty `agent_id`, is 400. A repeat `agent.launched` while that agent is already running or in NEEDS YOU refreshes the row, is not stored again, and does not clear NEEDS YOU.
+| Event | Row | Badge |
+| --- | --- | --- |
+| `agent.launched` (new, or after idle) | `running`. Stores `message` when one is sent. | No change. A launch by itself is not unread. |
+| `agent.launched` again while `running` or `attention` | Refreshes `updated_at` so a live routine does not age out. Keeps attention. A new `message` updates that row's aside and is logged once. The same text is not logged again. | No change. |
+| `agent.needs_you` | Sets that agent's `attention` and `message`. Phase becomes `needs_you`. | The number of agents waiting. |
+| `agent.finished` while that agent has attention | Underlying status goes `idle`. Attention and the question stay, so the lamp and the row stay up. | No change. |
+| `agent.finished` otherwise | `idle`. Clears that row's message. | No change. |
+| `note` with a `message` | Does not change agents. The note is the face text. | 1 while that note is the latest text and nobody is waiting. A later event or a badge tap clears it. |
+| `POST /api/dismiss` | Clears attention and the question on agents that were waiting. A row that had already finished stays `idle`. A row that was still running stays `running`. Other agents' messages stay. | 0. |
+| `POST /api/unread/dismiss` | No agent change. | Stored count 0, but still the number of agents waiting. |
+
+A `running` row whose `updated_at` is more than 2 minutes old is reported as `idle`, and the phase and running count follow. Attention does not age out. Repeat `agent.launched` with the same `agent_id` while the routine is running is the heartbeat. Grok Bot chat unread is not readable from here, so a session that never POSTs stays off the desk.
+
+The server assigns `id` and `at` and returns the event with status 201. Unknown `type`, or an agent event with an empty `agent_id`, is 400. A repeat `agent.launched` while that agent is already running or waiting is not stored again unless the message changed, and it does not clear attention. When one agent is waiting, `last_event.title` and `last_event.message` in the status payload are that agent's name and question, so the face aside binds to that row.
 
 Grok Bot has no device API here. A session is on the desk only after it POSTs `agent.launched`. Repeat that POST with the same `agent_id` while the routine is running, and post `agent.finished` when it stops. Idle rows stay. `X` in `n/X running` is every agent still in this store. `GET /api/status` returns that full list. The panel keeps 24 rows and scrolls them.
 
@@ -93,7 +106,7 @@ curl -s -X POST "$DESK_URL/api/webhook/grok-bot" \
 
 `color`, `shape`, and `icon` are optional. Drop them to keep the neutral mark.
 
-On finish, the same call with `"type":"agent.finished"`. While the routine is still running, repeat the launch POST with the same `agent_id`. When the routine needs a person, send `"type":"agent.needs_you"` and the question in `message`. Drop the Authorization header when no token is configured.
+On finish, the same call with `"type":"agent.finished"`. While the routine is still running, repeat the launch POST with the same `agent_id` (a new `message` updates the aside; it does not add unread). When the routine needs a person, send `"type":"agent.needs_you"` and the question in `message`. That question stays on the row until `POST /api/dismiss`, including if `agent.finished` arrives first. Drop the Authorization header when no token is configured.
 
 Dismiss from anything that is not the panel:
 
@@ -101,13 +114,13 @@ Dismiss from anything that is not the panel:
 curl -s -X POST "$DESK_URL/api/dismiss" -H "Authorization: Bearer $GROK_DESK_WEBHOOK_TOKEN"
 ```
 
-`GET /api/status` includes `unread`. That count goes up for a needs-you event, a note, and the first time an agent id is stored. A finish, a later launch, and a cursor status change do not. `POST /api/dismiss` does not change it. Restart the companion after this build so the new field and `POST /api/unread/dismiss` are loaded. A tap on the badge, or:
+`GET /api/status` includes `unread`. The badge is the number of agents in attention. If none are waiting, a note that is still the latest event and has text shows 1. A first launch does not raise it. `POST /api/dismiss` clears it along with attention. A badge with no waiting row and no note text is stored back as 0 on the next status read, including a count left over from an older build. Restart the companion after this build so attention, per-agent messages, and that badge rule are loaded. Flash the panel to pick up row binding when `last_event` is not the only copy of the question. A tap on the badge, or:
 
 ```bash
 curl -s -X POST "$DESK_URL/api/unread/dismiss" -H "Authorization: Bearer $GROK_DESK_WEBHOOK_TOKEN"
 ```
 
-sets it back to 0. The face row is empty at 0.
+sets the stored count to 0. Agents still waiting keep the badge. The face row is empty at 0.
 
 ## What this does not replace
 

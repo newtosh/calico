@@ -14,12 +14,6 @@ ICON_LIMIT = 200
 # A launch POST that nobody refreshes must not pin the desk on the 2s poll.
 RUNNING_TTL = timedelta(seconds=120)
 
-_STATUS_FOR_TYPE = {
-    "agent.launched": "running",
-    "agent.finished": "idle",
-    "agent.needs_you": "needs_you",
-}
-
 
 @dataclass(frozen=True)
 class EventIn:
@@ -56,6 +50,9 @@ class _Agent:
     color: str = ""
     shape: str = ""
     icon: str = ""
+    # Awaiting Jon. Independent of running/idle so a finish does not drop the lamp.
+    attention: bool = False
+    message: str = ""
 
 
 def clip_text(value: object, limit: int) -> str:
@@ -86,15 +83,21 @@ def _now() -> str:
 
 
 def _visible_status(agent: _Agent, now: datetime) -> str:
+    if agent.attention:
+        return "needs_you"
     if agent.status != "running":
-        return agent.status
+        return "idle"
     try:
         updated = datetime.strptime(agent.updated_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
     except ValueError:
         return agent.status
     if now - updated > RUNNING_TTL:
         return "idle"
-    return agent.status
+    return "running"
+
+
+def _note_visible(event: Event | None) -> bool:
+    return bool(event and event.type == "note" and event.message)
 
 
 class DeskStore:
@@ -125,36 +128,74 @@ class DeskStore:
             icon=clip_text(raw.icon, ICON_LIMIT),
         )
         with self._lock:
-            # A standing launch ping must not flood the log or clear NEEDS YOU.
+            # A standing launch ping refreshes updated_at and must not flood
+            # the log, bump unread, or clear attention.
             if raw.type == "agent.launched":
                 current = self._agents.get(raw.agent_id)
-                if current is not None and current.status in {"running", "needs_you"}:
-                    self._upsert(
+                if current is not None and (current.status == "running" or current.attention):
+                    changed = bool(raw.message) and raw.message != current.message
+                    self._touch(
                         raw.agent_id,
                         raw.title,
-                        current.status,
                         event.at,
                         event.color,
                         event.shape,
                         event.icon,
+                        status="running",
+                        attention=current.attention,
+                        message=raw.message or None,
                     )
+                    if changed:
+                        self._remember(event)
                     self._persist()
                     return event
-            known = bool(raw.agent_id) and raw.agent_id in self._agents
-            self._remember(event)
-            attention = raw.type in {"note", "agent.needs_you"}
-            first_seen = raw.type == "agent.launched" and not known
-            if attention or first_seen:
-                self._unread += 1
-            if raw.type in _STATUS_FOR_TYPE:
-                self._upsert(
+            if raw.type == "agent.finished":
+                current = self._agents.get(raw.agent_id)
+                waiting = current is not None and current.attention
+                self._remember(event)
+                # Keep the question up when they are still waiting. A finish
+                # title is not the agent's name.
+                self._touch(
                     raw.agent_id,
-                    raw.title,
-                    _STATUS_FOR_TYPE[raw.type],
+                    "",
                     event.at,
                     event.color,
                     event.shape,
                     event.icon,
+                    status="idle",
+                    attention=waiting,
+                    message=None if waiting else "",
+                )
+                self._persist()
+                return event
+            if raw.type == "note" and raw.message:
+                self._unread = 1
+            self._remember(event)
+            if raw.type == "agent.needs_you":
+                # The question is `message`. A title here must not rename Desky to the question.
+                named = "" if raw.agent_id in self._agents else raw.title
+                self._touch(
+                    raw.agent_id,
+                    named,
+                    event.at,
+                    event.color,
+                    event.shape,
+                    event.icon,
+                    status="running",
+                    attention=True,
+                    message=raw.message or None,
+                )
+            elif raw.type == "agent.launched":
+                self._touch(
+                    raw.agent_id,
+                    raw.title,
+                    event.at,
+                    event.color,
+                    event.shape,
+                    event.icon,
+                    status="running",
+                    attention=False,
+                    message=raw.message or None,
                 )
             self._persist()
         return event
@@ -163,9 +204,15 @@ class DeskStore:
         with self._lock:
             at = _now()
             for agent in self._agents.values():
-                if agent.status == "needs_you":
-                    agent.status = "running"
+                if not agent.attention:
+                    continue
+                agent.attention = False
+                agent.message = ""
+                if agent.status == "running":
                     agent.updated_at = at
+            # The alert is gone and this note has no text. A badge with
+            # nothing to highlight is the bug Jon hit.
+            self._unread = 0
             self._remember(
                 Event(
                     id=str(uuid.uuid4()),
@@ -186,18 +233,55 @@ class DeskStore:
             self._unread = 0
             self._persist()
 
+    def _reported_unread(self) -> int:
+        """Badge equals waiting agents. A note counts only when nothing is waiting."""
+        waiters = sum(1 for agent in self._agents.values() if agent.attention)
+        if waiters:
+            return waiters
+        last = self._events[0] if self._events else None
+        if _note_visible(last) and self._unread:
+            return 1
+        return 0
+
+    def _face_last(self) -> dict[str, object] | None:
+        """Last event the face matches onto a row.
+
+        One waiting agent keeps their question on that row even when a later
+        event has no text. Firmware that only reads last_event.title still
+        highlights the right agent.
+        """
+        if not self._events:
+            return None
+        data = _public_event(self._events[0])
+        waiters = [agent for agent in self._agents.values() if agent.attention and agent.message]
+        if len(waiters) == 1:
+            agent = waiters[0]
+            data["agent_id"] = agent.id
+            data["title"] = agent.title or agent.id
+            data["message"] = agent.message
+            return data
+        agent_id = str(data.get("agent_id", ""))
+        if data.get("message") and agent_id:
+            agent = self._agents.get(agent_id)
+            bound = agent.title or agent.id if agent else ""
+            if bound and data.get("title") not in {agent.title, agent.id}:
+                data["title"] = bound
+        return data
+
     def status(self) -> dict[str, object]:
         with self._lock:
-            # needs_you, then newest updated_at, then id. Stable sorts keep the earlier key.
+            # attention, then newest updated_at, then id. Stable sorts keep the earlier key.
             ordered = sorted(self._agents.values(), key=lambda agent: agent.id)
             ordered.sort(key=lambda agent: agent.updated_at, reverse=True)
-            ordered.sort(key=lambda agent: agent.status != "needs_you")
+            ordered.sort(key=lambda agent: not agent.attention)
             now = datetime.now(UTC)
             agents = [
                 {
                     "id": agent.id,
                     "title": agent.title,
                     "status": _visible_status(agent, now),
+                    "attention": agent.attention,
+                    "message": agent.message,
                     "updated_at": agent.updated_at,
                     "color": agent.color,
                     "shape": agent.shape,
@@ -212,13 +296,16 @@ class DeskStore:
                 phase = "running"
             else:
                 phase = "idle"
-            last = _public_event(self._events[0]) if self._events else None
+            unread = self._reported_unread()
+            if unread == 0 and self._unread != 0:
+                self._unread = 0
+                self._persist()
             return {
                 "phase": phase,
                 "needs_you": phase == "needs_you",
-                "unread": self._unread,
+                "unread": unread,
                 "agents": agents,
-                "last_event": last,
+                "last_event": self._face_last(),
                 "events": [_public_event(event) for event in self._events],
             }
 
@@ -240,9 +327,15 @@ class DeskStore:
         kept_icon = clip_text(icon, ICON_LIMIT)
         with self._lock:
             current = self._agents.get(agent_id)
-            if current is not None and (current.status == mapped or current.status == "needs_you"):
+            if current is not None and current.attention:
                 return False
-            known = agent_id in self._agents
+            if current is not None and current.status == mapped:
+                # Same cursor status is the heartbeat. A newer stamp keeps
+                # the row from aging out; it is not a new unread.
+                if mapped == "running" and at > current.updated_at:
+                    current.updated_at = at
+                    self._persist()
+                return False
             self._remember(
                 Event(
                     id=str(uuid.uuid4()),
@@ -257,9 +350,16 @@ class DeskStore:
                     icon=kept_icon,
                 )
             )
-            if not known:
-                self._unread += 1
-            self._upsert(agent_id, name, mapped, at, kept_color, kept_shape, kept_icon)
+            self._touch(
+                agent_id,
+                name,
+                at,
+                kept_color,
+                kept_shape,
+                kept_icon,
+                status=mapped,
+                attention=False,
+            )
             self._persist()
             return True
 
@@ -267,26 +367,32 @@ class DeskStore:
         self._events.insert(0, event)
         del self._events[EVENT_CAP:]
 
-    def _upsert(
+    def _touch(
         self,
         agent_id: str,
         title: str,
-        status: str,
         at: str,
         color: str,
         shape: str,
         icon: str,
+        *,
+        status: str,
+        attention: bool,
+        message: str | None = None,
     ) -> None:
         current = self._agents.get(agent_id)
-        kept = title if title else (current.title if current else "")
+        if message is None:
+            message = current.message if current else ""
         self._agents[agent_id] = _Agent(
             id=agent_id,
-            title=kept,
+            title=title or (current.title if current else ""),
             status=status,
             updated_at=at,
             color=color or (current.color if current else ""),
             shape=shape or (current.shape if current else ""),
             icon=icon or (current.icon if current else ""),
+            attention=attention,
+            message=message,
         )
 
     def _connect(self) -> sqlite3.Connection:
@@ -302,11 +408,32 @@ class DeskStore:
             ).fetchall()
             for row in rows[:EVENT_CAP]:
                 self._events.append(Event(*row))
-            for agent_id, title, status, updated_at, color, shape, icon in conn.execute(
-                "SELECT id, title, status, updated_at, color, shape, icon FROM agents"
+            for (
+                agent_id,
+                title,
+                status,
+                updated_at,
+                color,
+                shape,
+                icon,
+                attention,
+                message,
+            ) in conn.execute(
+                "SELECT id, title, status, updated_at, color, shape, icon, attention, message "
+                "FROM agents"
             ):
+                waiting = bool(attention) or status == "needs_you"
+                life = "running" if status == "needs_you" else status
                 self._agents[agent_id] = _Agent(
-                    agent_id, title, status, updated_at, color or "", shape or "", icon or ""
+                    agent_id,
+                    title,
+                    life,
+                    updated_at,
+                    color or "",
+                    shape or "",
+                    icon or "",
+                    waiting,
+                    message or "",
                 )
             row = conn.execute("SELECT n FROM unread").fetchone()
             if row is not None:
@@ -341,8 +468,8 @@ class DeskStore:
             for agent in self._agents.values():
                 conn.execute(
                     "INSERT INTO agents ("
-                    "id, title, status, updated_at, color, shape, icon"
-                    ") VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    "id, title, status, updated_at, color, shape, icon, attention, message"
+                    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
                         agent.id,
                         agent.title,
@@ -351,6 +478,8 @@ class DeskStore:
                         agent.color,
                         agent.shape,
                         agent.icon,
+                        1 if agent.attention else 0,
+                        agent.message,
                     ),
                 )
             conn.execute("DELETE FROM unread")
@@ -386,3 +515,8 @@ def _add_text_columns(conn: sqlite3.Connection, table: str) -> None:
     for name in ("color", "shape", "icon"):
         if name not in have:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} TEXT NOT NULL DEFAULT ''")
+    if table == "agents":
+        if "attention" not in have:
+            conn.execute("ALTER TABLE agents ADD COLUMN attention INTEGER NOT NULL DEFAULT 0")
+        if "message" not in have:
+            conn.execute("ALTER TABLE agents ADD COLUMN message TEXT NOT NULL DEFAULT ''")
