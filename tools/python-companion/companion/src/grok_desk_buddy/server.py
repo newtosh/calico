@@ -128,7 +128,16 @@ def _handler_class(
                 self._json(401, {"error": "unauthorized"})
                 return
             if path == "/api/dismiss":
-                store.dismiss()
+                agent_id = ""
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                if length:
+                    payload = self._read_json()
+                    if payload is None:
+                        self._json(400, {"error": "bad json"})
+                        return
+                    raw_id = payload.get("agent_id", "")
+                    agent_id = raw_id if isinstance(raw_id, str) else ""
+                store.dismiss(agent_id)
                 self._send(204, b"", "text/plain")
                 return
             if path == "/api/unread/dismiss":

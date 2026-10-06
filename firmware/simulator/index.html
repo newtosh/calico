@@ -434,6 +434,31 @@
         padding: 8px 14px;
         font: inherit;
       }
+      .peek {
+        position: absolute;
+        z-index: 3;
+        height: 50px;
+        box-sizing: border-box;
+        border-radius: 28px 28px 0 0;
+        background: rgba(22, 24, 15, 0.8);
+        border: 2px solid rgba(163, 155, 136, 0.75);
+        pointer-events: none;
+        transform: translateY(110%);
+        transition: transform 280ms ease-out;
+      }
+      .peek.show {
+        transform: translateY(0);
+      }
+      #peek1 {
+        left: 12px;
+        right: 12px;
+        top: 48px;
+      }
+      #peek2 {
+        left: 24px;
+        right: 24px;
+        top: 48px;
+      }
       #sheet {
         position: absolute;
         left: 0;
@@ -448,15 +473,24 @@
         gap: 12px;
         padding: 28px 24px 72px;
         border-radius: 36px 36px 0 0;
+        background: rgba(12, 14, 9, 0.92);
+        color: #efe7d6;
+        border: 2px solid rgba(163, 155, 136, 0.55);
         transform: translateY(110%);
-        transition: transform 280ms ease-out;
+        transition: transform 280ms ease-out, top 280ms ease-out;
         pointer-events: none;
+      }
+      #sheet.stack1 {
+        top: 62px;
+      }
+      #sheet.stack2 {
+        top: 76px;
       }
       #sheet.up {
         transform: translateY(0);
         pointer-events: auto;
       }
-      #sheet .plate {
+      #sheet .halo {
         width: 168px;
         height: 168px;
         border-radius: 50%;
@@ -479,12 +513,25 @@
         width: 90px;
         height: 90px;
       }
+      #sheet-new {
+        margin: 0;
+        padding: 4px 14px;
+        border-radius: 999px;
+        border: 1px solid #a39b88;
+        background: #2a2d24;
+        color: #efe7d6;
+        font-size: 20px;
+        line-height: 24px;
+      }
       #sheet h2 {
         margin: 0;
         width: 100%;
-        font-size: 24px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 48px;
         font-weight: 400;
-        line-height: 1.2;
+        line-height: 1.05;
         text-align: center;
       }
       #sheet .copy {
@@ -492,9 +539,18 @@
         min-height: 0;
         width: 100%;
         overflow: auto;
-        font-size: 20px;
+        font-size: 28px;
         line-height: 1.25;
         text-align: center;
+      }
+      #sheet-all {
+        flex: none;
+        width: calc(100% - 48px);
+        background: transparent;
+        color: #efe7d6;
+        border: 1px solid #6d6756;
+        border-radius: 999px;
+        font-size: 20px;
       }
       #title.badge {
         align-self: center;
@@ -574,10 +630,14 @@
       <div id="agents"></div>
       <button id="newjump" type="button" hidden>1 new</button>
       </div>
+      <div id="peek2" class="peek" hidden></div>
+      <div id="peek1" class="peek" hidden></div>
       <div id="sheet">
-        <div class="plate"><i class="mark circle"></i></div>
+        <div class="halo"><i class="mark circle"></i></div>
+        <p id="sheet-new" hidden>1 new</p>
         <h2></h2>
         <div class="copy"></div>
+        <button id="sheet-all" type="button" hidden>Dismiss all</button>
       </div>
       <div id="chrome">
         <div id="dock">
@@ -906,47 +966,126 @@
       let sheetLeaving = false;
       let sheetHold = false;
 
-      function sheetInk(hex) {
+      const sheetNew = document.getElementById("sheet-new");
+      const sheetAll = document.getElementById("sheet-all");
+      const peek1 = document.getElementById("peek1");
+      const peek2 = document.getElementById("peek2");
+      const sheetHalo = sheet.querySelector(".halo");
+      let latest = null;
+      let sheetAt = 0;
+      let sheetFocus = "";
+      let sheetSeen = [];
+      const sheetDropped = new Set();
+
+      function hexAlpha(hex, alpha) {
         const n = parseInt(String(hex).slice(1), 16);
-        const y = (299 * ((n >> 16) & 255) + 587 * ((n >> 8) & 255) + 114 * (n & 255)) / 1000;
-        return y < 140 ? "#efe7d6" : "#14160f";
+        if (!Number.isFinite(n)) return "rgba(163,155,136," + alpha + ")";
+        return (
+          "rgba(" +
+          ((n >> 16) & 255) +
+          "," +
+          ((n >> 8) & 255) +
+          "," +
+          (n & 255) +
+          "," +
+          alpha +
+          ")"
+        );
       }
 
-      function featuredAgent(status) {
-        const list = (status && status.agents) || [];
-        if (agentNeeds(list[0])) return list[0];
-        return list.find(agentNeeds) || null;
+      function waitingAgents(status) {
+        return ((status && status.agents) || []).filter(agentNeeds);
+      }
+
+      function stackAgents(status) {
+        return waitingAgents(status).filter((agent) => !sheetDropped.has(agent.id));
+      }
+
+      function hidePeeks() {
+        peek1.hidden = true;
+        peek2.hidden = true;
+        peek1.classList.remove("show");
+        peek2.classList.remove("show");
+        sheet.classList.remove("stack1", "stack2");
       }
 
       function paintSheet(status) {
+        latest = status;
+        const raw = waitingAgents(status);
+        for (const id of [...sheetDropped]) {
+          if (!raw.some((agent) => agent.id === id)) sheetDropped.delete(id);
+        }
         const show = label(status) === "NEEDS YOU" && !sheetHold && !sheetLeaving;
-        if (!show) {
-          if (!sheetLeaving) sheet.classList.remove("up");
+        const waiters = stackAgents(status);
+        if (!show || waiters.length < 1) {
+          if (!sheetLeaving) {
+            sheet.classList.remove("up");
+            hidePeeks();
+            sheetSeen = [];
+            sheetFocus = "";
+            sheetAt = 0;
+          }
           return;
         }
-        const agent = featuredAgent(status);
+        const fresh = waiters.some((agent) => sheetSeen.indexOf(agent.id) < 0);
+        if (fresh || !sheetFocus) {
+          sheetAt = 0;
+        } else {
+          const found = waiters.findIndex((agent) => agent.id === sheetFocus);
+          sheetAt = found >= 0 ? found : 0;
+        }
+        const agent = waiters[sheetAt];
+        const behind = waiters.length - sheetAt - 1;
+        const steps = Math.min(2, Math.max(0, behind));
         const color = markColor(agent && agent.color);
-        const ink = sheetInk(color);
         const mark = sheet.querySelector(".mark");
-        sheet.style.background = color;
-        sheet.style.color = ink;
-        sheet.querySelector(".plate").style.background = ink;
+        sheetFocus = agent.id;
+        sheetSeen = waiters.map((item) => item.id);
+        sheet.style.borderColor = hexAlpha(color, 0.55);
+        sheetHalo.style.background = hexAlpha(color, 0.38);
         mark.className = "mark " + markShape(agent && agent.shape);
         mark.style.background = color;
-        sheet.querySelector("h2").textContent =
-          (agent && (agent.title || agent.id)) || "NEEDS YOU";
-        sheetCopy.textContent = agent ? rowAside(agent, status) : "";
+        sheet.querySelector("h2").textContent = agent.title || agent.id || "NEEDS YOU";
+        if (sheetCopy.dataset.agent !== agent.id) {
+          sheetCopy.scrollTop = 0;
+          sheetCopy.dataset.agent = agent.id;
+        }
+        const aside = rowAside(agent, status);
+        if (sheetCopy.textContent !== aside) sheetCopy.textContent = aside;
+        sheetNew.hidden = behind < 1;
+        sheetNew.textContent = behind > 99 ? "99+ new" : behind + " new";
+        sheetNew.style.borderColor = color;
+        sheetAll.hidden = waiters.length < 2;
+        sheet.classList.toggle("stack1", steps === 1);
+        sheet.classList.toggle("stack2", steps >= 2);
+        peek1.hidden = steps < 1;
+        peek2.hidden = steps < 2;
+        peek1.classList.toggle("show", steps >= 1);
+        peek2.classList.toggle("show", steps >= 2);
+        if (steps >= 1) {
+          peek1.style.top = steps >= 2 ? "62px" : "48px";
+          peek1.style.borderColor = hexAlpha(markColor(waiters[sheetAt + 1].color), 0.8);
+        }
+        if (steps >= 2) {
+          peek2.style.top = "48px";
+          peek2.style.borderColor = hexAlpha(markColor(waiters[sheetAt + 2].color), 0.8);
+        }
         sheet.classList.add("up");
       }
 
-      function leaveSheet() {
+      function leaveSheet(body) {
         if (sheetLeaving || !sheet.classList.contains("up")) return;
         sheetLeaving = true;
         sheetHold = true;
         sheet.classList.remove("up");
+        hidePeeks();
         setTimeout(() => {
           sheetLeaving = false;
-          fetch(base + "/api/dismiss", { method: "POST" })
+          fetch(base + "/api/dismiss", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: body || "{}",
+          })
             .catch(() => {})
             .then(() => {
               sheetHold = false;
@@ -955,27 +1094,82 @@
         }, 280);
       }
 
+      async function dismissCurrent() {
+        const waiters = stackAgents(latest);
+        const agent = waiters[sheetAt];
+        if (!agent) {
+          leaveSheet("{}");
+          return;
+        }
+        if (waiters.length < 2) {
+          leaveSheet(JSON.stringify({ agent_id: agent.id }));
+          return;
+        }
+        sheetDropped.add(agent.id);
+        const next = waiters.filter((item) => item.id !== agent.id);
+        if (sheetAt >= next.length) sheetAt = next.length - 1;
+        sheetFocus = next[sheetAt].id;
+        paintSheet(latest);
+        try {
+          await fetch(base + "/api/dismiss", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ agent_id: agent.id }),
+          });
+        } catch (err) {
+          /* The next status is the truth. */
+        }
+        await tick();
+        const still = waitingAgents(latest).some((item) => item.id === agent.id);
+        if (still) sheetDropped.delete(agent.id);
+        paintSheet(latest);
+      }
+
+      function stepSheet(dir) {
+        const waiters = stackAgents(latest);
+        const at = sheetAt + dir;
+        if (at < 0 || at >= waiters.length) return;
+        sheetAt = at;
+        sheetFocus = waiters[at].id;
+        paintSheet(latest);
+      }
+
       function sheetOverflow() {
         return sheetCopy.scrollHeight > sheetCopy.clientHeight + 1;
       }
 
       sheet.addEventListener("pointerdown", (event) => {
         if (!sheet.classList.contains("up") || event.button !== 0) return;
-        sheetDrag = { id: event.pointerId, y: event.clientY, t: performance.now() };
+        sheetDrag = {
+          id: event.pointerId,
+          x: event.clientX,
+          y: event.clientY,
+          t: performance.now(),
+        };
       });
       sheet.addEventListener("pointerup", (event) => {
         if (!sheetDrag || sheetDrag.id !== event.pointerId) return;
+        const dx = event.clientX - sheetDrag.x;
         const dy = event.clientY - sheetDrag.y;
         const dt = performance.now() - sheetDrag.t;
-        const dragged = dy > 8 || dy < -8;
+        const ax = Math.abs(dx);
+        const ay = Math.abs(dy);
+        const dragged = ax > 8 || ay > 8;
         const flick = dy >= 48 && dt < 280;
         const dismiss = dy >= 40 && (!sheetOverflow() || flick);
         sheetDrag = null;
-        if (dismiss) leaveSheet();
-        else if (!dragged) leaveSheet();
+        if (ax >= 48 && ax > ay) stepSheet(dx < 0 ? 1 : -1);
+        else if (dismiss || !dragged) dismissCurrent();
       });
       sheet.addEventListener("pointercancel", () => {
         sheetDrag = null;
+      });
+      sheetAll.addEventListener("pointerdown", (event) => {
+        event.stopPropagation();
+      });
+      sheetAll.addEventListener("click", (event) => {
+        event.stopPropagation();
+        leaveSheet("{}");
       });
       (function loop() {
         tick().then(() => setTimeout(loop, pollMs));

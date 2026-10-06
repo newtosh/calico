@@ -470,7 +470,20 @@ def test_two_waiters_keep_their_own_asides() -> None:
     assert last["message"] == "your turn"
     store.clear_unread()
     assert store.status()["unread"] == 2
-    store.dismiss()
+    ids = [item["id"] for item in body["agents"] if item["attention"]]
+    assert ids == ["spool", "desky"]
+    store.dismiss("nope")
+    assert store.status()["needs_you"] is True
+    store.dismiss("desky")
+    held = store.status()
+    assert held["needs_you"] is True
+    assert held["unread"] == 1
+    agents = {item["id"]: item for item in held["agents"]}
+    assert agents["desky"]["attention"] is False
+    assert agents["desky"]["message"] == ""
+    assert agents["spool"]["attention"] is True
+    assert agents["spool"]["message"] == "your turn"
+    store.dismiss("spool")
     quiet = store.status()
     assert quiet["unread"] == 0
     assert quiet["needs_you"] is False

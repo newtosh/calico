@@ -767,20 +767,34 @@ static int agent_needs(const desk_agent_t *agent) {
     return agent->attention || strcmp(agent->status, "needs_you") == 0;
 }
 
-int desk_sheet_agent(const desk_view_t *view) {
+int desk_sheet_stack(const desk_view_t *view, int *indexes, int cap) {
     int i;
-    if (!view || view->agent_count < 1) {
-        return -1;
-    }
-    if (agent_needs(&view->agents[0])) {
+    int n = 0;
+    if (!view || !indexes || cap < 1) {
         return 0;
     }
-    for (i = 1; i < view->agent_count; i++) {
-        if (agent_needs(&view->agents[i])) {
-            return i;
+    for (i = 0; i < view->agent_count && n < cap; i++) {
+        if (!agent_needs(&view->agents[i])) {
+            continue;
         }
+        indexes[n++] = i;
     }
-    return -1;
+    return n;
+}
+
+int desk_sheet_agent(const desk_view_t *view) {
+    int index;
+    if (desk_sheet_stack(view, &index, 1) < 1) {
+        return -1;
+    }
+    return index;
+}
+
+int desk_sheet_behind(int count, int index) {
+    if (count < 1 || index < 0 || index >= count) {
+        return 0;
+    }
+    return count - index - 1;
 }
 
 uint32_t desk_sheet_ink(uint32_t color) {
@@ -802,6 +816,18 @@ int desk_sheet_dismiss(int overflow, int dy, int dt_ms) {
         return 0;
     }
     return 1;
+}
+
+int desk_sheet_gesture(int overflow, int dx, int dy, int dt_ms) {
+    int ax = dx < 0 ? -dx : dx;
+    int ay = dy < 0 ? -dy : dy;
+    if (ax >= 48 && ax > ay) {
+        return dx < 0 ? DESK_SHEET_OLDER : DESK_SHEET_NEWER;
+    }
+    if (desk_sheet_dismiss(overflow, dy, dt_ms)) {
+        return DESK_SHEET_DISMISS;
+    }
+    return DESK_SHEET_HOLD;
 }
 
 static void bmp_u16(uint8_t *p, unsigned v) {

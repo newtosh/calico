@@ -193,3 +193,34 @@ def test_frame_request_post_and_get() -> None:
         assert urlopen(base + "/api/frame").read() == b"BMrace"
     finally:
         server.shutdown()
+
+
+def test_dismiss_one_agent_leaves_the_other() -> None:
+    store = DeskStore()
+    server, base = serve_in_thread(store, token="", web_dist=None)
+    try:
+        post(
+            base + "/api/webhook/grok-bot",
+            {"type": "agent.needs_you", "agent_id": "desky", "title": "Desky", "message": "one"},
+        )
+        post(
+            base + "/api/webhook/grok-bot",
+            {"type": "agent.needs_you", "agent_id": "spool", "title": "Spool", "message": "two"},
+        )
+        bad = post_bytes(base + "/api/dismiss", b"nope", content_type="application/json")
+        assert bad.status == 400
+        one = post(base + "/api/dismiss", {"agent_id": "desky"})
+        assert one.status == 204
+        body = json.loads(urlopen(base + "/api/status").read())
+        agents = {item["id"]: item for item in body["agents"]}
+        assert agents["desky"]["attention"] is False
+        assert agents["spool"]["attention"] is True
+        assert body["needs_you"] is True
+        assert body["unread"] == 1
+        cleared = post(base + "/api/dismiss", {})
+        assert cleared.status == 204
+        quiet = json.loads(urlopen(base + "/api/status").read())
+        assert quiet["needs_you"] is False
+        assert quiet["unread"] == 0
+    finally:
+        server.shutdown()

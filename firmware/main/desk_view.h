@@ -101,12 +101,29 @@ int desk_aside_scroll(const desk_view_t *prev, const desk_view_t *view);
 /* Rows that are new, or whose status, attention, or aside changed.
  * 0 when either view is missing. Color and order alone do not count. */
 int desk_unseen_updates(const desk_view_t *prev, const desk_view_t *view);
-/* Index of the agent the needs-you sheet features, or -1. */
+/* Index of the first waiting agent, or -1. Status order is newest waiter first. */
 int desk_sheet_agent(const desk_view_t *view);
+/* Waiting agents in status order, newest first. Writes up to cap indexes.
+ * Returns how many were written. */
+int desk_sheet_stack(const desk_view_t *view, int *indexes, int cap);
+/* Cards still under the one at index. 0 when this card is the last. */
+int desk_sheet_behind(int count, int index);
 /* Cream on a dark mark, near-black on a light one. */
 uint32_t desk_sheet_ink(uint32_t color);
 /* 1 when this pointer release should dismiss the sheet.
  * dy is downward pixels. overflow is 1 when the body is taller than the viewport. */
 int desk_sheet_dismiss(int overflow, int dy, int dt_ms);
+
+enum {
+    DESK_SHEET_HOLD = 0,
+    DESK_SHEET_DISMISS = 1,
+    /* Finger moved left: the card under this one. */
+    DESK_SHEET_OLDER = 2,
+    DESK_SHEET_NEWER = 3
+};
+
+/* Horizontal move of 48px that beats the vertical one pages the stack.
+ * Otherwise the downward dismiss rule. A sideways swipe does not dismiss. */
+int desk_sheet_gesture(int overflow, int dx, int dy, int dt_ms);
 /* 66-byte top-down RGB565 BMP header. biHeight is negative. Returns 66, or -1. */
 int desk_bmp565_header(uint8_t *dst, size_t cap, int w, int h);

@@ -204,16 +204,27 @@ class DeskStore:
             self._persist()
         return event
 
-    def dismiss(self) -> None:
+    def dismiss(self, agent_id: str = "") -> None:
         with self._lock:
             at = _now()
+            cleared = False
             for agent in self._agents.values():
                 if not agent.attention:
+                    continue
+                if agent_id and agent.id != agent_id:
                     continue
                 agent.attention = False
                 agent.message = ""
                 if agent.status == "running":
                     agent.updated_at = at
+                cleared = True
+            still = any(agent.attention for agent in self._agents.values())
+            # A named dismiss that matched nobody must not clear the others.
+            if agent_id and not cleared:
+                return
+            if still:
+                self._persist()
+                return
             # The alert is gone and this note has no text. A badge with
             # nothing to highlight is the bug Jon hit.
             self._unread = 0
@@ -293,8 +304,18 @@ class DeskStore:
 
     def status(self) -> dict[str, object]:
         with self._lock:
-            # attention, then newest updated_at, then id. Stable sorts keep the earlier key.
+            # attention, then newest updated_at. The clock is whole seconds, so
+            # two needs_you in that second follow event order (later event first).
+            # id is the last tie. Stable sorts keep the earlier key.
+            recent: dict[str, int] = {}
+            for index, event in enumerate(self._events):
+                if event.agent_id and event.agent_id not in recent:
+                    recent[event.agent_id] = index
+            tail = len(self._events)
             ordered = sorted(self._agents.values(), key=lambda agent: agent.id)
+            ordered.sort(
+                key=lambda agent: recent.get(agent.id, tail) if agent.attention else 0
+            )
             ordered.sort(key=lambda agent: agent.updated_at, reverse=True)
             ordered.sort(key=lambda agent: not agent.attention)
             now = datetime.now(UTC)

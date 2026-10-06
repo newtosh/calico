@@ -82,8 +82,12 @@ static void save_and_restart(const char *ssid, const char *pass, const char *url
     esp_restart();
 }
 
-static void dismiss_alert(void) {
-    net_dismiss(&s_active);
+static void dismiss_alert(const char *agent_id) {
+    if (agent_id && agent_id[0]) {
+        net_dismiss_agent(&s_active, agent_id);
+    } else {
+        net_dismiss(&s_active);
+    }
     /* After the POST, so a fetch that overlapped the request cannot reopen the sheet. */
     s_dismiss_gen = s_fetch_gen;
 }

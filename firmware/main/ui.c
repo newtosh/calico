@@ -49,7 +49,12 @@ enum {
      * lower radius stays past the glass. */
     SHEET_Y = EDGE_PX + BAR_H,
     SHEET_MARK = 120,
-    SHEET_PLATE = 168,
+    /* Halo behind the silhouette. Not a contrasting plate. */
+    SHEET_GLOW = 168,
+    /* How far a card behind this one peeks above the front sheet. */
+    SHEET_PEEK = 14,
+    /* Far enough that the rear peek is still off the glass. */
+    SHEET_PARK = SCREEN_PX + (SHEET_PEEK * 2),
     SHEET_MS = 280,
     INK = 0xefe7d6,
     INK_DIM = 0xa39b88,
@@ -84,19 +89,35 @@ static lv_obj_t *s_title;
 static lv_obj_t *s_message;
 static lv_obj_t *s_count;
 static lv_obj_t *s_sheet;
-static lv_obj_t *s_sheet_plate;
+static lv_obj_t *s_peek1;
+static lv_obj_t *s_peek2;
+static lv_obj_t *s_sheet_glow;
 static lv_obj_t *s_sheet_mark;
+static lv_obj_t *s_sheet_count;
+static lv_obj_t *s_sheet_count_label;
 static lv_obj_t *s_sheet_title;
 static lv_obj_t *s_sheet_body;
 static lv_obj_t *s_sheet_text;
+static lv_obj_t *s_sheet_all;
 static lv_timer_t *s_sheet_timer;
 static int s_sheet_up;
 static int s_sheet_leaving;
 static int s_sheet_suppress;
 static int s_sheet_pressed;
 static int s_sheet_dragged;
+static int s_sheet_press_x;
 static int s_sheet_press_y;
+static int s_sheet_rest;
+static int s_sheet_steps;
+static int s_sheet_at;
 static uint32_t s_sheet_press_ms;
+static char s_sheet_focus_id[40];
+static char s_sheet_bound[40];
+static char s_sheet_leave_id[40];
+static char s_sheet_skip[DESK_AGENT_MAX][40];
+static int s_sheet_skip_n;
+static char s_sheet_seen[DESK_AGENT_MAX][40];
+static int s_sheet_seen_n;
 static lv_obj_t *s_settings;
 static lv_obj_t *s_header;
 static lv_obj_t *s_body;
@@ -120,7 +141,7 @@ static lv_timer_t *s_aside_timer;
 static net_ap_t s_aps[NET_SCAN_MAX];
 static int s_row_count;
 static ui_save_fn s_on_save;
-static void (*s_on_dismiss)(void);
+static void (*s_on_dismiss)(const char *agent_id);
 static void (*s_on_clear_unread)(void);
 static ui_scan_fn s_on_scan;
 static lv_timer_t *s_mic_timer;
@@ -364,6 +385,7 @@ static void apply_mark(lv_obj_t *mark, uint32_t color, int shape) {
         side = MARK_PX;
     }
     lv_obj_set_style_bg_color(mark, lv_color_hex(color), 0);
+    lv_obj_set_style_outline_width(mark, 0, 0);
     lv_obj_set_user_data(mark, (void *)(intptr_t)shape);
     if (shape == DESK_SHAPE_SQUARE) {
         radius = 2 * side / 24;
@@ -686,8 +708,21 @@ static void show_unread(int count) {
 
 static void anim_delete(void *var);
 
+static void sheet_place(int y) {
+    if (s_sheet) {
+        lv_obj_set_y(s_sheet, y);
+    }
+    if (s_peek1) {
+        lv_obj_set_y(s_peek1, y - SHEET_PEEK);
+    }
+    if (s_peek2) {
+        lv_obj_set_y(s_peek2, y - (SHEET_PEEK * 2));
+    }
+}
+
 static void sheet_exec_y(void *obj, int32_t v) {
-    lv_obj_set_y(obj, v);
+    (void)obj;
+    sheet_place(v);
 }
 
 static void sheet_timer_drop(void) {
@@ -698,31 +733,59 @@ static void sheet_timer_drop(void) {
     s_sheet_timer = NULL;
 }
 
+static void sheet_forget(void) {
+    s_sheet_at = 0;
+    s_sheet_steps = 0;
+    s_sheet_rest = SHEET_Y;
+    s_sheet_focus_id[0] = '\0';
+    s_sheet_bound[0] = '\0';
+    s_sheet_seen_n = 0;
+}
+
 static void sheet_hide_now(void) {
     sheet_timer_drop();
     s_sheet_leaving = 0;
     s_sheet_up = 0;
     s_sheet_pressed = 0;
+    sheet_forget();
+    if (s_peek1) {
+        lv_obj_add_flag(s_peek1, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (s_peek2) {
+        lv_obj_add_flag(s_peek2, LV_OBJ_FLAG_HIDDEN);
+    }
     if (!s_sheet) {
         return;
     }
     anim_delete(s_sheet);
-    lv_obj_set_y(s_sheet, SCREEN_PX);
+    sheet_place(SHEET_PARK);
     lv_obj_set_hidden(s_sheet, true);
 }
 
 static void sheet_leave_done(lv_timer_t *timer) {
+    char id[40];
     (void)timer;
+    /* The one-shot timer is ending. Deleting it here would free the callback. */
     s_sheet_timer = NULL;
+    copy_text(id, sizeof(id), s_sheet_leave_id);
+    s_sheet_leave_id[0] = '\0';
     s_sheet_leaving = 0;
     s_sheet_up = 0;
     s_sheet_pressed = 0;
+    sheet_forget();
+    if (s_peek1) {
+        lv_obj_add_flag(s_peek1, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (s_peek2) {
+        lv_obj_add_flag(s_peek2, LV_OBJ_FLAG_HIDDEN);
+    }
     if (s_sheet) {
-        lv_obj_set_y(s_sheet, SCREEN_PX);
+        anim_delete(s_sheet);
+        sheet_place(SHEET_PARK);
         lv_obj_set_hidden(s_sheet, true);
     }
     if (s_on_dismiss) {
-        s_on_dismiss();
+        s_on_dismiss(id[0] ? id : NULL);
     }
 }
 
@@ -739,7 +802,7 @@ static void sheet_leave(void) {
         lv_anim_init(&a);
         lv_anim_set_var(&a, s_sheet);
         lv_anim_set_exec_cb(&a, sheet_exec_y);
-        lv_anim_set_values(&a, lv_obj_get_y(s_sheet), SCREEN_PX);
+        lv_anim_set_values(&a, lv_obj_get_y(s_sheet), SHEET_PARK);
         lv_anim_set_duration(&a, SHEET_MS);
         lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
         lv_anim_start(&a);
@@ -756,6 +819,288 @@ static int sheet_overflow(void) {
     return lv_obj_get_scroll_top(s_sheet_body) > 0 || lv_obj_get_scroll_bottom(s_sheet_body) > 0;
 }
 
+static int sheet_skipped(const char *id) {
+    int i;
+    if (!id) {
+        return 0;
+    }
+    for (i = 0; i < s_sheet_skip_n; i++) {
+        if (strcmp(s_sheet_skip[i], id) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void sheet_skip_add(const char *id) {
+    if (!id || !id[0] || sheet_skipped(id) || s_sheet_skip_n >= DESK_AGENT_MAX) {
+        return;
+    }
+    copy_text(s_sheet_skip[s_sheet_skip_n], sizeof(s_sheet_skip[0]), id);
+    s_sheet_skip_n++;
+}
+
+static int sheet_collect(const desk_view_t *view, int *stack) {
+    int raw[DESK_AGENT_MAX];
+    int raw_n;
+    int i;
+    int n = 0;
+    if (!view) {
+        return 0;
+    }
+    raw_n = desk_sheet_stack(view, raw, DESK_AGENT_MAX);
+    for (i = 0; i < raw_n; i++) {
+        if (sheet_skipped(view->agents[raw[i]].id)) {
+            continue;
+        }
+        stack[n++] = raw[i];
+    }
+    return n;
+}
+
+static int sheet_was_seen(const char *id) {
+    int i;
+    for (i = 0; i < s_sheet_seen_n; i++) {
+        if (strcmp(s_sheet_seen[i], id) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int sheet_fresh(const desk_view_t *view, const int *stack, int n) {
+    int i;
+    for (i = 0; i < n; i++) {
+        if (!sheet_was_seen(view->agents[stack[i]].id)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void sheet_mark_seen(const desk_view_t *view, const int *stack, int n) {
+    int i;
+    s_sheet_seen_n = 0;
+    for (i = 0; i < n && s_sheet_seen_n < DESK_AGENT_MAX; i++) {
+        copy_text(s_sheet_seen[s_sheet_seen_n], sizeof(s_sheet_seen[0]), view->agents[stack[i]].id);
+        s_sheet_seen_n++;
+    }
+}
+
+static uint32_t sheet_color(const desk_agent_t *agent) {
+    uint32_t parsed;
+    if (agent && desk_mark_color(agent->color, &parsed) == 0) {
+        return parsed;
+    }
+    return DESK_MARK_NEUTRAL;
+}
+
+static void sheet_front(void) {
+    if (s_peek2) {
+        lv_obj_move_foreground(s_peek2);
+    }
+    if (s_peek1) {
+        lv_obj_move_foreground(s_peek1);
+    }
+    if (s_sheet) {
+        lv_obj_move_foreground(s_sheet);
+    }
+    if (s_settings && !lv_obj_has_flag(s_settings, LV_OBJ_FLAG_HIDDEN)) {
+        lv_obj_move_foreground(s_settings);
+    }
+}
+
+static void sheet_rise(void) {
+    lv_anim_t a;
+    if (!s_sheet || s_sheet_up || s_sheet_leaving) {
+        return;
+    }
+    s_sheet_up = 1;
+    sheet_place(SHEET_PARK);
+    lv_obj_set_hidden(s_sheet, false);
+    sheet_front();
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, s_sheet);
+    lv_anim_set_exec_cb(&a, sheet_exec_y);
+    lv_anim_set_values(&a, SHEET_PARK, s_sheet_rest);
+    lv_anim_set_duration(&a, SHEET_MS);
+    lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
+    lv_anim_start(&a);
+}
+
+static void sheet_open(void) {
+    if (!s_sheet || s_sheet_leaving) {
+        return;
+    }
+    if (!s_sheet_up) {
+        sheet_rise();
+        return;
+    }
+    anim_delete(s_sheet);
+    sheet_place(s_sheet_rest);
+    lv_obj_set_hidden(s_sheet, false);
+    sheet_front();
+}
+
+static void sheet_peek(lv_obj_t *peek, int on, uint32_t color) {
+    if (!peek) {
+        return;
+    }
+    if (!on) {
+        lv_obj_add_flag(peek, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    lv_obj_set_style_border_color(peek, lv_color_hex(color), 0);
+    lv_obj_clear_flag(peek, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void sheet_count_set(int behind) {
+    if (!s_sheet_count) {
+        return;
+    }
+    if (behind < 1) {
+        lv_obj_add_flag(s_sheet_count, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    if (behind > 99) {
+        lv_label_set_text(s_sheet_count_label, "99+ new");
+    } else {
+        lv_label_set_text_fmt(s_sheet_count_label, "%d new", behind);
+    }
+    lv_obj_clear_flag(s_sheet_count, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void sheet_paint(const desk_view_t *view, const int *stack, int at, int n) {
+    const desk_agent_t *agent = &view->agents[stack[at]];
+    const char *aside = "";
+    const char *title = agent->title[0] ? agent->title : (agent->id[0] ? agent->id : "NEEDS YOU");
+    uint32_t color = sheet_color(agent);
+    int behind = desk_sheet_behind(n, at);
+    int steps = behind > 2 ? 2 : behind;
+    desk_agent_hot(view, stack[at], &aside);
+    s_sheet_steps = steps;
+    s_sheet_rest = SHEET_Y + (steps * SHEET_PEEK);
+    apply_mark(s_sheet_mark, color, desk_mark_shape(agent->shape));
+    lv_obj_set_style_bg_color(s_sheet_glow, lv_color_hex(color), 0);
+    lv_obj_set_style_border_color(s_sheet, lv_color_hex(color), 0);
+    if (s_sheet_count) {
+        lv_obj_set_style_border_color(s_sheet_count, lv_color_hex(color), 0);
+    }
+    lv_obj_set_style_pad_bottom(s_sheet, 36 + (steps * SHEET_PEEK), 0);
+    sheet_peek(s_peek1, steps >= 1, steps >= 1 ? sheet_color(&view->agents[stack[at + 1]]) : color);
+    sheet_peek(s_peek2, steps >= 2, steps >= 2 ? sheet_color(&view->agents[stack[at + 2]]) : color);
+    sheet_count_set(behind);
+    if (s_sheet_all) {
+        if (n > 1) {
+            lv_obj_clear_flag(s_sheet_all, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(s_sheet_all, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+    /* Setting the same string still resets the body's scroll. */
+    if (strcmp(s_sheet_bound, agent->id) != 0) {
+        copy_text(s_sheet_bound, sizeof(s_sheet_bound), agent->id);
+        if (s_sheet_body) {
+            lv_obj_scroll_to_y(s_sheet_body, 0, LV_ANIM_OFF);
+        }
+    }
+    if (strcmp(lv_label_get_text(s_sheet_title), title) != 0) {
+        lv_label_set_text(s_sheet_title, title);
+    }
+    if (strcmp(lv_label_get_text(s_sheet_text), aside ? aside : "") != 0) {
+        lv_label_set_text(s_sheet_text, aside ? aside : "");
+    }
+}
+
+static void sheet_show(const desk_view_t *view, int prefer_front) {
+    int stack[DESK_AGENT_MAX];
+    int n = sheet_collect(view, stack);
+    int at = 0;
+    int i;
+    if (n < 1) {
+        if (!s_sheet_leaving) {
+            sheet_hide_now();
+        }
+        return;
+    }
+    if (!prefer_front && s_sheet_focus_id[0]) {
+        for (i = 0; i < n; i++) {
+            if (strcmp(view->agents[stack[i]].id, s_sheet_focus_id) == 0) {
+                at = i;
+                break;
+            }
+        }
+    }
+    s_sheet_at = at;
+    copy_text(s_sheet_focus_id, sizeof(s_sheet_focus_id), view->agents[stack[at]].id);
+    sheet_mark_seen(view, stack, n);
+    sheet_paint(view, stack, at, n);
+    sheet_open();
+}
+
+static void sheet_drop_current(void) {
+    int stack[DESK_AGENT_MAX];
+    int n;
+    char id[40];
+    if (!s_applied || s_sheet_leaving || !s_sheet_up) {
+        return;
+    }
+    n = sheet_collect(&s_applied_view, stack);
+    if (n < 1 || s_sheet_at < 0 || s_sheet_at >= n) {
+        s_sheet_leave_id[0] = '\0';
+        sheet_leave();
+        return;
+    }
+    copy_text(id, sizeof(id), s_applied_view.agents[stack[s_sheet_at]].id);
+    if (n == 1) {
+        copy_text(s_sheet_leave_id, sizeof(s_sheet_leave_id), id);
+        sheet_leave();
+        return;
+    }
+    sheet_skip_add(id);
+    n = sheet_collect(&s_applied_view, stack);
+    if (n < 1) {
+        copy_text(s_sheet_leave_id, sizeof(s_sheet_leave_id), id);
+        sheet_leave();
+        return;
+    }
+    if (s_sheet_at >= n) {
+        s_sheet_at = n - 1;
+    }
+    copy_text(s_sheet_focus_id, sizeof(s_sheet_focus_id), s_applied_view.agents[stack[s_sheet_at]].id);
+    sheet_show(&s_applied_view, 0);
+    if (s_on_dismiss) {
+        s_on_dismiss(id);
+    }
+}
+
+static void sheet_step(int dir) {
+    int stack[DESK_AGENT_MAX];
+    int n;
+    int at;
+    if (!s_applied || s_sheet_leaving || !s_sheet_up) {
+        return;
+    }
+    n = sheet_collect(&s_applied_view, stack);
+    at = s_sheet_at + dir;
+    if (at < 0 || at >= n) {
+        return;
+    }
+    s_sheet_at = at;
+    copy_text(s_sheet_focus_id, sizeof(s_sheet_focus_id), s_applied_view.agents[stack[at]].id);
+    sheet_show(&s_applied_view, 0);
+}
+
+static void on_dismiss_all(lv_event_t *event) {
+    if (lv_event_get_code(event) != LV_EVENT_CLICKED) {
+        return;
+    }
+    s_sheet_dragged = 1;
+    s_sheet_leave_id[0] = '\0';
+    s_sheet_skip_n = 0;
+    sheet_leave();
+}
+
 static void on_sheet(lv_event_t *event) {
     lv_indev_t *indev;
     lv_point_t point;
@@ -763,7 +1108,7 @@ static void on_sheet(lv_event_t *event) {
     if (code == LV_EVENT_CLICKED) {
         /* A pan already decided. A flick dismisses from RELEASED. */
         if (!s_sheet_dragged) {
-            sheet_leave();
+            sheet_drop_current();
         }
         s_sheet_dragged = 0;
         return;
@@ -780,6 +1125,7 @@ static void on_sheet(lv_event_t *event) {
     if (code == LV_EVENT_PRESSED) {
         s_sheet_pressed = 1;
         s_sheet_dragged = 0;
+        s_sheet_press_x = point.x;
         s_sheet_press_y = point.y;
         s_sheet_press_ms = lv_tick_get();
         return;
@@ -788,72 +1134,27 @@ static void on_sheet(lv_event_t *event) {
         return;
     }
     s_sheet_pressed = 0;
-    if (point.y - s_sheet_press_y > 8 || s_sheet_press_y - point.y > 8) {
-        s_sheet_dragged = 1;
-    }
-    if (desk_sheet_dismiss(sheet_overflow(), point.y - s_sheet_press_y,
-                           (int)(lv_tick_get() - s_sheet_press_ms))) {
-        sheet_leave();
-    }
-}
-
-static void sheet_rise(void) {
-    lv_anim_t a;
-    if (!s_sheet || s_sheet_up || s_sheet_leaving) {
-        return;
-    }
-    s_sheet_up = 1;
-    lv_obj_set_y(s_sheet, SCREEN_PX);
-    lv_obj_set_hidden(s_sheet, false);
-    lv_obj_move_foreground(s_sheet);
-    if (s_settings && !lv_obj_has_flag(s_settings, LV_OBJ_FLAG_HIDDEN)) {
-        lv_obj_move_foreground(s_settings);
-    }
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, s_sheet);
-    lv_anim_set_exec_cb(&a, sheet_exec_y);
-    lv_anim_set_values(&a, SCREEN_PX, SHEET_Y);
-    lv_anim_set_duration(&a, SHEET_MS);
-    lv_anim_set_path_cb(&a, lv_anim_path_ease_out);
-    lv_anim_start(&a);
-}
-
-static void sheet_bind(const desk_view_t *view) {
-    int index = desk_sheet_agent(view);
-    const desk_agent_t *agent;
-    const char *aside = "";
-    const char *title;
-    uint32_t color = DESK_MARK_NEUTRAL;
-    uint32_t parsed;
-    uint32_t ink;
-    if (!view || index < 0 || index >= view->agent_count) {
-        title = "NEEDS YOU";
-        aside = "";
-        apply_mark(s_sheet_mark, DESK_MARK_NEUTRAL, DESK_SHAPE_CIRCLE);
-    } else {
-        agent = &view->agents[index];
-        title = agent->title[0] ? agent->title : (agent->id[0] ? agent->id : "NEEDS YOU");
-        desk_agent_hot(view, index, &aside);
-        if (desk_mark_color(agent->color, &parsed) == 0) {
-            color = parsed;
+    {
+        int dx = point.x - s_sheet_press_x;
+        int dy = point.y - s_sheet_press_y;
+        int gesture;
+        if (dx > 8 || dx < -8 || dy > 8 || dy < -8) {
+            s_sheet_dragged = 1;
         }
-        apply_mark(s_sheet_mark, color, desk_mark_shape(agent->shape));
-    }
-    ink = desk_sheet_ink(color);
-    lv_obj_set_style_bg_color(s_sheet, lv_color_hex(color), 0);
-    lv_obj_set_style_bg_color(s_sheet_plate, lv_color_hex(ink), 0);
-    lv_obj_set_style_text_color(s_sheet_title, lv_color_hex(ink), 0);
-    lv_obj_set_style_text_color(s_sheet_text, lv_color_hex(ink), 0);
-    /* Setting the same string still resets the body's scroll. */
-    if (strcmp(lv_label_get_text(s_sheet_title), title) != 0) {
-        lv_label_set_text(s_sheet_title, title);
-    }
-    if (strcmp(lv_label_get_text(s_sheet_text), aside ? aside : "") != 0) {
-        lv_label_set_text(s_sheet_text, aside ? aside : "");
+        gesture = desk_sheet_gesture(sheet_overflow(), dx, dy, (int)(lv_tick_get() - s_sheet_press_ms));
+        if (gesture == DESK_SHEET_DISMISS) {
+            sheet_drop_current();
+        } else if (gesture == DESK_SHEET_OLDER) {
+            sheet_step(1);
+        } else if (gesture == DESK_SHEET_NEWER) {
+            sheet_step(-1);
+        }
     }
 }
 
 static void present_sheet(const desk_view_t *view, int failures) {
+    int stack[DESK_AGENT_MAX];
+    int n;
     int show = view && view->needs_you && failures < 3 && !s_sheet_suppress;
     if (!show) {
         if (!s_sheet_leaving) {
@@ -861,8 +1162,8 @@ static void present_sheet(const desk_view_t *view, int failures) {
         }
         return;
     }
-    sheet_bind(view);
-    sheet_rise();
+    n = sheet_collect(view, stack);
+    sheet_show(view, sheet_fresh(view, stack, n));
 }
 
 static void on_unread(lv_event_t *event) {
@@ -1380,7 +1681,24 @@ static void build_status_bar(lv_obj_t *screen) {
 
 static void build_new_pill(lv_obj_t *screen);
 
-void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
+static lv_obj_t *make_peek(lv_obj_t *screen, int inset) {
+    lv_obj_t *peek = lv_obj_create(screen);
+    lv_obj_set_size(peek, SCREEN_PX - (inset * 2), 36 + SHEET_PEEK);
+    lv_obj_set_pos(peek, inset, SCREEN_PX);
+    lv_obj_set_style_bg_color(peek, lv_color_hex(0x16180f), 0);
+    lv_obj_set_style_bg_opa(peek, LV_OPA_80, 0);
+    lv_obj_set_style_radius(peek, 28, 0);
+    lv_obj_set_style_border_width(peek, 2, 0);
+    lv_obj_set_style_border_opa(peek, LV_OPA_80, 0);
+    lv_obj_set_style_border_color(peek, lv_color_hex(DESK_MARK_NEUTRAL), 0);
+    lv_obj_set_style_outline_width(peek, 0, 0);
+    lv_obj_set_style_shadow_width(peek, 0, 0);
+    lv_obj_clear_flag(peek, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(peek, LV_OBJ_FLAG_HIDDEN);
+    return peek;
+}
+
+void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_scan_fn on_scan) {
     lv_obj_t *screen = lv_screen_active();
     static const desk_view_t blank;
     lv_obj_t *settings_btn;
@@ -1445,12 +1763,18 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_set_size(settings_btn, BTN_W, BTN_H);
     build_new_pill(screen);
 
+    s_peek2 = make_peek(screen, 24);
+    s_peek1 = make_peek(screen, 12);
     s_sheet = lv_obj_create(screen);
     lv_obj_set_size(s_sheet, SCREEN_PX, SCREEN_PX - SHEET_Y + 36);
     lv_obj_set_pos(s_sheet, 0, SCREEN_PX);
-    lv_obj_set_style_bg_color(s_sheet, lv_color_hex(DESK_MARK_NEUTRAL), 0);
-    lv_obj_set_style_bg_opa(s_sheet, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(s_sheet, 0, 0);
+    lv_obj_set_style_bg_color(s_sheet, lv_color_hex(DOCK), 0);
+    lv_obj_set_style_bg_opa(s_sheet, LV_OPA_90, 0);
+    lv_obj_set_style_border_width(s_sheet, 2, 0);
+    lv_obj_set_style_border_opa(s_sheet, LV_OPA_60, 0);
+    lv_obj_set_style_border_color(s_sheet, lv_color_hex(DESK_MARK_NEUTRAL), 0);
+    lv_obj_set_style_outline_width(s_sheet, 0, 0);
+    lv_obj_set_style_shadow_width(s_sheet, 0, 0);
     lv_obj_set_style_radius(s_sheet, 36, 0);
     lv_obj_set_style_pad_top(s_sheet, 28, 0);
     lv_obj_set_style_pad_hor(s_sheet, 24, 0);
@@ -1465,26 +1789,49 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_add_event_cb(s_sheet, on_sheet, LV_EVENT_RELEASED, NULL);
     lv_obj_add_event_cb(s_sheet, on_sheet, LV_EVENT_CLICKED, NULL);
     lv_obj_set_hidden(s_sheet, true);
-    s_sheet_plate = lv_obj_create(s_sheet);
-    lv_obj_set_size(s_sheet_plate, SHEET_PLATE, SHEET_PLATE);
-    lv_obj_set_style_radius(s_sheet_plate, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_opa(s_sheet_plate, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(s_sheet_plate, 0, 0);
-    lv_obj_set_style_pad_all(s_sheet_plate, 0, 0);
-    lv_obj_clear_flag(s_sheet_plate, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    s_sheet_mark = lv_obj_create(s_sheet_plate);
+    s_sheet_glow = lv_obj_create(s_sheet);
+    lv_obj_set_size(s_sheet_glow, SHEET_GLOW, SHEET_GLOW);
+    lv_obj_set_style_radius(s_sheet_glow, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(s_sheet_glow, lv_color_hex(DESK_MARK_NEUTRAL), 0);
+    lv_obj_set_style_bg_opa(s_sheet_glow, LV_OPA_40, 0);
+    lv_obj_set_style_border_width(s_sheet_glow, 0, 0);
+    lv_obj_set_style_outline_width(s_sheet_glow, 0, 0);
+    lv_obj_set_style_shadow_width(s_sheet_glow, 0, 0);
+    lv_obj_set_style_pad_all(s_sheet_glow, 0, 0);
+    lv_obj_clear_flag(s_sheet_glow, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    s_sheet_mark = lv_obj_create(s_sheet_glow);
     lv_obj_set_size(s_sheet_mark, SHEET_MARK, SHEET_MARK);
     lv_obj_center(s_sheet_mark);
     lv_obj_set_style_border_width(s_sheet_mark, 0, 0);
+    lv_obj_set_style_outline_width(s_sheet_mark, 0, 0);
     lv_obj_set_style_pad_all(s_sheet_mark, 0, 0);
     lv_obj_set_style_shadow_width(s_sheet_mark, 0, 0);
     lv_obj_clear_flag(s_sheet_mark, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(s_sheet_mark, draw_mark, LV_EVENT_DRAW_POST, NULL);
     apply_mark(s_sheet_mark, DESK_MARK_NEUTRAL, DESK_SHAPE_CIRCLE);
+    s_sheet_count = lv_obj_create(s_sheet);
+    s_sheet_count_label = lv_label_create(s_sheet_count);
+    lv_obj_set_size(s_sheet_count, LV_SIZE_CONTENT, 32);
+    lv_obj_set_style_bg_color(s_sheet_count, lv_color_hex(FIELD), 0);
+    lv_obj_set_style_bg_opa(s_sheet_count, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(s_sheet_count, lv_color_hex(DESK_MARK_NEUTRAL), 0);
+    lv_obj_set_style_border_width(s_sheet_count, 1, 0);
+    lv_obj_set_style_radius(s_sheet_count, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_shadow_width(s_sheet_count, 0, 0);
+    lv_obj_set_style_pad_hor(s_sheet_count, 14, 0);
+    lv_obj_set_style_pad_ver(s_sheet_count, 0, 0);
+    lv_label_set_text(s_sheet_count_label, "1 new");
+    lv_obj_set_style_text_font(s_sheet_count_label, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(s_sheet_count_label, lv_color_hex(INK), 0);
+    lv_obj_center(s_sheet_count_label);
+    lv_obj_clear_flag(s_sheet_count, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_flag(s_sheet_count_label, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(s_sheet_count, LV_OBJ_FLAG_HIDDEN);
     s_sheet_title = lv_label_create(s_sheet);
     lv_obj_set_width(s_sheet_title, SCREEN_PX - 48);
     lv_label_set_long_mode(s_sheet_title, LV_LABEL_LONG_DOT);
-    lv_obj_set_style_text_font(s_sheet_title, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_font(s_sheet_title, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_color(s_sheet_title, lv_color_hex(INK), 0);
     lv_obj_set_style_text_align(s_sheet_title, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_text(s_sheet_title, "");
     s_sheet_body = lv_obj_create(s_sheet);
@@ -1499,10 +1846,30 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     s_sheet_text = lv_label_create(s_sheet_body);
     lv_obj_set_width(s_sheet_text, SCREEN_PX - 48);
     lv_label_set_long_mode(s_sheet_text, LV_LABEL_LONG_WRAP);
-    lv_obj_set_style_text_font(s_sheet_text, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(s_sheet_text, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_color(s_sheet_text, lv_color_hex(INK), 0);
     lv_obj_set_style_text_align(s_sheet_text, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_text(s_sheet_text, "");
     lv_obj_add_flag(s_sheet_text, LV_OBJ_FLAG_EVENT_BUBBLE);
+    s_sheet_all = lv_button_create(s_sheet);
+    {
+        lv_obj_t *all_label = lv_label_create(s_sheet_all);
+        lv_obj_set_width(s_sheet_all, SCREEN_PX - 96);
+        lv_obj_set_height(s_sheet_all, 44);
+        lv_obj_set_style_bg_opa(s_sheet_all, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_color(s_sheet_all, lv_color_hex(FIELD_EDGE), 0);
+        lv_obj_set_style_border_width(s_sheet_all, 1, 0);
+        lv_obj_set_style_radius(s_sheet_all, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_shadow_width(s_sheet_all, 0, 0);
+        lv_label_set_text(all_label, "Dismiss all");
+        lv_obj_set_style_text_font(all_label, &lv_font_montserrat_20, 0);
+        lv_obj_set_style_text_color(all_label, lv_color_hex(INK), 0);
+        lv_obj_center(all_label);
+        lv_obj_clear_flag(all_label, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_clear_flag(s_sheet_all, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_add_event_cb(s_sheet_all, on_dismiss_all, LV_EVENT_CLICKED, NULL);
+        lv_obj_add_flag(s_sheet_all, LV_OBJ_FLAG_HIDDEN);
+    }
 
     s_settings = lv_obj_create(screen);
     lv_obj_set_size(s_settings, SCREEN_PX, SCREEN_PX);
@@ -1903,7 +2270,11 @@ int ui_status_current(const desk_view_t *view, int failures) {
 }
 
 void ui_release_sheet_suppress(void) {
-    s_sheet_suppress = 0;
+    s_sheet_skip_n = 0;
+    /* A sheet already sliding off keeps its suppress until that POST's fetch. */
+    if (!s_sheet_leaving) {
+        s_sheet_suppress = 0;
+    }
 }
 
 int ui_capture_frame(uint8_t **pixels, int *stride) {

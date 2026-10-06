@@ -84,7 +84,7 @@ Each agent in `GET /api/status` has `attention` (bool) and `message` (the last t
 | `agent.finished` while that agent has attention | Underlying status goes `idle`. Attention and the question stay, so the lamp and the row stay up. | No change. |
 | `agent.finished` otherwise | `idle`. Clears that row's message. | No change. |
 | `note` with a `message` | Does not change agents. The note is the face text. | 1 while that note is the latest text and nobody is waiting. A later event or a badge tap clears it. |
-| `POST /api/dismiss` | Clears attention and the question on agents that were waiting. A row that had already finished stays `idle`. A row that was still running stays `running`. Other agents' messages stay. | 0. |
+| `POST /api/dismiss` | Clears attention and the question on agents that were waiting. A JSON body `{"agent_id":"..."}` clears that agent only and leaves the others up. An empty body, or a body without `agent_id`, clears every waiter. A row that had already finished stays `idle`. A row that was still running stays `running`. Other agents' messages stay. | 0 when nobody is left waiting. Otherwise the number still waiting. |
 | `POST /api/unread/dismiss` | No agent change. | Stored count 0, but still the number of agents waiting. |
 
 A `running` row whose `updated_at` is more than 2 minutes old is reported as `idle`, and the phase and running count follow. Attention does not age out. Repeat `agent.launched` with the same `agent_id` while the routine is running is the heartbeat. Grok Bot chat unread is not readable from here, so a session that never POSTs stays off the desk.
@@ -108,11 +108,33 @@ curl -s -X POST "$DESK_URL/api/webhook/grok-bot" \
 
 On finish, the same call with `"type":"agent.finished"`. While the routine is still running, repeat the launch POST with the same `agent_id` (a new `message` updates the aside; it does not add unread). When the routine needs a person, send `"type":"agent.needs_you"` and the question in `message`. That question stays on the row until `POST /api/dismiss`, including if `agent.finished` arrives first. Drop the Authorization header when no token is configured.
 
-Dismiss from anything that is not the panel. The panel itself dismisses from the needs-you sheet (a tap, or a downward swipe):
+Dismiss from anything that is not the panel. The panel itself dismisses the card on screen (a tap, or a downward swipe) and posts that agent's id. `Dismiss all`, and this curl with no body, clear every waiter:
 
 ```bash
 curl -s -X POST "$DESK_URL/api/dismiss" -H "Authorization: Bearer $GROK_DESK_WEBHOOK_TOKEN"
 ```
+
+```bash
+curl -s -X POST "$DESK_URL/api/dismiss" \
+  -H "Authorization: Bearer $GROK_DESK_WEBHOOK_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"agent_id":"'"$AGENT_ID"'"}'
+```
+
+The face does not keep a second queue. Waiting agents in `GET /api/status` are the stack, newest `updated_at` first. Two events in the same second stay in arrival order. A second `agent.needs_you` while the sheet is up covers the first card. `N new` is how many cards are still underneath. Swipe left for the older card and right to come back. To see that on the simulator or the panel, post two needs-you events before dismissing:
+
+```bash
+curl -s -X POST "$DESK_URL/api/webhook/grok-bot" \
+  -H "Authorization: Bearer $GROK_DESK_WEBHOOK_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"agent.needs_you","agent_id":"scaffold","title":"Scaffold","message":"Pick one","color":"#1673df","shape":"diamond"}'
+curl -s -X POST "$DESK_URL/api/webhook/grok-bot" \
+  -H "Authorization: Bearer $GROK_DESK_WEBHOOK_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"agent.needs_you","agent_id":"grove","title":"Grove","message":"Your turn","color":"#c45c26","shape":"cloud"}'
+```
+
+The second card is on top, with a terracotta edge, and `1 new` under the cloud. Swipe left to the Scaffold diamond.
 
 Ask the panel for one frame. The next status poll carries `"capture": true` (right after `unread`). The panel then POSTs `image/bmp`. Fetch it without the bearer:
 

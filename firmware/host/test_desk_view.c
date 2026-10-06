@@ -670,6 +670,27 @@ int main(void) {
         check(desk_sheet_dismiss(1, 80, 200) == 1, "flick on a long body dismisses");
         check(desk_sheet_dismiss(1, 80, 400) == 0, "slow pan on a long body stays");
         check(desk_sheet_dismiss(1, -20, 100) == 0, "upward drag stays");
+        check(desk_sheet_stack(NULL, &view.agent_count, 1) == 0, "stack needs a view");
+        check(desk_view_from_json(heart, &view) == 0, "stack parse");
+        {
+            int ids[4];
+            int n = desk_sheet_stack(&view, ids, 4);
+            check(n == 2, "two waiters in the stack");
+            check(ids[0] == 0 && ids[1] == 1, "stack follows status order");
+            check(desk_sheet_behind(n, 0) == 1, "one card under the top");
+            check(desk_sheet_behind(n, 1) == 0, "bottom card has nothing under it");
+            check(desk_sheet_behind(n, 2) == 0, "past the end is not pending");
+            check(desk_sheet_behind(1, 0) == 0, "a single card has no pending");
+            check(desk_sheet_stack(&view, ids, 1) == 1, "cap stops at one");
+            check(ids[0] == 0, "cap keeps the newest");
+        }
+        check(desk_sheet_gesture(0, -60, 10, 100) == DESK_SHEET_OLDER, "left pages older");
+        check(desk_sheet_gesture(0, 60, 10, 100) == DESK_SHEET_NEWER, "right pages newer");
+        check(desk_sheet_gesture(1, -80, 20, 900) == DESK_SHEET_OLDER, "sideways ignores overflow");
+        check(desk_sheet_gesture(0, 10, 50, 100) == DESK_SHEET_DISMISS, "down still dismisses");
+        check(desk_sheet_gesture(0, -30, 50, 100) == DESK_SHEET_DISMISS, "down wins a small sideways");
+        check(desk_sheet_gesture(1, 10, 80, 400) == DESK_SHEET_HOLD, "slow pan does not page");
+        check(desk_sheet_gesture(0, 20, 10, 50) == DESK_SHEET_HOLD, "a tap holds for the click");
         check(desk_bmp565_header(hdr, sizeof(hdr), 2, 2) == 66, "bmp header size");
         check(hdr[0] == 'B' && hdr[1] == 'M', "bmp signature");
         memcpy(&height, hdr + 22, 4);

@@ -462,7 +462,7 @@ static void join_url(char *dest, size_t dest_len, const char *base, const char *
 }
 
 static esp_err_t request(const desk_settings_t *in, const char *suffix, const char *method,
-                         http_buf_t *buf) {
+                         http_buf_t *buf, const char *post_body) {
     char url[160];
     char bearer[160];
     esp_http_client_config_t cfg = {
@@ -483,6 +483,10 @@ static esp_err_t request(const desk_settings_t *in, const char *suffix, const ch
         snprintf(bearer, sizeof(bearer), "Bearer %s", in->token);
         esp_http_client_set_header(client, "Authorization", bearer);
     }
+    if (post_body) {
+        esp_http_client_set_header(client, "Content-Type", "application/json");
+        esp_http_client_set_post_field(client, post_body, (int)strlen(post_body));
+    }
     err = esp_http_client_perform(client);
     if (err == ESP_OK && esp_http_client_get_status_code(client) != 200 &&
         esp_http_client_get_status_code(client) != 204) {
@@ -498,18 +502,59 @@ int net_fetch_status(const desk_settings_t *in, char *body, size_t body_len) {
         return -1;
     }
     body[0] = '\0';
-    if (request(in, "/api/status", "GET", &buf) != ESP_OK) {
+    if (request(in, "/api/status", "GET", &buf, NULL) != ESP_OK) {
         return -1;
     }
     return 0;
 }
 
 void net_dismiss(const desk_settings_t *in) {
-    request(in, "/api/dismiss", "POST", NULL);
+    request(in, "/api/dismiss", "POST", NULL, NULL);
+}
+
+static int json_escape(char *dst, size_t cap, const char *src) {
+    size_t o = 0;
+    if (!dst || cap < 1) {
+        return -1;
+    }
+    if (!src) {
+        dst[0] = '\0';
+        return 0;
+    }
+    for (; *src; src++) {
+        unsigned char c = (unsigned char)*src;
+        if (c < 0x20) {
+            continue;
+        }
+        if (c == '"' || c == '\\') {
+            if (o + 2 >= cap) {
+                return -1;
+            }
+            dst[o++] = '\\';
+            dst[o++] = (char)c;
+            continue;
+        }
+        if (o + 1 >= cap) {
+            return -1;
+        }
+        dst[o++] = (char)c;
+    }
+    dst[o] = '\0';
+    return 0;
+}
+
+void net_dismiss_agent(const desk_settings_t *in, const char *agent_id) {
+    char escaped[96];
+    char body[128];
+    if (!agent_id || !agent_id[0] || json_escape(escaped, sizeof(escaped), agent_id) != 0) {
+        return;
+    }
+    snprintf(body, sizeof(body), "{\"agent_id\":\"%s\"}", escaped);
+    request(in, "/api/dismiss", "POST", NULL, body);
 }
 
 void net_clear_unread(const desk_settings_t *in) {
-    request(in, "/api/unread/dismiss", "POST", NULL);
+    request(in, "/api/unread/dismiss", "POST", NULL, NULL);
 }
 
 void net_post_frame(const desk_settings_t *in, const uint8_t *pixels, int width, int height,

@@ -7,7 +7,8 @@ typedef void (*ui_save_fn)(const char *ssid, const char *pass, const char *url, 
 typedef void (*ui_scan_fn)(void);
 typedef void (*ui_rotlock_fn)(int locked);
 
-void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan);
+/* agent_id NULL clears every waiting sheet. A name clears that one. */
+void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_scan_fn on_scan);
 void ui_bind_unread(void (*on_clear)(void));
 void ui_bind_rotlock(int locked, ui_rotlock_fn on_toggle);
 void ui_set_link(int has_ip, int rssi, int retries, int gave_up);
