@@ -21,7 +21,8 @@ enum {
     DESK_SHAPE_PILL,
     DESK_SHAPE_PENTAGON,
     DESK_SHAPE_SUN,
-    DESK_SHAPE_HEXAGON
+    DESK_SHAPE_HEXAGON,
+    DESK_SHAPE_OVAL
 };
 
 typedef struct {

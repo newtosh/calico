@@ -252,10 +252,36 @@
         }
       }
       .mark {
+        position: relative;
         width: 24px;
         height: 24px;
         flex: none;
+        overflow: hidden;
         background: #a39b88;
+        /* Neutral #a39b88 divided by 6. JS replaces this per color. */
+        --eye: #1b1916;
+        --el: 25%;
+        --er: 62.5%;
+        --ey: 29.1667%;
+        --ew: 12.5%;
+        --eh: 16.6667%;
+      }
+      .mark::before,
+      .mark::after {
+        content: "";
+        position: absolute;
+        top: var(--ey);
+        width: var(--ew);
+        height: var(--eh);
+        border-radius: 999px;
+        background: var(--eye);
+        pointer-events: none;
+      }
+      .mark::before {
+        left: var(--el);
+      }
+      .mark::after {
+        left: var(--er);
       }
       .mark.circle {
         border-radius: 50%;
@@ -264,19 +290,69 @@
         border-radius: 2px;
       }
       .mark.diamond {
-        width: 18px;
-        height: 18px;
-        border-radius: 2px;
-        transform: rotate(45deg);
+        clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+        --ey: 33.3333%;
       }
       .mark.triangle {
-        clip-path: polygon(50% 0, 100% 100%, 0 100%);
+        clip-path: polygon(50% 4.1667%, 91.6667% 83.3333%, 83.3333% 95.8333%, 16.6667% 95.8333%, 8.3333% 83.3333%);
+        --el: 33.3333%;
+        --er: 54.1667%;
+        --ey: 50%;
+        --ew: 12.5%;
+        --eh: 12.5%;
       }
       .mark.rounded {
         border-radius: 6px;
       }
+      .mark.oval {
+        clip-path: inset(12.5% 4.1667% 12.5% 4.1667% round 50%);
+        --ey: 33.3333%;
+      }
       .mark.pill {
-        clip-path: inset(1px 5px 1px 5px round 7px);
+        clip-path: inset(25% 4.1667% 20.8333% 4.1667% round 50%);
+        --ey: 37.5%;
+        --eh: 12.5%;
+      }
+      .mark.hex {
+        --ey: 37.5%;
+      }
+      .mark.cloud {
+        --ey: 41.6667%;
+      }
+      .mark.drop {
+        --el: 29.1667%;
+        --er: 58.3333%;
+        --ey: 54.1667%;
+      }
+      .mark.star {
+        --el: 33.3333%;
+        --er: 58.3333%;
+        --ey: 45.8333%;
+        --ew: 8.3333%;
+        --eh: 12.5%;
+      }
+      .mark.flower {
+        --el: 20.8333%;
+        --er: 66.6667%;
+        --ey: 20.8333%;
+        --eh: 12.5%;
+      }
+      .mark.heart {
+        --el: 20.8333%;
+        --er: 66.6667%;
+        --ey: 25%;
+        --eh: 12.5%;
+      }
+      .mark.blob,
+      .mark.pentagon,
+      .mark.sun {
+        --el: 29.1667%;
+        --er: 58.3333%;
+        --ey: 37.5%;
+        --eh: 12.5%;
+      }
+      .mark.pentagon {
+        --ey: 41.6667%;
       }
       .mark.cloud {
         clip-path: url(#mark-cloud);
@@ -586,10 +662,6 @@
       #sheet .mark.rounded {
         border-radius: 30px;
       }
-      #sheet .mark.diamond {
-        width: 90px;
-        height: 90px;
-      }
       #sheet-new {
         margin: 0;
         padding: 4px 14px;
@@ -650,10 +722,10 @@
     <svg width="0" height="0" aria-hidden="true">
       <defs>
         <clipPath id="mark-cloud" clipPathUnits="objectBoundingBox">
-          <circle cx="0.3333" cy="0.7083" r="0.2917" />
-          <circle cx="0.6458" cy="0.6458" r="0.3125" />
-          <circle cx="0.4375" cy="0.3542" r="0.2292" />
-          <circle cx="0.7083" cy="0.375" r="0.2083" />
+          <circle cx="0.3125" cy="0.6875" r="0.2708" />
+          <circle cx="0.6875" cy="0.6458" r="0.2708" />
+          <circle cx="0.3958" cy="0.3542" r="0.2292" />
+          <circle cx="0.7292" cy="0.4375" r="0.1875" />
         </clipPath>
         <clipPath id="mark-flower" clipPathUnits="objectBoundingBox">
           <circle cx="0.2917" cy="0.2917" r="0.25" />
@@ -683,7 +755,7 @@
           <polygon points="0.5000,0.0000 0.5833,0.2083 0.7917,0.1667 0.7500,0.3750 0.9167,0.5000 0.7500,0.5833 0.7917,0.7917 0.5833,0.7500 0.5000,0.9167 0.3750,0.7500 0.1667,0.7917 0.2083,0.5833 0.0000,0.5000 0.2083,0.3750 0.1667,0.1667 0.3750,0.2083" />
         </clipPath>
         <clipPath id="mark-hex" clipPathUnits="objectBoundingBox">
-          <polygon points="0.5000,0.0000 0.8750,0.2500 0.8750,0.7083 0.5000,0.9167 0.0833,0.7083 0.0833,0.2500" />
+          <polygon points="0.5000,0.0417 0.9167,0.2917 0.9167,0.7083 0.5000,0.9583 0.0833,0.7083 0.0833,0.2917" />
         </clipPath>
       </defs>
     </svg>
@@ -866,6 +938,11 @@
         cloud: "cloud",
         rounded: "rounded",
         rounded_square: "rounded",
+        squircle: "rounded",
+        oval: "oval",
+        pebble: "oval",
+        ellipse: "oval",
+        droplet: "drop",
         star: "star",
         flower: "flower",
         clover: "flower",
@@ -887,6 +964,28 @@
       function markShape(value) {
         const key = String(value || "").trim().toLowerCase();
         return markShapes[key] || "circle";
+      }
+
+      function eyeInk(hex) {
+        const n = parseInt(String(hex).slice(1), 16);
+        const part = (v) => Math.floor(v / 6).toString(16).padStart(2, "0");
+        let r;
+        let g;
+        let b;
+        let luma;
+        if (!Number.isFinite(n)) return "#1b1916";
+        r = (n >> 16) & 255;
+        g = (n >> 8) & 255;
+        b = n & 255;
+        luma = (r * 3 + g * 6 + b) / 10;
+        if (luma < 80) return "#efe7d6";
+        return "#" + part(r) + part(g) + part(b);
+      }
+
+      function paintMark(mark, shape, color) {
+        mark.className = "mark " + markShape(shape);
+        mark.style.background = color;
+        mark.style.setProperty("--eye", eyeInk(color));
       }
 
       function unreadText(status) {
@@ -1002,8 +1101,7 @@
             const scrolling =
               index === 0 && marquee.until > Date.now() && marquee.text === asideText;
             row.className = "agent" + (agentNeeds(agent) || asideText ? " hot" : "");
-            mark.className = "mark " + markShape(agent.shape);
-            mark.style.background = markColor(agent.color);
+            paintMark(mark, agent.shape, markColor(agent.color));
             name.className = "name";
             name.textContent = agent.title || agent.id || "agent";
             row.append(mark, name);
@@ -1140,8 +1238,7 @@
         sheetInnerFar.style.borderColor = hexAlpha(color, 14 / 255);
         glowOuter.style.background = color;
         glowCore.style.background = color;
-        mark.className = "mark " + markShape(agent && agent.shape);
-        mark.style.background = color;
+        paintMark(mark, agent && agent.shape, color);
         sheet.querySelector("h2").textContent = agent.title || agent.id || "NEEDS YOU";
         if (sheetCopy.dataset.agent !== agent.id) {
           sheetCopy.scrollTop = 0;

@@ -32,23 +32,24 @@ Leave `color`, `shape`, and `icon` off when you have nothing to send. An empty s
 
 ### Shapes
 
-The panel draws a filled 24px silhouette in that agent's color. The picker glyphs also have a pair of eyes; those are left off at this size. `square` and `diamond` are the marks this desk already drew. `rounded_square` is the picker squircle.
+The panel draws a filled 24px silhouette in that agent's color, with two static pixel eyes. The eyes are a 3×4 block on that grid (15×20 on the 120px attention mark), starting about 7px down the face, with a 6px gap. Triangle, teardrop, and the other narrow crowns drop the pair into the wide part of the body. The ink is the body color divided by 6, or `#efe7d6` when the body is already dark (luma under 80). They do not blink. `square` and `diamond` are marks this desk already drew. `rounded_square` is the picker squircle. `oval` is the horizontal pebble.
 
 | `shape` | Draws |
 | --- | --- |
 | `circle` | Circle |
+| `oval`, `pebble`, `ellipse` | Horizontal pebble |
 | `cloud` | Cloud |
-| `rounded_square`, `rounded` | Rounded square |
+| `rounded_square`, `rounded`, `squircle` | Rounded square |
 | `star` | 4-point star |
 | `flower`, `clover` | Flower |
 | `heart` | Heart |
 | `blob`, `splatter` | Splatter |
-| `teardrop`, `drop` | Teardrop |
-| `pill`, `capsule` | Capsule |
-| `triangle` | Triangle |
+| `teardrop`, `drop`, `droplet` | Teardrop, point up |
+| `pill`, `capsule` | Horizontal capsule |
+| `triangle` | Triangle, point up |
 | `pentagon`, `shield` | Pentagon |
 | `sun`, `gear` | 8-point sun |
-| `hexagon`, `hex` | Hexagon |
+| `hexagon`, `hex` | Hexagon, point up |
 | `square` | Square, the existing mark |
 | `diamond` | Diamond, the existing mark |
 

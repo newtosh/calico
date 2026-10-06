@@ -342,7 +342,78 @@ static const int8_t k_blob[] = {12, 0,  16, 4,  20, 6,  18, 12, 21, 17, 16, 18,
 static const int8_t k_pentagon[] = {12, 0, 22, 8, 18, 20, 5, 20, 1, 8};
 static const int8_t k_sun[] = {12, 0,  14, 5,  19, 4,  18, 9,  22, 12, 18, 14, 19, 19, 14, 18,
                                12, 22, 9,  18, 4,  19, 5,  14, 0,  12, 5,  9,  4,  4,  9,  5};
-static const int8_t k_hexagon[] = {12, 0, 21, 6, 21, 17, 12, 22, 2, 17, 2, 6};
+static const int8_t k_hexagon[] = {12, 1, 22, 7, 22, 17, 12, 23, 2, 17, 2, 7};
+/* Point-up triangle with the base corners pulled in. The picker triangle is
+ * rounded there; a sharp corner at 24px reads as a spike. */
+static const int8_t k_triangle[] = {12, 1, 22, 20, 20, 23, 4, 23, 2, 20};
+
+/* Two eyes, each x,y,w,h on the 24px grid. The 120px card is five times this.
+ * The default pair is a 3x4 block starting 7px down (upper face), with a 6px
+ * gap. Narrow crowns move the pair into the body. Nothing here blinks. */
+static const int8_t k_eyes[][8] = {
+    [DESK_SHAPE_CIRCLE] = {6, 7, 3, 4, 15, 7, 3, 4},
+    [DESK_SHAPE_SQUARE] = {6, 7, 3, 4, 15, 7, 3, 4},
+    [DESK_SHAPE_DIAMOND] = {6, 8, 3, 4, 15, 8, 3, 4},
+    [DESK_SHAPE_TRIANGLE] = {8, 12, 3, 3, 13, 12, 3, 3},
+    [DESK_SHAPE_CLOUD] = {6, 10, 3, 4, 15, 10, 3, 4},
+    [DESK_SHAPE_ROUNDED] = {6, 7, 3, 4, 15, 7, 3, 4},
+    [DESK_SHAPE_STAR] = {8, 11, 2, 3, 14, 11, 2, 3},
+    [DESK_SHAPE_FLOWER] = {5, 5, 3, 3, 16, 5, 3, 3},
+    [DESK_SHAPE_HEART] = {5, 6, 3, 3, 16, 6, 3, 3},
+    [DESK_SHAPE_BLOB] = {7, 9, 3, 3, 14, 9, 3, 3},
+    [DESK_SHAPE_DROP] = {7, 13, 3, 4, 14, 13, 3, 4},
+    [DESK_SHAPE_PILL] = {6, 9, 3, 3, 15, 9, 3, 3},
+    [DESK_SHAPE_PENTAGON] = {7, 10, 3, 3, 14, 10, 3, 3},
+    [DESK_SHAPE_SUN] = {7, 9, 3, 3, 14, 9, 3, 3},
+    [DESK_SHAPE_HEXAGON] = {6, 9, 3, 4, 15, 9, 3, 4},
+    [DESK_SHAPE_OVAL] = {6, 8, 3, 4, 15, 8, 3, 4},
+};
+
+/* Body divided by 6, so a bright swatch keeps a dark slit. A body darker
+ * than luma 80 uses the cream ink so the pair still reads. */
+static lv_color_t slit_ink(lv_color_t body) {
+    lv_color32_t c = lv_color_to_32(body, LV_OPA_COVER);
+    int luma = ((int)c.red * 3 + (int)c.green * 6 + (int)c.blue) / 10;
+    if (luma < 80) {
+        return lv_color_hex(0xefe7d6);
+    }
+    return lv_color_make((uint8_t)(c.red / 6), (uint8_t)(c.green / 6), (uint8_t)(c.blue / 6));
+}
+
+static void fill_slit(lv_layer_t *layer, lv_color_t color, int x, int y, int w, int h) {
+    lv_draw_rect_dsc_t dsc;
+    lv_area_t area;
+    int radius;
+    if (w < 1 || h < 1) {
+        return;
+    }
+    radius = w < h ? w / 2 : h / 2;
+    lv_draw_rect_dsc_init(&dsc);
+    dsc.bg_color = color;
+    dsc.bg_opa = LV_OPA_COVER;
+    dsc.radius = radius;
+    area.x1 = x;
+    area.y1 = y;
+    area.x2 = x + w - 1;
+    area.y2 = y + h - 1;
+    lv_draw_rect(layer, &dsc, &area);
+}
+
+static void draw_eyes(lv_layer_t *layer, const lv_area_t *box, int shape, lv_color_t body) {
+    const int8_t *eye = k_eyes[DESK_SHAPE_CIRCLE];
+    int side = mark_box(box);
+    int i;
+    lv_color_t ink;
+    if (shape >= 0 && shape <= DESK_SHAPE_OVAL && k_eyes[shape][2] > 0) {
+        eye = k_eyes[shape];
+    }
+    ink = slit_ink(body);
+    for (i = 0; i < 2; i++) {
+        const int8_t *e = eye + (i * 4);
+        fill_slit(layer, ink, box->x1 + sc(e[0], side), box->y1 + sc(e[1], side), sc(e[2], side),
+                  sc(e[3], side));
+    }
+}
 
 static void draw_mark(lv_event_t *event) {
     lv_obj_t *obj = lv_event_get_target(event);
@@ -355,76 +426,65 @@ static void draw_mark(lv_event_t *event) {
     int y;
     int cx;
     int cy;
-    if (shape == DESK_SHAPE_CIRCLE || shape == DESK_SHAPE_SQUARE || shape == DESK_SHAPE_ROUNDED) {
-        return;
-    }
     layer = lv_event_get_layer(event);
     if (!layer) {
         return;
     }
     lv_obj_get_coords(obj, &area);
     color = lv_obj_get_style_bg_color(obj, LV_PART_MAIN);
-    paint_triangle(&dsc, color);
-    x = area.x1;
-    y = area.y1;
-    cx = (area.x1 + area.x2) / 2;
-    cy = (area.y1 + area.y2) / 2;
-    if (shape == DESK_SHAPE_TRIANGLE) {
-        fill_tri(layer, &dsc, cx, area.y1, area.x1, area.y2, area.x2, area.y2);
-        return;
+    if (shape != DESK_SHAPE_CIRCLE && shape != DESK_SHAPE_SQUARE && shape != DESK_SHAPE_ROUNDED) {
+        paint_triangle(&dsc, color);
+        x = area.x1;
+        y = area.y1;
+        cx = (area.x1 + area.x2) / 2;
+        cy = (area.y1 + area.y2) / 2;
+        if (shape == DESK_SHAPE_TRIANGLE) {
+            fill_poly(layer, &dsc, &area, k_triangle, (int)(sizeof(k_triangle) / 2));
+        } else if (shape == DESK_SHAPE_DIAMOND) {
+            fill_tri(layer, &dsc, cx, area.y1, area.x2, cy, cx, area.y2);
+            fill_tri(layer, &dsc, cx, area.y1, area.x1, cy, cx, area.y2);
+        } else if (shape == DESK_SHAPE_CLOUD) {
+            int w = mark_box(&area);
+            fill_round(layer, color, x + sc(1, w), y + sc(10, w), sc(13, w), sc(13, w));
+            fill_round(layer, color, x + sc(10, w), y + sc(9, w), sc(13, w), sc(13, w));
+            fill_round(layer, color, x + sc(4, w), y + sc(3, w), sc(11, w), sc(11, w));
+            fill_round(layer, color, x + sc(13, w), y + sc(6, w), sc(9, w), sc(9, w));
+        } else if (shape == DESK_SHAPE_FLOWER) {
+            int w = mark_box(&area);
+            fill_round(layer, color, x + sc(1, w), y + sc(1, w), sc(12, w), sc(12, w));
+            fill_round(layer, color, x + sc(11, w), y + sc(1, w), sc(12, w), sc(12, w));
+            fill_round(layer, color, x + sc(1, w), y + sc(11, w), sc(12, w), sc(12, w));
+            fill_round(layer, color, x + sc(11, w), y + sc(11, w), sc(12, w), sc(12, w));
+        } else if (shape == DESK_SHAPE_HEART) {
+            int w = mark_box(&area);
+            fill_round(layer, color, x + sc(1, w), y + sc(3, w), sc(12, w), sc(12, w));
+            fill_round(layer, color, x + sc(11, w), y + sc(3, w), sc(12, w), sc(12, w));
+            fill_tri(layer, &dsc, x + sc(2, w), y + sc(10, w), x + sc(22, w), y + sc(10, w), x + sc(12, w),
+                     y + sc(22, w));
+        } else if (shape == DESK_SHAPE_DROP) {
+            int w = mark_box(&area);
+            fill_round(layer, color, x + sc(4, w), y + sc(8, w), sc(16, w), sc(16, w));
+            fill_tri(layer, &dsc, x + sc(12, w), y + sc(1, w), x + sc(4, w), y + sc(14, w), x + sc(20, w),
+                     y + sc(14, w));
+        } else if (shape == DESK_SHAPE_PILL) {
+            int w = mark_box(&area);
+            fill_round(layer, color, x + sc(1, w), y + sc(6, w), sc(22, w), sc(13, w));
+        } else if (shape == DESK_SHAPE_OVAL) {
+            int w = mark_box(&area);
+            fill_round(layer, color, x + sc(1, w), y + sc(3, w), sc(22, w), sc(18, w));
+        } else if (shape == DESK_SHAPE_STAR) {
+            fill_poly(layer, &dsc, &area, k_star, (int)(sizeof(k_star) / 2));
+        } else if (shape == DESK_SHAPE_BLOB) {
+            fill_poly(layer, &dsc, &area, k_blob, (int)(sizeof(k_blob) / 2));
+        } else if (shape == DESK_SHAPE_PENTAGON) {
+            fill_poly(layer, &dsc, &area, k_pentagon, (int)(sizeof(k_pentagon) / 2));
+        } else if (shape == DESK_SHAPE_SUN) {
+            fill_poly(layer, &dsc, &area, k_sun, (int)(sizeof(k_sun) / 2));
+        } else if (shape == DESK_SHAPE_HEXAGON) {
+            fill_poly(layer, &dsc, &area, k_hexagon, (int)(sizeof(k_hexagon) / 2));
+        }
     }
-    if (shape == DESK_SHAPE_DIAMOND) {
-        fill_tri(layer, &dsc, cx, area.y1, area.x2, cy, cx, area.y2);
-        fill_tri(layer, &dsc, cx, area.y1, area.x1, cy, cx, area.y2);
-        return;
-    }
-    if (shape == DESK_SHAPE_CLOUD) {
-        int w = mark_box(&area);
-        fill_round(layer, color, x + sc(1, w), y + sc(10, w), sc(14, w), sc(14, w));
-        fill_round(layer, color, x + sc(8, w), y + sc(8, w), sc(15, w), sc(15, w));
-        fill_round(layer, color, x + sc(5, w), y + sc(3, w), sc(11, w), sc(11, w));
-        fill_round(layer, color, x + sc(12, w), y + sc(4, w), sc(10, w), sc(10, w));
-        return;
-    }
-    if (shape == DESK_SHAPE_FLOWER) {
-        int w = mark_box(&area);
-        fill_round(layer, color, x + sc(1, w), y + sc(1, w), sc(12, w), sc(12, w));
-        fill_round(layer, color, x + sc(11, w), y + sc(1, w), sc(12, w), sc(12, w));
-        fill_round(layer, color, x + sc(1, w), y + sc(11, w), sc(12, w), sc(12, w));
-        fill_round(layer, color, x + sc(11, w), y + sc(11, w), sc(12, w), sc(12, w));
-        return;
-    }
-    if (shape == DESK_SHAPE_HEART) {
-        int w = mark_box(&area);
-        fill_round(layer, color, x + sc(1, w), y + sc(3, w), sc(12, w), sc(12, w));
-        fill_round(layer, color, x + sc(11, w), y + sc(3, w), sc(12, w), sc(12, w));
-        fill_tri(layer, &dsc, x + sc(2, w), y + sc(10, w), x + sc(22, w), y + sc(10, w), x + sc(12, w),
-                 y + sc(22, w));
-        return;
-    }
-    if (shape == DESK_SHAPE_DROP) {
-        int w = mark_box(&area);
-        fill_round(layer, color, x + sc(4, w), y + sc(8, w), sc(16, w), sc(16, w));
-        fill_tri(layer, &dsc, x + sc(12, w), y + sc(1, w), x + sc(4, w), y + sc(14, w), x + sc(20, w),
-                 y + sc(14, w));
-        return;
-    }
-    if (shape == DESK_SHAPE_PILL) {
-        int w = mark_box(&area);
-        fill_round(layer, color, x + sc(5, w), y + sc(1, w), sc(14, w), sc(22, w));
-        return;
-    }
-    if (shape == DESK_SHAPE_STAR) {
-        fill_poly(layer, &dsc, &area, k_star, (int)(sizeof(k_star) / 2));
-    } else if (shape == DESK_SHAPE_BLOB) {
-        fill_poly(layer, &dsc, &area, k_blob, (int)(sizeof(k_blob) / 2));
-    } else if (shape == DESK_SHAPE_PENTAGON) {
-        fill_poly(layer, &dsc, &area, k_pentagon, (int)(sizeof(k_pentagon) / 2));
-    } else if (shape == DESK_SHAPE_SUN) {
-        fill_poly(layer, &dsc, &area, k_sun, (int)(sizeof(k_sun) / 2));
-    } else if (shape == DESK_SHAPE_HEXAGON) {
-        fill_poly(layer, &dsc, &area, k_hexagon, (int)(sizeof(k_hexagon) / 2));
-    }
+    draw_eyes(layer, &area, (int)shape, color);
 }
 
 static void apply_mark(lv_obj_t *mark, uint32_t color, int shape) {

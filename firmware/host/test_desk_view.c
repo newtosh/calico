@@ -199,6 +199,11 @@ int main(void) {
             {"splatter", DESK_SHAPE_BLOB},
             {"drop", DESK_SHAPE_DROP},
             {"teardrop", DESK_SHAPE_DROP},
+            {"droplet", DESK_SHAPE_DROP},
+            {"oval", DESK_SHAPE_OVAL},
+            {"pebble", DESK_SHAPE_OVAL},
+            {"ellipse", DESK_SHAPE_OVAL},
+            {"squircle", DESK_SHAPE_ROUNDED},
             {"pill", DESK_SHAPE_PILL},
             {"capsule", DESK_SHAPE_PILL},
             {"pentagon", DESK_SHAPE_PENTAGON},
@@ -218,8 +223,9 @@ int main(void) {
         }
         check(DESK_SHAPE_DIAMOND != DESK_SHAPE_SQUARE && DESK_SHAPE_CLOUD != DESK_SHAPE_SQUARE &&
                   DESK_SHAPE_CLOUD != DESK_SHAPE_CIRCLE && DESK_SHAPE_STAR != DESK_SHAPE_SQUARE &&
-                  DESK_SHAPE_TRIANGLE != DESK_SHAPE_SQUARE,
-              "diamond, cloud, star, and triangle are not squares");
+                  DESK_SHAPE_TRIANGLE != DESK_SHAPE_SQUARE && DESK_SHAPE_OVAL != DESK_SHAPE_CIRCLE &&
+                  DESK_SHAPE_OVAL != DESK_SHAPE_PILL,
+              "diamond, cloud, star, triangle, and oval are their own marks");
     }
     const char *rounded =
         "{\"phase\":\"idle\",\"agents\":[{\"id\":\"r\",\"title\":\"Round\",\"shape\":\"rounded_square\"}]}";
