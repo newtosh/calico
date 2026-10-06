@@ -39,8 +39,10 @@ enum {
     BTN_W = 72,
     /* Past the 16px glass bezel, so the printed corner misses the button. */
     DOCK_INSET = 8,
-    /* Top of the button row. The count sits in that row. */
-    DOCK_TOP = SCREEN_PX - EDGE_PX - DOCK_INSET - BTN_H,
+    /* Same air as the bezel. The buttons stay put; the list ends above this. */
+    DOCK_GAP = 16,
+    /* Top of the dock strip. Buttons sit DOCK_GAP below it. The count sits with them. */
+    DOCK_TOP = SCREEN_PX - EDGE_PX - DOCK_INSET - DOCK_GAP - BTN_H,
     INK = 0xefe7d6,
     INK_DIM = 0xa39b88,
     BG = 0x14160f,
@@ -65,6 +67,7 @@ _Static_assert((int)EDGE_PX == (int)FACE_EDGE, "face band edge");
 _Static_assert((int)BAR_H == (int)FACE_BAR_H, "face band top");
 _Static_assert((int)BTN_H == (int)FACE_BTN_H, "face band dock");
 _Static_assert((int)DOCK_INSET == (int)FACE_DOCK_INSET, "face band inset");
+_Static_assert((int)DOCK_GAP == (int)FACE_DOCK_GAP, "face band gap");
 _Static_assert((int)DOCK_TOP == (int)FACE_DOCK_TOP, "face band bottom");
 _Static_assert(BTN_W == 72 && BTN_H == 58, "dock buttons are about 10% under 80x64");
 _Static_assert((int)MESSAGE_Y == (int)FACE_MESSAGE_Y, "sleep origin");
@@ -1204,11 +1207,12 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     build_sleep(screen);
     build_agent_rows(screen);
     dock = lv_obj_create(screen);
-    lv_obj_set_size(dock, SCREEN_PX, BTN_H + EDGE_PX + DOCK_INSET);
+    lv_obj_set_size(dock, SCREEN_PX, BTN_H + EDGE_PX + DOCK_INSET + DOCK_GAP);
     lv_obj_align(dock, LV_ALIGN_BOTTOM_MID, 0, 0);
     flatten(dock);
     lv_obj_set_style_bg_color(dock, lv_color_hex(DOCK), 0);
     lv_obj_set_style_bg_opa(dock, LV_OPA_COVER, 0);
+    lv_obj_set_style_pad_top(dock, DOCK_GAP, 0);
     lv_obj_set_style_pad_hor(dock, EDGE_PX + DOCK_INSET, 0);
     lv_obj_set_style_pad_bottom(dock, EDGE_PX + DOCK_INSET, 0);
     lv_obj_set_flex_flow(dock, LV_FLEX_FLOW_ROW);

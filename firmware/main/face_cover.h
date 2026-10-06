@@ -11,7 +11,9 @@ enum {
     FACE_BTN_H = 58,
     /* Past the 16px glass bezel. The printed case clips a button on that line. */
     FACE_DOCK_INSET = 8,
-    FACE_DOCK_TOP = FACE_SCREEN - FACE_EDGE - FACE_DOCK_INSET - FACE_BTN_H,
+    /* Dock chrome above the buttons, so the list band does not sit on their tops. */
+    FACE_DOCK_GAP = 16,
+    FACE_DOCK_TOP = FACE_SCREEN - FACE_EDGE - FACE_DOCK_INSET - FACE_DOCK_GAP - FACE_BTN_H,
     FACE_MESSAGE_Y = 74,
     FACE_SLEEP_HEAD = 96,
     /* Head plus the gap the Zzz used to occupy above it. */

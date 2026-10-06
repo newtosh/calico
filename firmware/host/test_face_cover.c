@@ -33,7 +33,9 @@ int main(void) {
     check(band.y2 == FACE_DOCK_TOP - 1, "band stops above the dock");
     check(FACE_BTN_H == 58, "dock button height is about 10% under 64");
     check(FACE_DOCK_INSET == 8, "buttons sit 8px past the bezel");
-    check(FACE_DOCK_TOP == 398, "list stops above the inset dock");
+    check(FACE_DOCK_GAP == 16, "dock chrome sits above the buttons");
+    check(FACE_DOCK_TOP + FACE_DOCK_GAP == 398, "buttons stay clear of the case corner");
+    check(FACE_DOCK_TOP == 382, "list stops above that gap");
     check((band.x1 % 2) == 0 && (band.y1 % 2) == 0, "band start is even");
     check((band.x2 % 2) == 1 && (band.y2 % 2) == 1, "band end is odd");
     check((width % 2) == 0 && (height % 2) == 0, "band size is even");
