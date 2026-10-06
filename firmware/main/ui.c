@@ -45,12 +45,32 @@ enum {
     DOCK_GAP = 16,
     /* Top of the dock strip. Buttons sit DOCK_GAP below it. The count sits with them. */
     DOCK_TOP = SCREEN_PX - EDGE_PX - DOCK_INSET - DOCK_GAP - BTN_H,
-    /* Sheet starts under the status strip and runs off the bottom so the
-     * lower radius stays past the glass. */
+    /* Under the status strip. The printed case clips the outer 24px (the
+     * 16px bezel plus the 8px lip the dock already clears). The halo's outer
+     * edge sits on that line. The card border is one halo thickness inside
+     * it, so the rounded bottom and Dismiss all stay on the glass. The old
+     * card ran 36px past the panel and the lip cut both. */
+    SHEET_SAFE = EDGE_PX + DOCK_INSET,
+    SHEET_HALO_PX = 6,
+    SHEET_INSET = SHEET_SAFE + SHEET_HALO_PX,
     SHEET_Y = EDGE_PX + BAR_H,
+    SHEET_BOTTOM = SCREEN_PX - SHEET_INSET,
     SHEET_MARK = 120,
-    /* Halo behind the silhouette. Not a contrasting plate. */
-    SHEET_GLOW = 168,
+    /* Two solid discs behind the silhouette. A blurred shadow would want
+     * another full frame; these do not. */
+    SHEET_GLOW = 148,
+    SHEET_GLOW_CORE = 136,
+    SHEET_GLOW_OPA = 140,
+    SHEET_GLOW_CORE_OPA = 210,
+    /* 98%. LV_OPA_90 (and the sim's 0.92) still left roster type readable. */
+    SHEET_OPA = 250,
+    PEEK_OPA = 242,
+    SHEET_HALO_OPA = 160,
+    SHEET_BORDER = 3,
+    SHEET_PAD_TOP = 8,
+    SHEET_PAD_H = 20,
+    SHEET_PAD_BOTTOM = 12,
+    SHEET_PAD_ROW = 6,
     /* How far a card behind this one peeks above the front sheet. */
     SHEET_PEEK = 14,
     /* Far enough that the rear peek is still off the glass. */
@@ -83,15 +103,21 @@ _Static_assert((int)DOCK_INSET == (int)FACE_DOCK_INSET, "face band inset");
 _Static_assert((int)DOCK_GAP == (int)FACE_DOCK_GAP, "face band gap");
 _Static_assert((int)DOCK_TOP == (int)FACE_DOCK_TOP, "face band bottom");
 _Static_assert(BTN_W == 72 && BTN_H == 58, "dock buttons are about 10% under 80x64");
+_Static_assert(SHEET_SAFE == 24, "sheet halo meets the dock case line");
+_Static_assert(SHEET_INSET == 30, "card border sits inside the halo");
+_Static_assert(SHEET_BOTTOM + SHEET_HALO_PX == SCREEN_PX - 24, "halo ends on the case line");
+_Static_assert(SHEET_OPA >= 248, "sheet stays opaque enough to hide roster type");
 _Static_assert((int)MESSAGE_Y == (int)FACE_MESSAGE_Y, "sleep origin");
 
 static lv_obj_t *s_title;
 static lv_obj_t *s_message;
 static lv_obj_t *s_count;
 static lv_obj_t *s_sheet;
+static lv_obj_t *s_sheet_halo;
 static lv_obj_t *s_peek1;
 static lv_obj_t *s_peek2;
 static lv_obj_t *s_sheet_glow;
+static lv_obj_t *s_sheet_glow_core;
 static lv_obj_t *s_sheet_mark;
 static lv_obj_t *s_sheet_count;
 static lv_obj_t *s_sheet_count_label;
@@ -709,6 +735,9 @@ static void show_unread(int count) {
 static void anim_delete(void *var);
 
 static void sheet_place(int y) {
+    if (s_sheet_halo) {
+        lv_obj_set_y(s_sheet_halo, y);
+    }
     if (s_sheet) {
         lv_obj_set_y(s_sheet, y);
     }
@@ -760,6 +789,9 @@ static void sheet_hide_now(void) {
     anim_delete(s_sheet);
     sheet_place(SHEET_PARK);
     lv_obj_set_hidden(s_sheet, true);
+    if (s_sheet_halo) {
+        lv_obj_set_hidden(s_sheet_halo, true);
+    }
 }
 
 static void sheet_leave_done(lv_timer_t *timer) {
@@ -783,6 +815,9 @@ static void sheet_leave_done(lv_timer_t *timer) {
         anim_delete(s_sheet);
         sheet_place(SHEET_PARK);
         lv_obj_set_hidden(s_sheet, true);
+    }
+    if (s_sheet_halo) {
+        lv_obj_set_hidden(s_sheet_halo, true);
     }
     if (s_on_dismiss) {
         s_on_dismiss(id[0] ? id : NULL);
@@ -902,6 +937,9 @@ static void sheet_front(void) {
     if (s_peek1) {
         lv_obj_move_foreground(s_peek1);
     }
+    if (s_sheet_halo) {
+        lv_obj_move_foreground(s_sheet_halo);
+    }
     if (s_sheet) {
         lv_obj_move_foreground(s_sheet);
     }
@@ -918,6 +956,9 @@ static void sheet_rise(void) {
     s_sheet_up = 1;
     sheet_place(SHEET_PARK);
     lv_obj_set_hidden(s_sheet, false);
+    if (s_sheet_halo) {
+        lv_obj_set_hidden(s_sheet_halo, false);
+    }
     sheet_front();
     lv_anim_init(&a);
     lv_anim_set_var(&a, s_sheet);
@@ -939,6 +980,9 @@ static void sheet_open(void) {
     anim_delete(s_sheet);
     sheet_place(s_sheet_rest);
     lv_obj_set_hidden(s_sheet, false);
+    if (s_sheet_halo) {
+        lv_obj_set_hidden(s_sheet_halo, false);
+    }
     sheet_front();
 }
 
@@ -980,13 +1024,25 @@ static void sheet_paint(const desk_view_t *view, const int *stack, int at, int n
     desk_agent_hot(view, stack[at], &aside);
     s_sheet_steps = steps;
     s_sheet_rest = SHEET_Y + (steps * SHEET_PEEK);
+    if (s_sheet) {
+        int h = SHEET_BOTTOM - s_sheet_rest;
+        lv_obj_set_height(s_sheet, h > 0 ? h : 1);
+    }
+    if (s_sheet_halo && s_sheet) {
+        lv_obj_set_height(s_sheet_halo, lv_obj_get_height(s_sheet) + SHEET_HALO_PX);
+    }
     apply_mark(s_sheet_mark, color, desk_mark_shape(agent->shape));
     lv_obj_set_style_bg_color(s_sheet_glow, lv_color_hex(color), 0);
+    if (s_sheet_glow_core) {
+        lv_obj_set_style_bg_color(s_sheet_glow_core, lv_color_hex(color), 0);
+    }
+    if (s_sheet_halo) {
+        lv_obj_set_style_bg_color(s_sheet_halo, lv_color_hex(color), 0);
+    }
     lv_obj_set_style_border_color(s_sheet, lv_color_hex(color), 0);
     if (s_sheet_count) {
         lv_obj_set_style_border_color(s_sheet_count, lv_color_hex(color), 0);
     }
-    lv_obj_set_style_pad_bottom(s_sheet, 36 + (steps * SHEET_PEEK), 0);
     sheet_peek(s_peek1, steps >= 1, steps >= 1 ? sheet_color(&view->agents[stack[at + 1]]) : color);
     sheet_peek(s_peek2, steps >= 2, steps >= 2 ? sheet_color(&view->agents[stack[at + 2]]) : color);
     sheet_count_set(behind);
@@ -1681,15 +1737,29 @@ static void build_status_bar(lv_obj_t *screen) {
 
 static void build_new_pill(lv_obj_t *screen);
 
+static lv_obj_t *make_disc(lv_obj_t *parent, int size, lv_opa_t opa) {
+    lv_obj_t *disc = lv_obj_create(parent);
+    lv_obj_set_size(disc, size, size);
+    lv_obj_set_style_radius(disc, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(disc, lv_color_hex(DESK_MARK_NEUTRAL), 0);
+    lv_obj_set_style_bg_opa(disc, opa, 0);
+    lv_obj_set_style_border_width(disc, 0, 0);
+    lv_obj_set_style_outline_width(disc, 0, 0);
+    lv_obj_set_style_shadow_width(disc, 0, 0);
+    lv_obj_set_style_pad_all(disc, 0, 0);
+    lv_obj_clear_flag(disc, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    return disc;
+}
+
 static lv_obj_t *make_peek(lv_obj_t *screen, int inset) {
     lv_obj_t *peek = lv_obj_create(screen);
     lv_obj_set_size(peek, SCREEN_PX - (inset * 2), 36 + SHEET_PEEK);
     lv_obj_set_pos(peek, inset, SCREEN_PX);
     lv_obj_set_style_bg_color(peek, lv_color_hex(0x16180f), 0);
-    lv_obj_set_style_bg_opa(peek, LV_OPA_80, 0);
+    lv_obj_set_style_bg_opa(peek, PEEK_OPA, 0);
     lv_obj_set_style_radius(peek, 28, 0);
     lv_obj_set_style_border_width(peek, 2, 0);
-    lv_obj_set_style_border_opa(peek, LV_OPA_80, 0);
+    lv_obj_set_style_border_opa(peek, LV_OPA_COVER, 0);
     lv_obj_set_style_border_color(peek, lv_color_hex(DESK_MARK_NEUTRAL), 0);
     lv_obj_set_style_outline_width(peek, 0, 0);
     lv_obj_set_style_shadow_width(peek, 0, 0);
@@ -1763,23 +1833,37 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     lv_obj_set_size(settings_btn, BTN_W, BTN_H);
     build_new_pill(screen);
 
-    s_peek2 = make_peek(screen, 24);
-    s_peek1 = make_peek(screen, 12);
+    /* Each card behind steps in 12px, then 24px, from the front card. */
+    s_peek2 = make_peek(screen, SHEET_INSET + 24);
+    s_peek1 = make_peek(screen, SHEET_INSET + 12);
+    s_sheet_halo = lv_obj_create(screen);
+    lv_obj_set_size(s_sheet_halo, SCREEN_PX - (SHEET_SAFE * 2),
+                    (SHEET_BOTTOM - SHEET_Y) + SHEET_HALO_PX);
+    lv_obj_set_pos(s_sheet_halo, SHEET_SAFE, SCREEN_PX);
+    lv_obj_set_style_bg_color(s_sheet_halo, lv_color_hex(DESK_MARK_NEUTRAL), 0);
+    lv_obj_set_style_bg_opa(s_sheet_halo, SHEET_HALO_OPA, 0);
+    lv_obj_set_style_radius(s_sheet_halo, 36 + SHEET_HALO_PX, 0);
+    lv_obj_set_style_border_width(s_sheet_halo, 0, 0);
+    lv_obj_set_style_outline_width(s_sheet_halo, 0, 0);
+    lv_obj_set_style_shadow_width(s_sheet_halo, 0, 0);
+    lv_obj_set_style_pad_all(s_sheet_halo, 0, 0);
+    lv_obj_clear_flag(s_sheet_halo, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(s_sheet_halo, LV_OBJ_FLAG_HIDDEN);
     s_sheet = lv_obj_create(screen);
-    lv_obj_set_size(s_sheet, SCREEN_PX, SCREEN_PX - SHEET_Y + 36);
-    lv_obj_set_pos(s_sheet, 0, SCREEN_PX);
+    lv_obj_set_size(s_sheet, SCREEN_PX - (SHEET_INSET * 2), SHEET_BOTTOM - SHEET_Y);
+    lv_obj_set_pos(s_sheet, SHEET_INSET, SCREEN_PX);
     lv_obj_set_style_bg_color(s_sheet, lv_color_hex(DOCK), 0);
-    lv_obj_set_style_bg_opa(s_sheet, LV_OPA_90, 0);
-    lv_obj_set_style_border_width(s_sheet, 2, 0);
-    lv_obj_set_style_border_opa(s_sheet, LV_OPA_60, 0);
+    lv_obj_set_style_bg_opa(s_sheet, SHEET_OPA, 0);
+    lv_obj_set_style_border_width(s_sheet, SHEET_BORDER, 0);
+    lv_obj_set_style_border_opa(s_sheet, LV_OPA_COVER, 0);
     lv_obj_set_style_border_color(s_sheet, lv_color_hex(DESK_MARK_NEUTRAL), 0);
     lv_obj_set_style_outline_width(s_sheet, 0, 0);
     lv_obj_set_style_shadow_width(s_sheet, 0, 0);
     lv_obj_set_style_radius(s_sheet, 36, 0);
-    lv_obj_set_style_pad_top(s_sheet, 28, 0);
-    lv_obj_set_style_pad_hor(s_sheet, 24, 0);
-    lv_obj_set_style_pad_bottom(s_sheet, 36, 0);
-    lv_obj_set_style_pad_row(s_sheet, 12, 0);
+    lv_obj_set_style_pad_top(s_sheet, SHEET_PAD_TOP, 0);
+    lv_obj_set_style_pad_hor(s_sheet, SHEET_PAD_H, 0);
+    lv_obj_set_style_pad_bottom(s_sheet, SHEET_PAD_BOTTOM, 0);
+    lv_obj_set_style_pad_row(s_sheet, SHEET_PAD_ROW, 0);
     lv_obj_set_flex_flow(s_sheet, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(s_sheet, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_scrollbar_mode(s_sheet, LV_SCROLLBAR_MODE_OFF);
@@ -1789,17 +1873,10 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     lv_obj_add_event_cb(s_sheet, on_sheet, LV_EVENT_RELEASED, NULL);
     lv_obj_add_event_cb(s_sheet, on_sheet, LV_EVENT_CLICKED, NULL);
     lv_obj_set_hidden(s_sheet, true);
-    s_sheet_glow = lv_obj_create(s_sheet);
-    lv_obj_set_size(s_sheet_glow, SHEET_GLOW, SHEET_GLOW);
-    lv_obj_set_style_radius(s_sheet_glow, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(s_sheet_glow, lv_color_hex(DESK_MARK_NEUTRAL), 0);
-    lv_obj_set_style_bg_opa(s_sheet_glow, LV_OPA_40, 0);
-    lv_obj_set_style_border_width(s_sheet_glow, 0, 0);
-    lv_obj_set_style_outline_width(s_sheet_glow, 0, 0);
-    lv_obj_set_style_shadow_width(s_sheet_glow, 0, 0);
-    lv_obj_set_style_pad_all(s_sheet_glow, 0, 0);
-    lv_obj_clear_flag(s_sheet_glow, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    s_sheet_mark = lv_obj_create(s_sheet_glow);
+    s_sheet_glow = make_disc(s_sheet, SHEET_GLOW, SHEET_GLOW_OPA);
+    s_sheet_glow_core = make_disc(s_sheet_glow, SHEET_GLOW_CORE, SHEET_GLOW_CORE_OPA);
+    lv_obj_center(s_sheet_glow_core);
+    s_sheet_mark = lv_obj_create(s_sheet_glow_core);
     lv_obj_set_size(s_sheet_mark, SHEET_MARK, SHEET_MARK);
     lv_obj_center(s_sheet_mark);
     lv_obj_set_style_border_width(s_sheet_mark, 0, 0);
@@ -1828,15 +1905,17 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     lv_obj_clear_flag(s_sheet_count_label, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_flag(s_sheet_count, LV_OBJ_FLAG_HIDDEN);
     s_sheet_title = lv_label_create(s_sheet);
-    lv_obj_set_width(s_sheet_title, SCREEN_PX - 48);
+    lv_obj_set_width(s_sheet_title, lv_pct(100));
     lv_label_set_long_mode(s_sheet_title, LV_LABEL_LONG_DOT);
     lv_obj_set_style_text_font(s_sheet_title, &lv_font_montserrat_48, 0);
     lv_obj_set_style_text_color(s_sheet_title, lv_color_hex(INK), 0);
     lv_obj_set_style_text_align(s_sheet_title, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_text(s_sheet_title, "");
     s_sheet_body = lv_obj_create(s_sheet);
-    lv_obj_set_width(s_sheet_body, SCREEN_PX - 48);
+    lv_obj_set_width(s_sheet_body, lv_pct(100));
     lv_obj_set_flex_grow(s_sheet_body, 1);
+    /* A long aside scrolls inside the body. The button stays on the card. */
+    lv_obj_set_style_min_height(s_sheet_body, 0, 0);
     lv_obj_set_style_bg_opa(s_sheet_body, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(s_sheet_body, 0, 0);
     lv_obj_set_style_pad_all(s_sheet_body, 0, 0);
@@ -1844,7 +1923,7 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     lv_obj_set_scroll_dir(s_sheet_body, LV_DIR_VER);
     lv_obj_add_flag(s_sheet_body, LV_OBJ_FLAG_EVENT_BUBBLE);
     s_sheet_text = lv_label_create(s_sheet_body);
-    lv_obj_set_width(s_sheet_text, SCREEN_PX - 48);
+    lv_obj_set_width(s_sheet_text, lv_pct(100));
     lv_label_set_long_mode(s_sheet_text, LV_LABEL_LONG_WRAP);
     lv_obj_set_style_text_font(s_sheet_text, &lv_font_montserrat_28, 0);
     lv_obj_set_style_text_color(s_sheet_text, lv_color_hex(INK), 0);
@@ -1854,7 +1933,7 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     s_sheet_all = lv_button_create(s_sheet);
     {
         lv_obj_t *all_label = lv_label_create(s_sheet_all);
-        lv_obj_set_width(s_sheet_all, SCREEN_PX - 96);
+        lv_obj_set_width(s_sheet_all, lv_pct(100));
         lv_obj_set_height(s_sheet_all, 44);
         lv_obj_set_style_bg_opa(s_sheet_all, LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_color(s_sheet_all, lv_color_hex(FIELD_EDGE), 0);
