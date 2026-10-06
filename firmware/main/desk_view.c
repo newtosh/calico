@@ -378,6 +378,10 @@ int desk_quiet_idle(const desk_view_t *view, int consecutive_failures) {
     return strcmp(desk_phase_label(view, consecutive_failures), "IDLE") == 0;
 }
 
+int desk_show_sleep(const desk_view_t *view, int consecutive_failures) {
+    return desk_quiet_idle(view, consecutive_failures) && view->known_count == 0;
+}
+
 int desk_poll_ms(const desk_view_t *view, int consecutive_failures, int link_ok) {
     if (link_ok && consecutive_failures == 0 && desk_quiet_idle(view, consecutive_failures)) {
         return 10000;

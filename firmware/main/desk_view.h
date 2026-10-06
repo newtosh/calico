@@ -53,6 +53,8 @@ int desk_panel_should_apply(const desk_panel_t *panel, const char *url, const ch
 int desk_panel_adopt(const desk_panel_t *panel, const char *url, const char *token, int probed_ok);
 const char *desk_phase_label(const desk_view_t *view, int consecutive_failures);
 int desk_quiet_idle(const desk_view_t *view, int consecutive_failures);
+/* 1 when the sleep face plays: quiet idle and no stored agents. */
+int desk_show_sleep(const desk_view_t *view, int consecutive_failures);
 /* 10000 while idle on a good link with no misses. 2000 otherwise. */
 int desk_poll_ms(const desk_view_t *view, int consecutive_failures, int link_ok);
 int desk_mark_color(const char *color, uint32_t *out);

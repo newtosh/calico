@@ -22,7 +22,6 @@ enum {
     AGENT_Y = 98,
     AGENT_ROW_H = 32,
     AGENT_GAP = 2,
-    AGENT_STRIDE = AGENT_ROW_H + AGENT_GAP,
     MARK_PX = 24,
     BTN_H = 64,
     BTN_W = 80,
@@ -80,7 +79,6 @@ static lv_obj_t *s_eye_l;
 static lv_obj_t *s_eye_r;
 static lv_obj_t *s_zzz;
 static int s_asleep;
-static int s_sleep_agents = -1;
 static lv_obj_t *s_lamp;
 static lv_obj_t *s_toast_label;
 static lv_obj_t *s_wifi_bars[3];
@@ -524,39 +522,20 @@ static void start_anim(lv_obj_t *obj, lv_anim_exec_xcb_t exec, int32_t from, int
     lv_anim_start(&a);
 }
 
-/* Large face when the middle of the 480 panel is empty. Shrink to stay under
- * the agent rows and above the dock. 16px bezel stays. */
-static int place_sleep(int agents) {
-    int below = agents > 0 ? AGENT_Y + agents * AGENT_STRIDE : MESSAGE_Y + 28;
-    int limit = DOCK_TOP;
-    int head = 96;
-    int span = head + 36;
-    int y = (below + limit - span) / 2;
-    int eye = 22;
-    int gap = 16;
-    const lv_font_t *font = &lv_font_montserrat_24;
-    if (y < below + 4) {
-        head = 48;
-        span = head + 28;
-        y = below + 4;
-        eye = 12;
-        gap = 8;
-        font = &lv_font_montserrat_16;
-        if (y + span > limit) {
-            return 0;
-        }
-    }
-    lv_obj_set_size(s_sleep, head + 56, span);
-    lv_obj_set_size(s_head, head, head);
-    lv_obj_set_size(s_eye_l, eye, 4);
-    lv_obj_set_size(s_eye_r, eye, 4);
-    lv_obj_align(s_eye_l, LV_ALIGN_CENTER, -gap, 3);
-    lv_obj_align(s_eye_r, LV_ALIGN_CENTER, gap, 3);
-    lv_obj_set_style_text_font(s_zzz, font, 0);
+/* Large face in the empty middle of the 480 panel. 16px bezel stays. */
+static void place_sleep(void) {
+    int span = 96 + 36;
+    int y = (MESSAGE_Y + 28 + DOCK_TOP - span) / 2;
+    lv_obj_set_size(s_sleep, 96 + 56, span);
+    lv_obj_set_size(s_head, 96, 96);
+    lv_obj_set_size(s_eye_l, 22, 4);
+    lv_obj_set_size(s_eye_r, 22, 4);
+    lv_obj_align(s_eye_l, LV_ALIGN_CENTER, -16, 3);
+    lv_obj_align(s_eye_r, LV_ALIGN_CENTER, 16, 3);
+    lv_obj_set_style_text_font(s_zzz, &lv_font_montserrat_24, 0);
     lv_obj_align(s_head, LV_ALIGN_BOTTOM_LEFT, 0, 0);
-    lv_obj_align(s_zzz, LV_ALIGN_TOP_LEFT, head - 4, 4);
+    lv_obj_align(s_zzz, LV_ALIGN_TOP_LEFT, 92, 4);
     lv_obj_align(s_sleep, LV_ALIGN_TOP_MID, 0, y);
-    return 1;
 }
 
 static void sleep_stop(void) {
@@ -564,24 +543,17 @@ static void sleep_stop(void) {
         return;
     }
     s_asleep = 0;
-    s_sleep_agents = -1;
     anim_delete(s_sleep);
     anim_delete(s_zzz);
     lv_obj_set_hidden(s_sleep, true);
 }
 
-static void sleep_show(int agents) {
-    if (!s_asleep || s_sleep_agents != agents) {
-        if (!place_sleep(agents)) {
-            sleep_stop();
-            return;
-        }
-        s_sleep_agents = agents;
-    }
-    lv_obj_set_hidden(s_sleep, false);
+static void sleep_show(void) {
     if (s_asleep) {
         return;
     }
+    place_sleep();
+    lv_obj_set_hidden(s_sleep, false);
     s_asleep = 1;
     lv_obj_set_style_translate_y(s_sleep, 0, 0);
     lv_obj_set_style_translate_y(s_zzz, 0, 0);
@@ -591,11 +563,11 @@ static void sleep_show(int agents) {
 }
 
 static void sync_sleep(const desk_view_t *view, int failures, int lamp) {
-    if (!lv_obj_is_hidden(s_settings) || !desk_quiet_idle(view, failures) || lamp == DESK_LAMP_RED) {
+    if (!lv_obj_is_hidden(s_settings) || !desk_show_sleep(view, failures) || lamp == DESK_LAMP_RED) {
         sleep_stop();
         return;
     }
-    sleep_show(view->agent_count);
+    sleep_show();
 }
 
 static lv_obj_t *sleep_eye(lv_obj_t *parent) {

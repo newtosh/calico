@@ -73,17 +73,24 @@ int main(void) {
     check(strcmp(label, "idle") == 0, "null view is idle");
     check(strcmp(desk_phase_label(&view, 0), "IDLE") == 0, "idle label");
     check(desk_quiet_idle(&view, 0) == 1, "idle is quiet");
+    check(desk_show_sleep(&view, 0) == 1, "empty desk shows sleep");
     check(desk_quiet_idle(&view, 2) == 1, "two misses still quiet");
+    check(desk_show_sleep(&view, 2) == 1, "two misses still show sleep");
     check(strcmp(desk_phase_label(&view, 3), "link down") == 0, "link down");
     check(desk_quiet_idle(&view, 3) == 0, "link down is not quiet");
+    check(desk_show_sleep(&view, 3) == 0, "link down hides sleep");
     check(desk_quiet_idle(NULL, 0) == 0, "null view is not quiet");
+    check(desk_show_sleep(NULL, 0) == 0, "null view hides sleep");
     check(desk_view_from_json(NULL, &view) == -1, "null json");
 
     const char *napping =
         "{\"phase\":\"idle\",\"needs_you\":false,\"agents\":[{\"id\":\"a1\",\"status\":\"idle\"}]}";
     check(desk_view_from_json(napping, &view) == 0, "napping parse");
-    check(view.running_count == 0 && view.agent_count == 1, "idle agent");
+    check(view.running_count == 0 && view.agent_count == 1 && view.known_count == 1, "idle agent");
     check(desk_quiet_idle(&view, 0) == 1, "idle agent still quiet");
+    check(desk_show_sleep(&view, 0) == 0, "idle agent hides sleep");
+    desk_count_text(&view, label, sizeof(label));
+    check(strcmp(label, "idle") == 0, "idle agent count stays idle");
 
     const char *busy =
         "{\"phase\":\"idle\",\"needs_you\":false,\"agents\":[{\"id\":\"a1\",\"status\":\"running\"}]}";
