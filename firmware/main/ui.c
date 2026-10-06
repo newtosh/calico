@@ -26,6 +26,9 @@ enum {
     AGENT_ROW_H = 30,
     AGENT_GAP = 2,
     MARK_PX = 24,
+    ASIDE_SCROLL_MS = 20000,
+    /* One pass of the aside marquee, so the line finishes inside the 20s window. */
+    ASIDE_PASS_MS = 8000,
     ROW_PAD = 8,
     ROW_GAP = 12,
     ASIDE_W = 156,
@@ -69,6 +72,7 @@ static lv_obj_t *s_agent_rows[DESK_AGENT_MAX];
 static lv_obj_t *s_agent_marks[DESK_AGENT_MAX];
 static lv_obj_t *s_agent_labels[DESK_AGENT_MAX];
 static lv_obj_t *s_agent_aside[DESK_AGENT_MAX];
+static lv_timer_t *s_aside_timer;
 static net_ap_t s_aps[NET_SCAN_MAX];
 static int s_row_count;
 static ui_save_fn s_on_save;
@@ -151,16 +155,156 @@ static void style_text(lv_obj_t *label) {
     lv_obj_set_style_text_font(label, &lv_font_montserrat_16, 0);
 }
 
+static void paint_triangle(lv_draw_triangle_dsc_t *dsc, lv_color_t color) {
+    lv_draw_triangle_dsc_init(dsc);
+#if LVGL_VERSION_MAJOR == 9 && LVGL_VERSION_MINOR < 3
+    dsc->bg_color = color;
+    dsc->bg_opa = LV_OPA_COVER;
+#else
+    dsc->color = color;
+    dsc->opa = LV_OPA_COVER;
+#endif
+}
+
+static void fill_tri(lv_layer_t *layer, lv_draw_triangle_dsc_t *dsc, int x0, int y0, int x1, int y1,
+                     int x2, int y2) {
+    dsc->p[0].x = x0;
+    dsc->p[0].y = y0;
+    dsc->p[1].x = x1;
+    dsc->p[1].y = y1;
+    dsc->p[2].x = x2;
+    dsc->p[2].y = y2;
+    lv_draw_triangle(layer, dsc);
+}
+
+/* Fan from the box center. Every polygon here is visible from that point. */
+static void fill_poly(lv_layer_t *layer, lv_draw_triangle_dsc_t *dsc, const lv_area_t *box,
+                      const int8_t *xy, int n) {
+    int i;
+    int cx = (box->x1 + box->x2) / 2;
+    int cy = (box->y1 + box->y2) / 2;
+    for (i = 0; i < n; i++) {
+        int j = (i + 1) % n;
+        fill_tri(layer, dsc, cx, cy, box->x1 + xy[2 * i], box->y1 + xy[2 * i + 1],
+                 box->x1 + xy[2 * j], box->y1 + xy[2 * j + 1]);
+    }
+}
+
+static void fill_round(lv_layer_t *layer, lv_color_t color, int x, int y, int w, int h) {
+    lv_draw_rect_dsc_t dsc;
+    lv_area_t area;
+    lv_draw_rect_dsc_init(&dsc);
+    dsc.bg_color = color;
+    dsc.bg_opa = LV_OPA_COVER;
+    dsc.radius = LV_RADIUS_CIRCLE;
+    area.x1 = x;
+    area.y1 = y;
+    area.x2 = x + w - 1;
+    area.y2 = y + h - 1;
+    lv_draw_rect(layer, &dsc, &area);
+}
+
+static const int8_t k_star[] = {12, 0, 14, 9, 22, 12, 14, 14, 12, 22, 9, 14, 0, 12, 9, 9};
+static const int8_t k_blob[] = {12, 0,  16, 4,  20, 6,  18, 12, 21, 17, 16, 18,
+                                12, 18, 7,  20, 5,  15, 0,  12, 4,  7,  8,  5};
+static const int8_t k_pentagon[] = {12, 0, 22, 8, 18, 20, 5, 20, 1, 8};
+static const int8_t k_sun[] = {12, 0,  14, 5,  19, 4,  18, 9,  22, 12, 18, 14, 19, 19, 14, 18,
+                               12, 22, 9,  18, 4,  19, 5,  14, 0,  12, 5,  9,  4,  4,  9,  5};
+static const int8_t k_hexagon[] = {12, 0, 21, 6, 21, 17, 12, 22, 2, 17, 2, 6};
+
+static void draw_mark(lv_event_t *event) {
+    lv_obj_t *obj = lv_event_get_target(event);
+    intptr_t shape = (intptr_t)lv_obj_get_user_data(obj);
+    lv_layer_t *layer;
+    lv_area_t area;
+    lv_draw_triangle_dsc_t dsc;
+    lv_color_t color;
+    int x;
+    int y;
+    int cx;
+    int cy;
+    if (shape == DESK_SHAPE_CIRCLE || shape == DESK_SHAPE_SQUARE || shape == DESK_SHAPE_ROUNDED) {
+        return;
+    }
+    layer = lv_event_get_layer(event);
+    if (!layer) {
+        return;
+    }
+    lv_obj_get_coords(obj, &area);
+    color = lv_obj_get_style_bg_color(obj, LV_PART_MAIN);
+    paint_triangle(&dsc, color);
+    x = area.x1;
+    y = area.y1;
+    cx = (area.x1 + area.x2) / 2;
+    cy = (area.y1 + area.y2) / 2;
+    if (shape == DESK_SHAPE_TRIANGLE) {
+        fill_tri(layer, &dsc, cx, area.y1, area.x1, area.y2, area.x2, area.y2);
+        return;
+    }
+    if (shape == DESK_SHAPE_DIAMOND) {
+        fill_tri(layer, &dsc, cx, area.y1, area.x2, cy, cx, area.y2);
+        fill_tri(layer, &dsc, cx, area.y1, area.x1, cy, cx, area.y2);
+        return;
+    }
+    if (shape == DESK_SHAPE_CLOUD) {
+        fill_round(layer, color, x + 1, y + 10, 14, 14);
+        fill_round(layer, color, x + 8, y + 8, 15, 15);
+        fill_round(layer, color, x + 5, y + 3, 11, 11);
+        fill_round(layer, color, x + 12, y + 4, 10, 10);
+        return;
+    }
+    if (shape == DESK_SHAPE_FLOWER) {
+        fill_round(layer, color, x + 1, y + 1, 12, 12);
+        fill_round(layer, color, x + 11, y + 1, 12, 12);
+        fill_round(layer, color, x + 1, y + 11, 12, 12);
+        fill_round(layer, color, x + 11, y + 11, 12, 12);
+        return;
+    }
+    if (shape == DESK_SHAPE_HEART) {
+        fill_round(layer, color, x + 1, y + 3, 12, 12);
+        fill_round(layer, color, x + 11, y + 3, 12, 12);
+        fill_tri(layer, &dsc, x + 2, y + 10, x + 22, y + 10, x + 12, y + 22);
+        return;
+    }
+    if (shape == DESK_SHAPE_DROP) {
+        fill_round(layer, color, x + 4, y + 8, 16, 16);
+        fill_tri(layer, &dsc, x + 12, y + 1, x + 4, y + 14, x + 20, y + 14);
+        return;
+    }
+    if (shape == DESK_SHAPE_PILL) {
+        fill_round(layer, color, x + 5, y + 1, 14, 22);
+        return;
+    }
+    if (shape == DESK_SHAPE_STAR) {
+        fill_poly(layer, &dsc, &area, k_star, (int)(sizeof(k_star) / 2));
+    } else if (shape == DESK_SHAPE_BLOB) {
+        fill_poly(layer, &dsc, &area, k_blob, (int)(sizeof(k_blob) / 2));
+    } else if (shape == DESK_SHAPE_PENTAGON) {
+        fill_poly(layer, &dsc, &area, k_pentagon, (int)(sizeof(k_pentagon) / 2));
+    } else if (shape == DESK_SHAPE_SUN) {
+        fill_poly(layer, &dsc, &area, k_sun, (int)(sizeof(k_sun) / 2));
+    } else if (shape == DESK_SHAPE_HEXAGON) {
+        fill_poly(layer, &dsc, &area, k_hexagon, (int)(sizeof(k_hexagon) / 2));
+    }
+}
+
 static void apply_mark(lv_obj_t *mark, uint32_t color, int shape) {
-    int radius = LV_RADIUS_CIRCLE;
+    int radius = 0;
+    lv_opa_t opa = LV_OPA_TRANSP;
+    lv_obj_set_style_bg_color(mark, lv_color_hex(color), 0);
+    lv_obj_set_user_data(mark, (void *)(intptr_t)shape);
     if (shape == DESK_SHAPE_SQUARE) {
         radius = 2;
+        opa = LV_OPA_COVER;
     } else if (shape == DESK_SHAPE_ROUNDED) {
         radius = 6;
+        opa = LV_OPA_COVER;
+    } else if (shape == DESK_SHAPE_CIRCLE) {
+        radius = LV_RADIUS_CIRCLE;
+        opa = LV_OPA_COVER;
     }
-    lv_obj_set_style_bg_color(mark, lv_color_hex(color), 0);
     lv_obj_set_style_radius(mark, radius, 0);
-    lv_obj_set_style_bg_opa(mark, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_opa(mark, opa, 0);
     lv_obj_invalidate(mark);
 }
 
@@ -190,15 +334,23 @@ static void show_note(const char *text) {
     place_agents(line);
 }
 
-static void lay_row_text(lv_obj_t *name, lv_obj_t *aside, const char *text) {
+static void lay_row_text(lv_obj_t *name, lv_obj_t *aside, const char *text, int scroll) {
     int show = text && text[0];
     int inner = (SCREEN_PX - (EDGE_PX * 2)) - (ROW_PAD * 2);
     int name_w = inner - MARK_PX - ROW_GAP;
+    lv_label_long_mode_t mode = scroll ? LV_LABEL_LONG_SCROLL_CIRCULAR : LV_LABEL_LONG_DOT;
+    const char *shown = show ? text : "";
     if (show) {
         name_w -= ROW_GAP + ASIDE_W;
     }
-    lv_label_set_text(aside, show ? text : "");
+    if (strcmp(lv_label_get_text(aside), shown) != 0) {
+        lv_label_set_text(aside, shown);
+    }
     lv_obj_set_hidden(aside, !show);
+    if (lv_label_get_long_mode(aside) != mode) {
+        lv_obj_set_style_text_align(aside, scroll ? LV_TEXT_ALIGN_LEFT : LV_TEXT_ALIGN_RIGHT, 0);
+        lv_label_set_long_mode(aside, mode);
+    }
     lv_obj_set_width(name, name_w);
 }
 
@@ -243,6 +395,7 @@ static void build_agent_rows(lv_obj_t *screen) {
         lv_obj_set_style_pad_all(mark, 0, 0);
         lv_obj_set_style_shadow_width(mark, 0, 0);
         lv_obj_clear_flag(mark, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_add_event_cb(mark, draw_mark, LV_EVENT_DRAW_POST, NULL);
         apply_mark(mark, DESK_MARK_NEUTRAL, DESK_SHAPE_CIRCLE);
         lv_obj_clear_flag(label, LV_OBJ_FLAG_CLICKABLE);
         lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
@@ -252,10 +405,11 @@ static void build_agent_rows(lv_obj_t *screen) {
         lv_obj_clear_flag(aside, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_set_width(aside, ASIDE_W);
         lv_label_set_long_mode(aside, LV_LABEL_LONG_DOT);
-        lv_obj_set_style_text_font(aside, &lv_font_montserrat_16, 0);
+        lv_obj_set_style_text_font(aside, &lv_font_montserrat_20, 0);
         lv_obj_set_style_text_color(aside, lv_color_hex(INK_DIM), 0);
         lv_obj_set_style_text_align(aside, LV_TEXT_ALIGN_RIGHT, 0);
-        lay_row_text(label, aside, "");
+        lv_obj_set_style_anim_duration(aside, ASIDE_PASS_MS, 0);
+        lay_row_text(label, aside, "", 0);
         lv_obj_set_hidden(row, true);
     }
 }
@@ -1125,6 +1279,41 @@ void ui_show_networks(const net_ap_t *aps, int count) {
     }
 }
 
+static void aside_drop_timer(void) {
+    lv_timer_t *done;
+    if (!s_aside_timer) {
+        return;
+    }
+    done = s_aside_timer;
+    s_aside_timer = NULL;
+#if LVGL_VERSION_MAJOR == 9 && LVGL_VERSION_MINOR < 3
+    lv_timer_del(done);
+#else
+    lv_timer_delete(done);
+#endif
+}
+
+static void aside_settle(lv_timer_t *timer) {
+    (void)timer;
+    s_aside_timer = NULL;
+    if (s_agent_aside[0]) {
+        lv_label_set_long_mode(s_agent_aside[0], LV_LABEL_LONG_DOT);
+        lv_obj_set_style_text_align(s_agent_aside[0], LV_TEXT_ALIGN_RIGHT, 0);
+    }
+}
+
+static void aside_begin(void) {
+    if (s_aside_timer) {
+        lv_timer_reset(s_aside_timer);
+        lv_timer_set_repeat_count(s_aside_timer, 1);
+        return;
+    }
+    s_aside_timer = lv_timer_create(aside_settle, ASIDE_SCROLL_MS, NULL);
+    if (s_aside_timer) {
+        lv_timer_set_repeat_count(s_aside_timer, 1);
+    }
+}
+
 void ui_apply(const desk_view_t *view, int failures) {
     char count[32];
     int i;
@@ -1142,28 +1331,45 @@ void ui_apply(const desk_view_t *view, int failures) {
         headline = desk_face_title(view);
         lv_label_set_text(s_title, headline);
         lv_obj_set_hidden(s_title, headline[0] == '\0');
-        for (i = 0; i < DESK_AGENT_MAX; i++) {
-            const desk_agent_t *agent;
-            uint32_t color = DESK_MARK_NEUTRAL;
-            uint32_t parsed;
-            const char *label;
-            const char *aside = "";
-            int hot;
-            if (i >= view->agent_count) {
-                lv_obj_set_hidden(s_agent_rows[i], true);
-                continue;
+        {
+            int scroll_top = 0;
+            if (view->agent_count > 0) {
+                scroll_top = desk_aside_scroll(s_applied ? &s_applied_view : NULL, view);
+            } else {
+                aside_drop_timer();
             }
-            agent = &view->agents[i];
-            if (desk_mark_color(agent->color, &parsed) == 0) {
-                color = parsed;
+            for (i = 0; i < DESK_AGENT_MAX; i++) {
+                const desk_agent_t *agent;
+                uint32_t color = DESK_MARK_NEUTRAL;
+                uint32_t parsed;
+                const char *label;
+                const char *aside = "";
+                int hot;
+                int scroll = 0;
+                if (i >= view->agent_count) {
+                    lv_obj_set_hidden(s_agent_rows[i], true);
+                    continue;
+                }
+                agent = &view->agents[i];
+                if (desk_mark_color(agent->color, &parsed) == 0) {
+                    color = parsed;
+                }
+                apply_mark(s_agent_marks[i], color, desk_mark_shape(agent->shape));
+                label = agent->title[0] ? agent->title : agent->id;
+                lv_label_set_text(s_agent_labels[i], label[0] ? label : "agent");
+                hot = desk_agent_hot(view, i, &aside);
+                if (i == 0) {
+                    scroll = scroll_top || (s_aside_timer && aside[0]);
+                    if (scroll_top) {
+                        aside_begin();
+                    } else if (!scroll) {
+                        aside_drop_timer();
+                    }
+                }
+                lay_row_text(s_agent_labels[i], s_agent_aside[i], aside, scroll);
+                lv_obj_set_style_bg_opa(s_agent_rows[i], hot ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+                lv_obj_set_hidden(s_agent_rows[i], false);
             }
-            apply_mark(s_agent_marks[i], color, desk_mark_shape(agent->shape));
-            label = agent->title[0] ? agent->title : agent->id;
-            lv_label_set_text(s_agent_labels[i], label[0] ? label : "agent");
-            hot = desk_agent_hot(view, i, &aside);
-            lay_row_text(s_agent_labels[i], s_agent_aside[i], aside);
-            lv_obj_set_style_bg_opa(s_agent_rows[i], hot ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
-            lv_obj_set_hidden(s_agent_rows[i], false);
         }
         desk_count_text(view, count, sizeof(count));
         lv_label_set_text(s_count, count);

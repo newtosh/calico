@@ -32,13 +32,25 @@ Leave `color`, `shape`, and `icon` off when you have nothing to send. An empty s
 
 ### Shapes
 
-The panel draws a filled 24px mark in that agent's color. It does not paint custom polygons. Each name is one of three style widgets:
+The panel draws a filled 24px silhouette in that agent's color. The picker glyphs also have a pair of eyes; those are left off at this size. `square` and `diamond` are the marks this desk already drew. `rounded_square` is the picker squircle.
 
-| `shape` | Widget |
+| `shape` | Draws |
 | --- | --- |
-| `circle`, `cloud`, `flower`, `clover`, `heart`, `blob`, `splatter`, `teardrop`, `drop`, `sun`, `gear` | Circle |
-| `rounded_square`, `rounded`, `pill`, `capsule` | Rounded square |
-| `square`, `diamond`, `triangle`, `star`, `pentagon`, `shield`, `hexagon`, `hex` | Square |
+| `circle` | Circle |
+| `cloud` | Cloud |
+| `rounded_square`, `rounded` | Rounded square |
+| `star` | 4-point star |
+| `flower`, `clover` | Flower |
+| `heart` | Heart |
+| `blob`, `splatter` | Splatter |
+| `teardrop`, `drop` | Teardrop |
+| `pill`, `capsule` | Capsule |
+| `triangle` | Triangle |
+| `pentagon`, `shield` | Pentagon |
+| `sun`, `gear` | 8-point sun |
+| `hexagon`, `hex` | Hexagon |
+| `square` | Square, the existing mark |
+| `diamond` | Diamond, the existing mark |
 
 An unknown name, or no name, is a circle.
 

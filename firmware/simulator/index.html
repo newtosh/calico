@@ -213,10 +213,35 @@
       }
       .agent .aside {
         flex: none;
+        width: 156px;
         max-width: 42%;
-        font-size: 16px;
+        min-width: 0;
+        overflow: hidden;
+        font-size: 20px;
+        line-height: 24px;
         text-align: right;
         color: #a39b88;
+        white-space: nowrap;
+      }
+      .agent .aside.marquee {
+        text-align: left;
+        text-overflow: clip;
+      }
+      .agent .aside .track {
+        display: inline-block;
+        overflow: visible;
+        text-overflow: clip;
+        white-space: nowrap;
+      }
+      @keyframes aside-marquee {
+        0%,
+        12% {
+          transform: translateX(0);
+        }
+        88%,
+        100% {
+          transform: translateX(var(--shift));
+        }
       }
       .mark {
         width: 24px;
@@ -502,6 +527,7 @@
       let statusSeen = "IDLE";
       let face = "IDLE";
       let drag = null;
+      let marquee = { id: "", text: "", until: 0, ready: false };
 
       agents.addEventListener("pointerdown", (event) => {
         if (event.pointerType !== "mouse" || event.button !== 0) return;
@@ -594,6 +620,44 @@
         return !title && agent.status === "needs_you" ? note : "";
       }
 
+      function syncMarquee(agent, aside, hot) {
+        const id = agent ? agent.id || "" : "";
+        const text = aside || "";
+        if (!marquee.ready) {
+          marquee = { id, text, until: hot && text ? Date.now() + 20000 : 0, ready: true };
+          return;
+        }
+        const same = marquee.id === id && marquee.text === text;
+        if (marquee.until > Date.now() && same) return;
+        marquee = {
+          id,
+          text,
+          until: hot && text && !same ? Date.now() + 20000 : 0,
+          ready: true,
+        };
+      }
+
+      function asideNode(text, scroll) {
+        const aside = document.createElement("span");
+        aside.className = "aside" + (scroll ? " marquee" : "");
+        if (!scroll) {
+          aside.textContent = text;
+          return aside;
+        }
+        const track = document.createElement("span");
+        const started = marquee.until - 20000;
+        track.className = "track";
+        track.textContent = text;
+        aside.append(track);
+        requestAnimationFrame(() => {
+          const shift = Math.min(0, aside.clientWidth - track.scrollWidth);
+          track.style.setProperty("--shift", shift + "px");
+          track.style.animation = "aside-marquee 8s linear infinite";
+          track.style.animationDelay = "-" + Math.max(0, Date.now() - started) + "ms";
+        });
+        return aside;
+      }
+
       function label(status) {
         if (failures >= 3) return "link down";
         if (status.needs_you || status.phase === "needs_you") return "NEEDS YOU";
@@ -620,13 +684,18 @@
           count.textContent = running === 0 ? "idle" : running + "/" + list.length + " running";
           count.classList.toggle("idle", running === 0);
           panel.classList.toggle("asleep", quiet && list.length === 0);
+          const top = list[0];
+          const topAside = top ? rowAside(top, status) : "";
+          syncMarquee(top, topAside, !!(top && (top.status === "needs_you" || topAside)));
           agents.replaceChildren();
           let placed = false;
-          list.forEach((agent) => {
+          list.forEach((agent, index) => {
             const row = document.createElement("div");
             const mark = document.createElement("i");
             const name = document.createElement("span");
             const asideText = rowAside(agent, status);
+            const scrolling =
+              index === 0 && marquee.until > Date.now() && marquee.text === asideText;
             row.className = "agent" + (agent.status === "needs_you" || asideText ? " hot" : "");
             mark.className = "mark " + markShape(agent.shape);
             mark.style.background = markColor(agent.color);
@@ -634,10 +703,7 @@
             name.textContent = agent.title || agent.id || "agent";
             row.append(mark, name);
             if (asideText) {
-              const aside = document.createElement("span");
-              aside.className = "aside";
-              aside.textContent = asideText;
-              row.append(aside);
+              row.append(asideNode(asideText, scrolling));
               placed = true;
             }
             agents.append(row);

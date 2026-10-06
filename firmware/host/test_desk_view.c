@@ -165,7 +165,7 @@ int main(void) {
     check(strcmp(view.agents[0].title, "Scaffold") == 0, "agent title");
     check(strcmp(view.agents[0].color, "#C45C26") == 0, "agent color");
     check(strcmp(view.agents[0].shape, "diamond") == 0, "agent shape");
-    check(desk_mark_shape(view.agents[0].shape) == DESK_SHAPE_SQUARE, "diamond widget");
+    check(desk_mark_shape(view.agents[0].shape) == DESK_SHAPE_DIAMOND, "diamond kind");
     check(desk_mark_color(view.agents[0].color, &color) == 0, "hex color");
     check(color == 0xc45c26u, "hex value");
     check(view.agents[1].color[0] == '\0', "omitted color");
@@ -175,38 +175,38 @@ int main(void) {
     check(desk_mark_color(view.agents[2].color, &color) == -1, "named color rejected");
     check(desk_mark_shape(view.agents[2].shape) == DESK_SHAPE_CIRCLE, "unknown shape");
     check(desk_mark_color(view.agents[3].color, &color) == 0 && color == 0x224466u, "bare hex");
-    check(desk_mark_shape(view.agents[4].shape) == DESK_SHAPE_SQUARE, "triangle widget");
+    check(desk_mark_shape(view.agents[4].shape) == DESK_SHAPE_TRIANGLE, "triangle kind");
     check(desk_mark_shape(view.agents[5].shape) == DESK_SHAPE_CIRCLE, "explicit circle");
     check(strcmp(view.agents[5].id, "a6") == 0, "sixth kept");
     check(strcmp(view.agents[6].id, "a7") == 0, "seventh kept");
     check(desk_mark_color(NULL, &color) == -1, "null color");
     check(desk_mark_shape(NULL) == DESK_SHAPE_CIRCLE, "null shape");
-    check(desk_mark_shape("Diamond") == DESK_SHAPE_SQUARE, "shape case");
+    check(desk_mark_shape("Diamond") == DESK_SHAPE_DIAMOND, "shape case");
     {
         static const struct {
             const char *name;
             int kind;
         } shapes[] = {
-            {"cloud", DESK_SHAPE_CIRCLE},
+            {"cloud", DESK_SHAPE_CLOUD},
             {"rounded", DESK_SHAPE_ROUNDED},
             {"rounded_square", DESK_SHAPE_ROUNDED},
             {"Rounded_Square", DESK_SHAPE_ROUNDED},
-            {"star", DESK_SHAPE_SQUARE},
-            {"flower", DESK_SHAPE_CIRCLE},
-            {"clover", DESK_SHAPE_CIRCLE},
-            {"heart", DESK_SHAPE_CIRCLE},
-            {"blob", DESK_SHAPE_CIRCLE},
-            {"splatter", DESK_SHAPE_CIRCLE},
-            {"drop", DESK_SHAPE_CIRCLE},
-            {"teardrop", DESK_SHAPE_CIRCLE},
-            {"pill", DESK_SHAPE_ROUNDED},
-            {"capsule", DESK_SHAPE_ROUNDED},
-            {"pentagon", DESK_SHAPE_SQUARE},
-            {"shield", DESK_SHAPE_SQUARE},
-            {"sun", DESK_SHAPE_CIRCLE},
-            {"gear", DESK_SHAPE_CIRCLE},
-            {"hex", DESK_SHAPE_SQUARE},
-            {"hexagon", DESK_SHAPE_SQUARE},
+            {"star", DESK_SHAPE_STAR},
+            {"flower", DESK_SHAPE_FLOWER},
+            {"clover", DESK_SHAPE_FLOWER},
+            {"heart", DESK_SHAPE_HEART},
+            {"blob", DESK_SHAPE_BLOB},
+            {"splatter", DESK_SHAPE_BLOB},
+            {"drop", DESK_SHAPE_DROP},
+            {"teardrop", DESK_SHAPE_DROP},
+            {"pill", DESK_SHAPE_PILL},
+            {"capsule", DESK_SHAPE_PILL},
+            {"pentagon", DESK_SHAPE_PENTAGON},
+            {"shield", DESK_SHAPE_PENTAGON},
+            {"sun", DESK_SHAPE_SUN},
+            {"gear", DESK_SHAPE_SUN},
+            {"hex", DESK_SHAPE_HEXAGON},
+            {"hexagon", DESK_SHAPE_HEXAGON},
             {"circle", DESK_SHAPE_CIRCLE},
             {"nope", DESK_SHAPE_CIRCLE},
         };
@@ -216,6 +216,10 @@ int main(void) {
             snprintf(msg, sizeof(msg), "shape %s", shapes[i].name);
             check(desk_mark_shape(shapes[i].name) == shapes[i].kind, msg);
         }
+        check(DESK_SHAPE_DIAMOND != DESK_SHAPE_SQUARE && DESK_SHAPE_CLOUD != DESK_SHAPE_SQUARE &&
+                  DESK_SHAPE_CLOUD != DESK_SHAPE_CIRCLE && DESK_SHAPE_STAR != DESK_SHAPE_SQUARE &&
+                  DESK_SHAPE_TRIANGLE != DESK_SHAPE_SQUARE,
+              "diamond, cloud, star, and triangle are not squares");
     }
     const char *rounded =
         "{\"phase\":\"idle\",\"agents\":[{\"id\":\"r\",\"title\":\"Round\",\"shape\":\"rounded_square\"}]}";
@@ -255,7 +259,7 @@ int main(void) {
     check(view.agent_count == 2, "pair rows");
     check(strcmp(view.agents[0].title, "Scaffold") == 0, "scaffold title");
     check(strcmp(view.agents[1].title, "Jeeves") == 0, "jeeves title");
-    check(desk_mark_shape(view.agents[0].shape) == DESK_SHAPE_SQUARE, "scaffold mark");
+    check(desk_mark_shape(view.agents[0].shape) == DESK_SHAPE_DIAMOND, "scaffold mark");
     check(desk_mark_shape(view.agents[1].shape) == DESK_SHAPE_SQUARE, "jeeves mark");
     check(view.running_count == 1 && view.known_count == 2, "one of two running");
     check(strcmp(desk_face_title(&view), "Scaffold") == 0, "pair headline");
@@ -396,6 +400,51 @@ int main(void) {
         check(aside[0] == '\0', "null view clears aside");
         check(desk_agent_hot(&view, -1, &aside) == 0, "bad index");
         check(desk_agent_hot(&view, 4, NULL) == 0, "aside pointer is optional");
+    }
+
+    {
+        desk_view_t prev;
+        desk_view_t next;
+        const char *scaffold =
+            "{\"phase\":\"running\",\"agents\":["
+            "{\"id\":\"scaffold\",\"title\":\"Scaffold\",\"status\":\"running\"},"
+            "{\"id\":\"jeeves\",\"title\":\"Jeeves\",\"status\":\"idle\"}"
+            "],\"last_event\":{\"title\":\"Scaffold\",\"message\":\"PR #31 flashed\"}}";
+        const char *longer =
+            "{\"phase\":\"running\",\"agents\":["
+            "{\"id\":\"scaffold\",\"title\":\"Scaffold\",\"status\":\"running\"},"
+            "{\"id\":\"jeeves\",\"title\":\"Jeeves\",\"status\":\"idle\"}"
+            "],\"last_event\":{\"title\":\"Scaffold\",\"message\":\"a longer note\"}}";
+        const char *quiet_top =
+            "{\"phase\":\"running\",\"agents\":["
+            "{\"id\":\"jeeves\",\"title\":\"Jeeves\",\"status\":\"idle\"},"
+            "{\"id\":\"scaffold\",\"title\":\"Scaffold\",\"status\":\"running\"}"
+            "],\"last_event\":{\"title\":\"Scaffold\",\"message\":\"PR #31 flashed\"}}";
+        const char *jumped =
+            "{\"phase\":\"running\",\"agents\":["
+            "{\"id\":\"jeeves\",\"title\":\"Jeeves\",\"status\":\"running\"},"
+            "{\"id\":\"scaffold\",\"title\":\"Scaffold\",\"status\":\"idle\"}"
+            "],\"last_event\":{\"title\":\"Jeeves\",\"message\":\"your turn\"}}";
+        const char *needs_only =
+            "{\"phase\":\"needs_you\",\"needs_you\":true,\"agents\":["
+            "{\"id\":\"jeeves\",\"title\":\"Jeeves\",\"status\":\"needs_you\"},"
+            "{\"id\":\"scaffold\",\"title\":\"Scaffold\",\"status\":\"running\"}"
+            "],\"last_event\":{\"title\":\"Scaffold\",\"message\":\"PR #31 flashed\"}}";
+        check(desk_aside_scroll(NULL, NULL) == 0, "scroll needs a view");
+        check(desk_view_from_json(scaffold, &next) == 0, "scroll scaffold");
+        check(desk_aside_scroll(NULL, &next) == 1, "new top highlight scrolls");
+        prev = next;
+        check(desk_aside_scroll(&prev, &next) == 0, "same top stays truncated");
+        check(desk_view_from_json(longer, &next) == 0, "longer note parse");
+        check(desk_aside_scroll(&prev, &next) == 1, "new top message scrolls");
+        check(desk_view_from_json(quiet_top, &next) == 0, "quiet top parse");
+        check(desk_aside_scroll(NULL, &next) == 0, "lower highlight stays truncated");
+        check(desk_aside_scroll(&prev, &next) == 0, "quiet top does not scroll");
+        check(desk_view_from_json(scaffold, &prev) == 0, "scaffold was top");
+        check(desk_view_from_json(jumped, &next) == 0, "jeeves jumped");
+        check(desk_aside_scroll(&prev, &next) == 1, "jump to the top scrolls");
+        check(desk_view_from_json(needs_only, &next) == 0, "needs top parse");
+        check(desk_aside_scroll(NULL, &next) == 0, "hot top with no aside stays put");
     }
 
     if (g_failed) {

@@ -312,28 +312,28 @@ int desk_mark_shape(const char *shape) {
         const char *name;
         int kind;
     } names[] = {
-        {"blob", DESK_SHAPE_CIRCLE},
-        {"capsule", DESK_SHAPE_ROUNDED},
-        {"cloud", DESK_SHAPE_CIRCLE},
-        {"clover", DESK_SHAPE_CIRCLE},
-        {"diamond", DESK_SHAPE_SQUARE},
-        {"drop", DESK_SHAPE_CIRCLE},
-        {"flower", DESK_SHAPE_CIRCLE},
-        {"gear", DESK_SHAPE_CIRCLE},
-        {"heart", DESK_SHAPE_CIRCLE},
-        {"hex", DESK_SHAPE_SQUARE},
-        {"hexagon", DESK_SHAPE_SQUARE},
-        {"pentagon", DESK_SHAPE_SQUARE},
-        {"pill", DESK_SHAPE_ROUNDED},
+        {"blob", DESK_SHAPE_BLOB},
+        {"capsule", DESK_SHAPE_PILL},
+        {"cloud", DESK_SHAPE_CLOUD},
+        {"clover", DESK_SHAPE_FLOWER},
+        {"diamond", DESK_SHAPE_DIAMOND},
+        {"drop", DESK_SHAPE_DROP},
+        {"flower", DESK_SHAPE_FLOWER},
+        {"gear", DESK_SHAPE_SUN},
+        {"heart", DESK_SHAPE_HEART},
+        {"hex", DESK_SHAPE_HEXAGON},
+        {"hexagon", DESK_SHAPE_HEXAGON},
+        {"pentagon", DESK_SHAPE_PENTAGON},
+        {"pill", DESK_SHAPE_PILL},
         {"rounded", DESK_SHAPE_ROUNDED},
         {"rounded_square", DESK_SHAPE_ROUNDED},
-        {"shield", DESK_SHAPE_SQUARE},
-        {"splatter", DESK_SHAPE_CIRCLE},
+        {"shield", DESK_SHAPE_PENTAGON},
+        {"splatter", DESK_SHAPE_BLOB},
         {"square", DESK_SHAPE_SQUARE},
-        {"star", DESK_SHAPE_SQUARE},
-        {"sun", DESK_SHAPE_CIRCLE},
-        {"teardrop", DESK_SHAPE_CIRCLE},
-        {"triangle", DESK_SHAPE_SQUARE},
+        {"star", DESK_SHAPE_STAR},
+        {"sun", DESK_SHAPE_SUN},
+        {"teardrop", DESK_SHAPE_DROP},
+        {"triangle", DESK_SHAPE_TRIANGLE},
     };
     size_t i;
     if (!shape) {
@@ -380,6 +380,19 @@ int desk_agent_hot(const desk_view_t *view, int index, const char **aside) {
         *aside = view->message;
     }
     return needs || owns;
+}
+
+int desk_aside_scroll(const desk_view_t *prev, const desk_view_t *view) {
+    const char *aside = "";
+    const char *was = "";
+    if (!view || view->agent_count < 1 || !desk_agent_hot(view, 0, &aside) || aside[0] == '\0') {
+        return 0;
+    }
+    if (!prev || prev->agent_count < 1 || strcmp(prev->agents[0].id, view->agents[0].id) != 0) {
+        return 1;
+    }
+    desk_agent_hot(prev, 0, &was);
+    return strcmp(was, aside) != 0;
 }
 
 const char *desk_phase_label(const desk_view_t *view, int consecutive_failures) {
