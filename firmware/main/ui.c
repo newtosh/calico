@@ -31,7 +31,8 @@ enum {
     ASIDE_PASS_MS = 8000,
     ROW_PAD = 8,
     ROW_GAP = 12,
-    ASIDE_W = 156,
+    /* Floor for the status text when a name would otherwise take the row. */
+    ASIDE_MIN = 48,
     BTN_H = 64,
     BTN_W = 80,
     /* Top of the button row. The count sits in that row. */
@@ -72,11 +73,13 @@ static lv_obj_t *s_agent_rows[DESK_AGENT_MAX];
 static lv_obj_t *s_agent_marks[DESK_AGENT_MAX];
 static lv_obj_t *s_agent_labels[DESK_AGENT_MAX];
 static lv_obj_t *s_agent_aside[DESK_AGENT_MAX];
+static int s_aside_w[DESK_AGENT_MAX];
 static lv_timer_t *s_aside_timer;
 static net_ap_t s_aps[NET_SCAN_MAX];
 static int s_row_count;
 static ui_save_fn s_on_save;
 static void (*s_on_dismiss)(void);
+static void (*s_on_clear_unread)(void);
 static ui_scan_fn s_on_scan;
 static lv_timer_t *s_mic_timer;
 static int s_hiding;
@@ -334,24 +337,61 @@ static void show_note(const char *text) {
     place_agents(line);
 }
 
-static void lay_row_text(lv_obj_t *name, lv_obj_t *aside, const char *text, int scroll) {
+static int label_text_px(lv_obj_t *label, const char *text) {
+    const lv_font_t *font;
+    lv_point_t size;
+    if (!label || !text || !text[0]) {
+        return 0;
+    }
+    font = lv_obj_get_style_text_font(label, LV_PART_MAIN);
+    if (!font) {
+        return 0;
+    }
+    lv_text_get_size(&size, text, font, lv_obj_get_style_text_letter_space(label, LV_PART_MAIN),
+                     lv_obj_get_style_text_line_space(label, LV_PART_MAIN), LV_COORD_MAX,
+                     LV_TEXT_FLAG_NONE);
+    /* Two pixels of slack so CLIP does not eat the last glyph. */
+    return size.x > 0 ? size.x + 2 : 0;
+}
+
+/* LONG_DOT drops expand and then grows to the wrapped height, so a content-sized
+ * aside wraps onto the next row once the circular scroll stops. CLIP stays one line. */
+static void pin_aside_line(lv_obj_t *aside) {
+    const lv_font_t *font = lv_obj_get_style_text_font(aside, LV_PART_MAIN);
+    int line = font ? (int)lv_font_get_line_height(font) : 20;
+    if (line < 1) {
+        line = 1;
+    }
+    lv_obj_set_height(aside, line);
+}
+
+static void lay_row_text(int index, lv_obj_t *name, lv_obj_t *aside, const char *text, int scroll) {
     int show = text && text[0];
     int inner = (SCREEN_PX - (EDGE_PX * 2)) - (ROW_PAD * 2);
-    int name_w = inner - MARK_PX - ROW_GAP;
-    lv_label_long_mode_t mode = scroll ? LV_LABEL_LONG_SCROLL_CIRCULAR : LV_LABEL_LONG_DOT;
+    int avail = inner - MARK_PX - ROW_GAP;
+    int name_w = 0;
+    int aside_w = 0;
+    int width_changed;
+    lv_label_long_mode_t mode = scroll ? LV_LABEL_LONG_SCROLL_CIRCULAR : LV_LABEL_LONG_CLIP;
     const char *shown = show ? text : "";
-    if (show) {
-        name_w -= ROW_GAP + ASIDE_W;
-    }
+    desk_row_spans(avail, label_text_px(name, lv_label_get_text(name)), ROW_GAP, ASIDE_MIN, show,
+                   &name_w, &aside_w);
     if (strcmp(lv_label_get_text(aside), shown) != 0) {
         lv_label_set_text(aside, shown);
     }
     lv_obj_set_hidden(aside, !show);
-    if (lv_label_get_long_mode(aside) != mode) {
-        lv_obj_set_style_text_align(aside, scroll ? LV_TEXT_ALIGN_LEFT : LV_TEXT_ALIGN_RIGHT, 0);
-        lv_label_set_long_mode(aside, mode);
-    }
+    width_changed = index >= 0 && index < DESK_AGENT_MAX && s_aside_w[index] != aside_w;
     lv_obj_set_width(name, name_w);
+    lv_obj_set_width(aside, aside_w);
+    if (lv_label_get_long_mode(aside) != mode || (scroll && width_changed)) {
+        lv_obj_set_style_text_align(aside, LV_TEXT_ALIGN_LEFT, 0);
+        lv_label_set_long_mode(aside, mode);
+        lv_obj_set_width(aside, aside_w);
+    }
+    pin_aside_line(aside);
+    if (index >= 0 && index < DESK_AGENT_MAX) {
+        s_aside_w[index] = aside_w;
+    }
 }
 
 static void build_agent_rows(lv_obj_t *screen) {
@@ -398,18 +438,17 @@ static void build_agent_rows(lv_obj_t *screen) {
         lv_obj_add_event_cb(mark, draw_mark, LV_EVENT_DRAW_POST, NULL);
         apply_mark(mark, DESK_MARK_NEUTRAL, DESK_SHAPE_CIRCLE);
         lv_obj_clear_flag(label, LV_OBJ_FLAG_CLICKABLE);
-        lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
+        lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
         style_text(label);
         lv_obj_set_style_text_font(label, &lv_font_montserrat_24, 0);
         lv_label_set_text(label, "");
         lv_obj_clear_flag(aside, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_set_width(aside, ASIDE_W);
-        lv_label_set_long_mode(aside, LV_LABEL_LONG_DOT);
+        lv_label_set_long_mode(aside, LV_LABEL_LONG_CLIP);
         lv_obj_set_style_text_font(aside, &lv_font_montserrat_20, 0);
         lv_obj_set_style_text_color(aside, lv_color_hex(INK_DIM), 0);
-        lv_obj_set_style_text_align(aside, LV_TEXT_ALIGN_RIGHT, 0);
+        lv_obj_set_style_text_align(aside, LV_TEXT_ALIGN_LEFT, 0);
         lv_obj_set_style_anim_duration(aside, ASIDE_PASS_MS, 0);
-        lay_row_text(label, aside, "", 0);
+        lay_row_text(i, label, aside, "", 0);
         lv_obj_set_hidden(row, true);
     }
 }
@@ -550,10 +589,38 @@ static lv_obj_t *add_row(int index) {
     return btn;
 }
 
+static void show_unread(int count) {
+    if (!s_title) {
+        return;
+    }
+    if (count < 1) {
+        lv_label_set_text(s_title, "");
+        lv_obj_set_hidden(s_title, true);
+        return;
+    }
+    if (count > 99) {
+        lv_label_set_text(s_title, "99+ unread");
+    } else {
+        lv_label_set_text_fmt(s_title, "%d unread", count);
+    }
+    lv_obj_set_hidden(s_title, false);
+}
+
 static void on_alert(lv_event_t *event) {
     (void)event;
     if (s_on_dismiss) {
         s_on_dismiss();
+    }
+}
+
+static void on_unread(lv_event_t *event) {
+    if (lv_event_get_code(event) != LV_EVENT_CLICKED || !s_on_clear_unread) {
+        return;
+    }
+    s_on_clear_unread();
+    show_unread(0);
+    if (s_applied) {
+        s_applied_view.unread = 0;
     }
 }
 
@@ -1039,12 +1106,21 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     desk_toast_init(&s_toast_state);
     build_status_bar(screen);
     s_title = lv_label_create(screen);
-    lv_obj_set_width(s_title, SCREEN_PX - (EDGE_PX * 2));
-    lv_label_set_long_mode(s_title, LV_LABEL_LONG_DOT);
-    lv_obj_set_style_text_font(s_title, &lv_font_montserrat_24, 0);
-    lv_obj_set_style_text_align(s_title, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_style_text_color(s_title, lv_color_hex(INK), 0);
+    lv_obj_set_size(s_title, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_label_set_long_mode(s_title, LV_LABEL_LONG_CLIP);
+    lv_obj_set_style_text_font(s_title, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(s_title, lv_color_hex(LAMP_AMBER), 0);
+    lv_obj_set_style_bg_color(s_title, lv_color_hex(FIELD), 0);
+    lv_obj_set_style_bg_opa(s_title, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(s_title, lv_color_hex(LAMP_AMBER), 0);
+    lv_obj_set_style_border_width(s_title, 1, 0);
+    lv_obj_set_style_radius(s_title, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_pad_hor(s_title, 10, 0);
+    lv_obj_set_style_pad_ver(s_title, 0, 0);
+    lv_obj_add_flag(s_title, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_event_cb(s_title, on_unread, LV_EVENT_CLICKED, NULL);
     lv_obj_align(s_title, LV_ALIGN_TOP_MID, 0, TITLE_Y);
+    lv_obj_set_hidden(s_title, true);
     s_message = lv_label_create(screen);
     lv_obj_set_width(s_message, SCREEN_PX - (EDGE_PX * 2));
     lv_label_set_long_mode(s_message, LV_LABEL_LONG_DOT);
@@ -1165,6 +1241,10 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(void), ui_scan_fn on_scan) {
     lv_obj_add_event_cb(s_keyboard, on_keyboard, LV_EVENT_CANCEL, NULL);
     layout_settings();
     ui_apply(&blank, 0);
+}
+
+void ui_bind_unread(void (*on_clear)(void)) {
+    s_on_clear_unread = on_clear;
 }
 
 void ui_bind_rotlock(int locked, ui_rotlock_fn on_toggle) {
@@ -1294,12 +1374,19 @@ static void aside_drop_timer(void) {
 }
 
 static void aside_settle(lv_timer_t *timer) {
+    lv_obj_t *aside = s_agent_aside[0];
     (void)timer;
     s_aside_timer = NULL;
-    if (s_agent_aside[0]) {
-        lv_label_set_long_mode(s_agent_aside[0], LV_LABEL_LONG_DOT);
-        lv_obj_set_style_text_align(s_agent_aside[0], LV_TEXT_ALIGN_RIGHT, 0);
+    if (!aside) {
+        return;
     }
+    /* DOT clears expand, measures the line wrapped to the column, and grows
+     * the label to that height. CLIP keeps the start of the line. */
+    lv_obj_set_width(aside, s_aside_w[0]);
+    lv_label_set_long_mode(aside, LV_LABEL_LONG_CLIP);
+    lv_obj_set_style_text_align(aside, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_width(aside, s_aside_w[0]);
+    pin_aside_line(aside);
 }
 
 static void aside_begin(void) {
@@ -1317,7 +1404,6 @@ static void aside_begin(void) {
 void ui_apply(const desk_view_t *view, int failures) {
     char count[32];
     int i;
-    const char *headline;
     int lamp = present_status(desk_phase_label(view, failures), failures);
     int fresh;
     fresh = !s_applied || !desk_status_same(&s_applied_view, s_applied_failures, view, failures);
@@ -1328,9 +1414,7 @@ void ui_apply(const desk_view_t *view, int failures) {
         }
     }
     if (fresh) {
-        headline = desk_face_title(view);
-        lv_label_set_text(s_title, headline);
-        lv_obj_set_hidden(s_title, headline[0] == '\0');
+        show_unread(desk_unread_count(view));
         {
             int scroll_top = 0;
             if (view->agent_count > 0) {
@@ -1366,7 +1450,7 @@ void ui_apply(const desk_view_t *view, int failures) {
                         aside_drop_timer();
                     }
                 }
-                lay_row_text(s_agent_labels[i], s_agent_aside[i], aside, scroll);
+                lay_row_text(i, s_agent_labels[i], s_agent_aside[i], aside, scroll);
                 lv_obj_set_style_bg_opa(s_agent_rows[i], hot ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
                 lv_obj_set_hidden(s_agent_rows[i], false);
             }

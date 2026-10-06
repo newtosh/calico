@@ -208,20 +208,25 @@
         background: #2a2d24;
       }
       .agent .name {
-        flex: 1;
+        flex: 0 1 auto;
         min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: clip;
       }
       .agent .aside {
-        flex: none;
-        width: 156px;
-        max-width: 42%;
-        min-width: 0;
+        flex: 1 1 auto;
+        width: auto;
+        max-width: none;
+        min-width: 48px;
+        height: 24px;
         overflow: hidden;
         font-size: 20px;
         line-height: 24px;
-        text-align: right;
+        text-align: left;
         color: #a39b88;
         white-space: nowrap;
+        text-overflow: ellipsis;
       }
       .agent .aside.marquee {
         text-align: left;
@@ -229,6 +234,7 @@
       }
       .agent .aside .track {
         display: inline-block;
+        height: 24px;
         overflow: visible;
         text-overflow: clip;
         white-space: nowrap;
@@ -424,6 +430,24 @@
       #panel.needs #count {
         color: #14160f;
       }
+      #title.badge {
+        align-self: center;
+        width: fit-content;
+        min-height: 24px;
+        margin: 4px auto 0;
+        padding: 0 10px;
+        border: 1px solid #e2a23a;
+        border-radius: 999px;
+        background: #2a2d24;
+        color: #e2a23a;
+        font-size: 16px;
+        line-height: 22px;
+        cursor: pointer;
+      }
+      #panel.needs #title.badge {
+        background: #14160f;
+        color: #e2a23a;
+      }
       #panel.needs button {
         background: #14160f;
         color: #efe7d6;
@@ -607,6 +631,12 @@
         return markShapes[key] || "circle";
       }
 
+      function unreadText(status) {
+        const count = Number(status && status.unread);
+        if (!Number.isFinite(count) || count < 1) return "";
+        return count > 99 ? "99+ unread" : Math.floor(count) + " unread";
+      }
+
       function faceTitle(event) {
         if (!event || !event.title || (event.title === "Dismissed" && !event.message)) return "";
         return event.title;
@@ -675,7 +705,9 @@
           failures = 0;
           face = label(status);
           paintLink(face, failures);
-          title.textContent = faceTitle(status.last_event);
+          const badge = unreadText(status);
+          title.textContent = badge;
+          title.classList.toggle("badge", badge !== "");
           const note = (status.last_event && status.last_event.message) || "";
           const list = status.agents || [];
           const running = list.filter((agent) => agent.status === "running").length;
@@ -729,6 +761,11 @@
       });
       document.getElementById("mic").addEventListener("click", () => {
         message.textContent = "Voice not in this PoC";
+      });
+      title.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (!title.classList.contains("badge")) return;
+        fetch(base + "/api/unread/dismiss", { method: "POST" }).then(() => tick());
       });
       panel.addEventListener("click", (event) => {
         if (event.target.closest("button") || !panel.classList.contains("needs")) {

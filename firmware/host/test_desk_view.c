@@ -447,6 +447,54 @@ int main(void) {
         check(desk_aside_scroll(NULL, &next) == 0, "hot top with no aside stays put");
     }
 
+    {
+        int name_w = -1;
+        int aside_w = -1;
+        const char *counted =
+            "{\"phase\":\"idle\",\"unread\":4,\"agents\":[],\"last_event\":{\"title\":\"Scaffold\"}}";
+        const char *zero = "{\"phase\":\"idle\",\"unread\":0,\"agents\":[]}";
+        const char *negative = "{\"phase\":\"idle\",\"unread\":-3,\"agents\":[]}";
+        const char *quoted =
+            "{\"phase\":\"idle\",\"last_event\":{\"message\":\"see unread: 9\"},\"unread\":2}";
+        check(desk_view_from_json(counted, &view) == 0, "unread parse");
+        check(view.unread == 4, "unread field");
+        check(desk_unread_count(&view) == 4, "unread count");
+        check(strcmp(desk_face_title(&view), "Scaffold") == 0, "event title still matches a row");
+        check(desk_view_from_json(zero, &view) == 0, "zero unread parse");
+        check(desk_unread_count(&view) == 0, "zero is idle");
+        check(desk_view_from_json(negative, &view) == 0, "negative unread parse");
+        check(desk_unread_count(&view) == 0, "negative is idle");
+        check(desk_view_from_json(idle, &view) == 0, "missing unread parse");
+        check(view.unread == 0, "missing unread is zero");
+        check(desk_unread_count(&view) == 0, "missing unread count");
+        check(desk_unread_count(NULL) == 0, "null unread");
+        check(desk_view_from_json(quoted, &view) == 0, "quoted unread parse");
+        check(desk_unread_count(&view) == 2, "message text is not the count");
+
+        const char *escaped =
+            "{\"phase\":\"idle\",\"last_event\":{\"title\":\"Caf\\u00e9\","
+            "\"message\":\"hi \\u2014 \\\"ok\\\" \\nnext \\uD83D\\uDE00\"}}";
+        check(desk_view_from_json(escaped, &view) == 0, "escaped parse");
+        check(strcmp(view.title, "Caf\xc3\xa9") == 0, "title unicode");
+        check(strcmp(view.message, "hi \xe2\x80\x94 \"ok\"  next \xf0\x9f\x98\x80") == 0,
+              "message unicode");
+
+        desk_row_spans(396, 80, 12, 48, 1, &name_w, &aside_w);
+        check(name_w == 80, "short name keeps its text width");
+        check(aside_w == 304, "aside takes the rest after the gap");
+        desk_row_spans(396, 400, 12, 48, 1, &name_w, &aside_w);
+        check(name_w == 336, "long name stops at the aside floor");
+        check(aside_w == 48, "aside keeps its floor");
+        check(name_w + 12 + aside_w == 396, "gap stays between name and aside");
+        desk_row_spans(396, 80, 12, 48, 0, &name_w, &aside_w);
+        check(name_w == 396 && aside_w == 0, "quiet row gives the name the row");
+        desk_row_spans(20, 80, 12, 48, 1, &name_w, &aside_w);
+        check(name_w == 0 && aside_w == 8, "tight row keeps the status");
+        desk_row_spans(-4, -8, -2, -3, 1, &name_w, &aside_w);
+        check(name_w == 0 && aside_w == 0, "negative spans are empty");
+        desk_row_spans(396, 80, 12, 48, 1, NULL, NULL);
+    }
+
     if (g_failed) {
         return 1;
     }

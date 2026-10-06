@@ -40,3 +40,4 @@ int net_wifi_scan(net_ap_t *out, int max_out);
 int net_wifi_select(const wifi_store_t *store, desk_settings_t *chosen);
 int net_fetch_status(const desk_settings_t *in, char *body, size_t body_len);
 void net_dismiss(const desk_settings_t *in);
+void net_clear_unread(const desk_settings_t *in);

@@ -35,6 +35,8 @@ typedef struct {
 typedef struct {
     char phase[16];
     int needs_you;
+    /* Events since the face badge was cleared. 0 leaves that row empty. */
+    int unread;
     char title[96];
     char message[160];
     int running_count;
@@ -54,12 +56,21 @@ int desk_view_from_json(const char *json, desk_view_t *out);
 int desk_view_same(const desk_view_t *a, const desk_view_t *b);
 /* 1 when the parsed view and the failure count both match the last apply. */
 int desk_status_same(const desk_view_t *a, int failures_a, const desk_view_t *b, int failures_b);
-/* Face headline. Empty when last_event has no useful title. A dismiss
- * acknowledgement is not one. Notes, launches, and needs-you questions keep theirs. */
+/* Event title used to match a row's aside. Empty when last_event has no
+ * useful title. A dismiss acknowledgement is not one. This is not the face
+ * row: that row is the unread badge. */
 const char *desk_face_title(const desk_view_t *view);
+/* Unread badge count. 0 when there is nothing to show. */
+int desk_unread_count(const desk_view_t *view);
+/* Split `avail` (pixels after the mark and its gap). The name keeps
+ * `name_px`. With an aside, `gap` stays between them and the aside takes
+ * the rest, at least `min_aside` when the row has room. Without an aside
+ * the name takes `avail`. Out pointers may be NULL. */
+void desk_row_spans(int avail, int name_px, int gap, int min_aside, int show_aside, int *name_w,
+                    int *aside_w);
 /* 1 when this agent row should be filled. *aside (optional) is the face
- * message on the right of the name, or "". needs_you fills the row even
- * with no message. A running or idle row fills only when it shows one. */
+ * message beside the name, or "". needs_you fills the row even with no
+ * message. A running or idle row fills only when it shows one. */
 int desk_agent_hot(const desk_view_t *view, int index, const char **aside);
 void desk_count_text(const desk_view_t *view, char *out, size_t out_len);
 int desk_panel_from_json(const char *json, desk_panel_t *out);

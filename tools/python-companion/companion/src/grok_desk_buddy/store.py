@@ -102,6 +102,7 @@ class DeskStore:
         self._lock = threading.Lock()
         self._events: list[Event] = []
         self._agents: dict[str, _Agent] = {}
+        self._unread = 0
         self._sqlite_path = sqlite_path or None
         if self._sqlite_path:
             self._load()
@@ -139,7 +140,12 @@ class DeskStore:
                     )
                     self._persist()
                     return event
+            known = bool(raw.agent_id) and raw.agent_id in self._agents
             self._remember(event)
+            attention = raw.type in {"note", "agent.needs_you"}
+            first_seen = raw.type == "agent.launched" and not known
+            if attention or first_seen:
+                self._unread += 1
             if raw.type in _STATUS_FOR_TYPE:
                 self._upsert(
                     raw.agent_id,
@@ -173,6 +179,13 @@ class DeskStore:
             )
             self._persist()
 
+    def clear_unread(self) -> None:
+        with self._lock:
+            if self._unread == 0:
+                return
+            self._unread = 0
+            self._persist()
+
     def status(self) -> dict[str, object]:
         with self._lock:
             # needs_you, then newest updated_at, then id. Stable sorts keep the earlier key.
@@ -203,6 +216,7 @@ class DeskStore:
             return {
                 "phase": phase,
                 "needs_you": phase == "needs_you",
+                "unread": self._unread,
                 "agents": agents,
                 "last_event": last,
                 "events": [_public_event(event) for event in self._events],
@@ -228,6 +242,7 @@ class DeskStore:
             current = self._agents.get(agent_id)
             if current is not None and (current.status == mapped or current.status == "needs_you"):
                 return False
+            known = agent_id in self._agents
             self._remember(
                 Event(
                     id=str(uuid.uuid4()),
@@ -242,6 +257,8 @@ class DeskStore:
                     icon=kept_icon,
                 )
             )
+            if not known:
+                self._unread += 1
             self._upsert(agent_id, name, mapped, at, kept_color, kept_shape, kept_icon)
             self._persist()
             return True
@@ -291,6 +308,9 @@ class DeskStore:
                 self._agents[agent_id] = _Agent(
                     agent_id, title, status, updated_at, color or "", shape or "", icon or ""
                 )
+            row = conn.execute("SELECT n FROM unread").fetchone()
+            if row is not None:
+                self._unread = max(0, int(row[0]))
 
     def _persist(self) -> None:
         if not self._sqlite_path:
@@ -333,6 +353,8 @@ class DeskStore:
                         agent.icon,
                     ),
                 )
+            conn.execute("DELETE FROM unread")
+            conn.execute("INSERT INTO unread (n) VALUES (?)", (self._unread,))
 
 
 def _ensure_schema(conn: sqlite3.Connection) -> None:
@@ -356,6 +378,7 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
         """)
     _add_text_columns(conn, "events")
     _add_text_columns(conn, "agents")
+    conn.execute("CREATE TABLE IF NOT EXISTS unread (n INTEGER NOT NULL)")
 
 
 def _add_text_columns(conn: sqlite3.Connection, table: str) -> None:

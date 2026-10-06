@@ -59,6 +59,45 @@ def test_status_returns_every_stored_agent() -> None:
     assert agents[16]["title"] == "Agent 16"
 
 
+def test_unread_counts_stored_events_and_clears() -> None:
+    store = DeskStore()
+    assert store.status()["unread"] == 0
+    store.apply_event(EventIn(type="agent.launched", agent_id="a1", title="Scaffold"))
+    assert store.status()["unread"] == 1
+    store.apply_event(EventIn(type="agent.launched", agent_id="a1", title="Scaffold"))
+    assert store.status()["unread"] == 1
+    store.apply_event(EventIn(type="agent.finished", agent_id="a1"))
+    assert store.status()["unread"] == 1
+    store.apply_event(EventIn(type="agent.launched", agent_id="a1", title="Scaffold"))
+    assert store.status()["unread"] == 1
+    store.apply_event(EventIn(type="note", title="Remember", message="milk"))
+    store.apply_event(EventIn(type="agent.needs_you", agent_id="a1", message="Pick one"))
+    assert store.status()["unread"] == 3
+    store.dismiss()
+    after = store.status()
+    assert after["needs_you"] is False
+    assert after["unread"] == 3
+    store.clear_unread()
+    assert store.status()["unread"] == 0
+    store.clear_unread()
+    assert store.status()["unread"] == 0
+
+
+def test_unread_persists_and_cursor_changes_count(tmp_path: Path) -> None:
+    path = tmp_path / "desk.sqlite"
+    store = DeskStore(sqlite_path=str(path))
+    store.apply_event(EventIn(type="agent.launched", agent_id="a1", title="Scaffold"))
+    assert store.apply_cursor_item("bc-1", "Readme", "running", "2026-10-02T13:00:00Z") is True
+    assert store.apply_cursor_item("bc-1", "Readme", "running", "2026-10-02T13:00:02Z") is False
+    assert store.apply_cursor_item("bc-1", "Readme", "idle", "2026-10-02T13:01:00Z") is True
+    assert store.status()["unread"] == 2
+    store.clear_unread()
+    reopened = DeskStore(sqlite_path=str(path))
+    assert reopened.status()["unread"] == 0
+    reopened.apply_event(EventIn(type="note", message="later"))
+    assert DeskStore(sqlite_path=str(path)).status()["unread"] == 1
+
+
 def test_face_title_keeps_real_events_and_drops_dismiss() -> None:
     assert face_event_title("Dismissed", "") == ""
     assert face_event_title("Remember", "milk") == "Remember"

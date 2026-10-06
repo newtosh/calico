@@ -66,7 +66,14 @@ def test_webhook_updates_status_and_auth() -> None:
         )
         cleared = post(base + "/api/dismiss", {}, "secret")
         assert cleared.status == 204
-        assert json.loads(urlopen(base + "/api/status").read())["needs_you"] is False
+        body = json.loads(urlopen(base + "/api/status").read())
+        assert body["needs_you"] is False
+        assert body["unread"] == 2
+        denied_badge = post(base + "/api/unread/dismiss", {})
+        assert denied_badge.status == 401
+        badge = post(base + "/api/unread/dismiss", {}, "secret")
+        assert badge.status == 204
+        assert json.loads(urlopen(base + "/api/status").read())["unread"] == 0
     finally:
         server.shutdown()
 

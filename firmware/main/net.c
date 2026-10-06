@@ -506,3 +506,7 @@ int net_fetch_status(const desk_settings_t *in, char *body, size_t body_len) {
 void net_dismiss(const desk_settings_t *in) {
     request(in, "/api/dismiss", "POST", NULL);
 }
+
+void net_clear_unread(const desk_settings_t *in) {
+    request(in, "/api/unread/dismiss", "POST", NULL);
+}

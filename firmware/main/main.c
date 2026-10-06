@@ -79,6 +79,10 @@ static void dismiss_alert(void) {
     net_dismiss(&s_active);
 }
 
+static void clear_unread(void) {
+    net_clear_unread(&s_active);
+}
+
 /* waveshare/esp32_s3_touch_amoled_2_16 2.0.1 declares bsp_display_lock as
  * bool and returns esp_lv_adapter_lock() unchanged. That call is esp_err_t,
  * and ESP_OK is 0, so a taken lock is false. Callers that branch on the bool
@@ -334,6 +338,7 @@ void app_main(void) {
     copy_setting(fields.token, sizeof(fields.token), s_store.token);
     if (lock_lvgl()) {
         ui_init(save_and_restart, dismiss_alert, request_scan);
+        ui_bind_unread(clear_unread);
         ui_bind_rotlock(s_rot_locked, on_rotlock);
         ui_set_fields(&fields);
         ui_set_known(&s_store);

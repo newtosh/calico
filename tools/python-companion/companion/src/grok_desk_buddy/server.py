@@ -107,7 +107,7 @@ def _handler_class(
 
         def do_POST(self) -> None:
             path = urlparse(self.path).path
-            if path not in {"/api/webhook/grok-bot", "/api/dismiss"}:
+            if path not in {"/api/webhook/grok-bot", "/api/dismiss", "/api/unread/dismiss"}:
                 self._json(404, {"error": "not found"})
                 return
             if not self._allowed():
@@ -115,6 +115,10 @@ def _handler_class(
                 return
             if path == "/api/dismiss":
                 store.dismiss()
+                self._send(204, b"", "text/plain")
+                return
+            if path == "/api/unread/dismiss":
+                store.clear_unread()
                 self._send(204, b"", "text/plain")
                 return
             payload = self._read_json()

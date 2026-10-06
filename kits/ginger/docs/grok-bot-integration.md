@@ -22,7 +22,7 @@ Send `Authorization: Bearer <token>` when `webhook_token` is set. Leave the head
 | --- | --- |
 | `type` | `agent.launched`, `agent.finished`, `agent.needs_you`, `note` |
 | `agent_id` | Required for the three agent types. Optional on `note`. |
-| `title`, `message` | Shown on the panel. Either may be empty. |
+| `title`, `message` | Shown on the panel. JSON `\uXXXX` escapes are decoded to the character. Either may be empty. |
 | `source` | Optional. Defaults to `grok-bot`. The inject buttons send `manual`. |
 | `color` | Optional. `#RRGGBB` or `RRGGBB`. Drawn as the row’s accent. Any other value is stored and shown with the neutral mark. |
 | `shape` | Optional. A name from the shape table. Anything else is stored and drawn as the neutral circle. |
@@ -100,6 +100,14 @@ Dismiss from anything that is not the panel:
 ```bash
 curl -s -X POST "$DESK_URL/api/dismiss" -H "Authorization: Bearer $GROK_DESK_WEBHOOK_TOKEN"
 ```
+
+`GET /api/status` includes `unread`. That count goes up for a needs-you event, a note, and the first time an agent id is stored. A finish, a later launch, and a cursor status change do not. `POST /api/dismiss` does not change it. Restart the companion after this build so the new field and `POST /api/unread/dismiss` are loaded. A tap on the badge, or:
+
+```bash
+curl -s -X POST "$DESK_URL/api/unread/dismiss" -H "Authorization: Bearer $GROK_DESK_WEBHOOK_TOKEN"
+```
+
+sets it back to 0. The face row is empty at 0.
 
 ## What this does not replace
 

@@ -27,13 +27,110 @@ static const char *find_key(const char *start, const char *end, const char *key)
     return NULL;
 }
 
+static int hex_nibble(char c) {
+    if (c >= '0' && c <= '9') {
+        return c - '0';
+    }
+    if (c >= 'a' && c <= 'f') {
+        return c - 'a' + 10;
+    }
+    if (c >= 'A' && c <= 'F') {
+        return c - 'A' + 10;
+    }
+    return -1;
+}
+
+static void put_utf8(char *out, size_t out_len, size_t *n, unsigned int cp) {
+    unsigned char bytes[4];
+    int len;
+    int i;
+    if (cp == 0 || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) {
+        return;
+    }
+    if (cp < 0x80) {
+        bytes[0] = (unsigned char)cp;
+        len = 1;
+    } else if (cp < 0x800) {
+        bytes[0] = (unsigned char)(0xC0 | (cp >> 6));
+        bytes[1] = (unsigned char)(0x80 | (cp & 0x3F));
+        len = 2;
+    } else if (cp < 0x10000) {
+        bytes[0] = (unsigned char)(0xE0 | (cp >> 12));
+        bytes[1] = (unsigned char)(0x80 | ((cp >> 6) & 0x3F));
+        bytes[2] = (unsigned char)(0x80 | (cp & 0x3F));
+        len = 3;
+    } else {
+        bytes[0] = (unsigned char)(0xF0 | (cp >> 18));
+        bytes[1] = (unsigned char)(0x80 | ((cp >> 12) & 0x3F));
+        bytes[2] = (unsigned char)(0x80 | ((cp >> 6) & 0x3F));
+        bytes[3] = (unsigned char)(0x80 | (cp & 0x3F));
+        len = 4;
+    }
+    if (*n + (size_t)len >= out_len) {
+        return;
+    }
+    for (i = 0; i < len; i++) {
+        out[(*n)++] = (char)bytes[i];
+    }
+}
+
+/* JSON string. \uXXXX (and a surrogate pair) becomes UTF-8. Newlines become
+ * a space so a one-line aside does not grow a second row. */
 static void copy_string(const char *value, char *out, size_t out_len) {
     size_t n = 0;
     if (out_len == 0) {
         return;
     }
     while (*value && *value != '"' && n + 1 < out_len) {
-        out[n++] = *value++;
+        unsigned int cp;
+        int i;
+        if (*value != '\\') {
+            out[n++] = *value++;
+            continue;
+        }
+        if (!value[1]) {
+            break;
+        }
+        value++;
+        if (*value == 'u') {
+            cp = 0;
+            value++;
+            for (i = 0; i < 4; i++) {
+                int h = hex_nibble(value[i]);
+                if (h < 0) {
+                    cp = 0;
+                    break;
+                }
+                cp = (cp << 4) | (unsigned int)h;
+            }
+            if (i == 4) {
+                value += 4;
+                if (cp >= 0xD800 && cp <= 0xDBFF && value[0] == '\\' && value[1] == 'u') {
+                    unsigned int low = 0;
+                    int ok = 1;
+                    for (i = 0; i < 4; i++) {
+                        int h = hex_nibble(value[2 + i]);
+                        if (h < 0) {
+                            ok = 0;
+                            break;
+                        }
+                        low = (low << 4) | (unsigned int)h;
+                    }
+                    if (ok && low >= 0xDC00 && low <= 0xDFFF) {
+                        cp = 0x10000u + ((cp - 0xD800u) << 10) + (low - 0xDC00u);
+                        value += 6;
+                    }
+                }
+                put_utf8(out, out_len, &n, cp);
+            }
+            continue;
+        }
+        if (*value == 'n' || *value == 'r' || *value == 't') {
+            out[n++] = ' ';
+        } else if (*value != 'b' && *value != 'f') {
+            out[n++] = *value;
+        }
+        value++;
     }
     out[n] = '\0';
 }
@@ -81,6 +178,8 @@ static const char *object_end(const char *open) {
 }
 
 static void read_agents(const char *json, desk_view_t *out);
+static const char *find_top_key(const char *json, const char *key);
+static int read_top_int(const char *json, const char *key, int *out);
 
 int desk_view_from_json(const char *json, desk_view_t *out) {
     const char *last;
@@ -91,6 +190,9 @@ int desk_view_from_json(const char *json, desk_view_t *out) {
     }
     memset(out, 0, sizeof(*out));
     read_string_field(json, json + strlen(json), "phase", out->phase, sizeof(out->phase));
+    if (read_top_int(json, "unread", &out->unread) != 0 || out->unread < 0) {
+        out->unread = 0;
+    }
     last = find_key(json, json + strlen(json), "needs_you");
     if (last) {
         value = skip_ws(last + strlen("\"needs_you\""));
@@ -132,6 +234,39 @@ void desk_count_text(const desk_view_t *view, char *out, size_t out_len) {
         return;
     }
     snprintf(out, out_len, "%d/%d running", view->running_count, view->known_count);
+}
+
+static int read_top_int(const char *json, const char *key, int *out) {
+    const char *at = find_top_key(json, key);
+    const char *p;
+    int value = 0;
+    int digits = 0;
+    if (!json || !at || !out) {
+        return -1;
+    }
+    p = skip_ws(at + strlen(key) + 2);
+    if (*p != ':') {
+        return -1;
+    }
+    p = skip_ws(p + 1);
+    if (*p == '-') {
+        *out = 0;
+        return 0;
+    }
+    while (*p >= '0' && *p <= '9') {
+        digits = 1;
+        if (value > 100000) {
+            value = 100000;
+        } else {
+            value = value * 10 + (*p - '0');
+        }
+        p++;
+    }
+    if (!digits) {
+        return -1;
+    }
+    *out = value;
+    return 0;
 }
 
 /* Top-level only. A status event can quote the word panel; that must not
@@ -345,6 +480,54 @@ int desk_mark_shape(const char *shape) {
         }
     }
     return DESK_SHAPE_CIRCLE;
+}
+
+int desk_unread_count(const desk_view_t *view) {
+    if (!view || view->unread < 1) {
+        return 0;
+    }
+    return view->unread;
+}
+
+void desk_row_spans(int avail, int name_px, int gap, int min_aside, int show_aside, int *name_w,
+                    int *aside_w) {
+    int name = 0;
+    int aside = 0;
+    int room;
+    if (avail < 0) {
+        avail = 0;
+    }
+    if (name_px < 0) {
+        name_px = 0;
+    }
+    if (gap < 0) {
+        gap = 0;
+    }
+    if (min_aside < 0) {
+        min_aside = 0;
+    }
+    if (!show_aside) {
+        name = avail;
+    } else {
+        room = avail - gap;
+        if (room < 0) {
+            room = 0;
+        }
+        if (min_aside > room) {
+            min_aside = room;
+        }
+        name = name_px;
+        if (name > room - min_aside) {
+            name = room - min_aside;
+        }
+        aside = room - name;
+    }
+    if (name_w) {
+        *name_w = name;
+    }
+    if (aside_w) {
+        *aside_w = aside;
+    }
 }
 
 const char *desk_face_title(const desk_view_t *view) {
