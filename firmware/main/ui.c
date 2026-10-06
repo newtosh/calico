@@ -52,12 +52,13 @@ enum {
     DOCK = 0x0c0e09
 };
 
-_Static_assert(SCREEN_PX == FACE_SCREEN, "face band width");
-_Static_assert(EDGE_PX == FACE_EDGE, "face band edge");
-_Static_assert(BAR_H == FACE_BAR_H, "face band top");
-_Static_assert(BTN_H == FACE_BTN_H, "face band dock");
-_Static_assert(DOCK_TOP == FACE_DOCK_TOP, "face band bottom");
-_Static_assert(MESSAGE_Y == FACE_MESSAGE_Y, "sleep origin");
+/* int casts: these are two anonymous enums, and -Werror=enum-compare rejects the compare. */
+_Static_assert((int)SCREEN_PX == (int)FACE_SCREEN, "face band width");
+_Static_assert((int)EDGE_PX == (int)FACE_EDGE, "face band edge");
+_Static_assert((int)BAR_H == (int)FACE_BAR_H, "face band top");
+_Static_assert((int)BTN_H == (int)FACE_BTN_H, "face band dock");
+_Static_assert((int)DOCK_TOP == (int)FACE_DOCK_TOP, "face band bottom");
+_Static_assert((int)MESSAGE_Y == (int)FACE_MESSAGE_Y, "sleep origin");
 
 static lv_obj_t *s_title;
 static lv_obj_t *s_message;
