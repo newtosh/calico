@@ -108,6 +108,8 @@ gcc -Wall -Werror -I firmware/main firmware/host/test_orient.c firmware/main/ori
 /tmp/test_orient
 gcc -Wall -Werror -I firmware/main firmware/host/test_desk_status.c firmware/main/desk_status.c -o /tmp/test_desk_status
 /tmp/test_desk_status
+gcc -Wall -Werror -I firmware/main firmware/host/test_face_cover.c firmware/main/face_cover.c -o /tmp/test_face_cover
+/tmp/test_face_cover
 ```
 
 Open `firmware/simulator/index.html` in a browser. It polls `http://127.0.0.1:8787` unless you pass `?base=http://192.168.1.20:8787`. Wheel or drag scrolls the agent list inside the face. The bar and the dock stay fixed.
