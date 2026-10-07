@@ -1,0 +1,35 @@
+name: Bug
+description: Something does not work.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you saw.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Calico version
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Distro and desktop
+      placeholder: Arch, KDE Plasma 6
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Panel firmware version
+      description: Shown in Device after connecting.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console output
+      description: Remove any passwords or tokens before pasting.
+      render: text

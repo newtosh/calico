@@ -1,0 +1,17 @@
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.0
+    hooks:
+      - id: gitleaks
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint
+        entry: pnpm exec eslint --max-warnings=0
+        language: system
+        files: \.(ts|tsx|mjs)$
+      - id: prettier
+        name: prettier
+        entry: pnpm exec prettier --check
+        language: system
+        types_or: [ts, tsx, javascript, json, yaml, markdown, css]
