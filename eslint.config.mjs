@@ -1,0 +1,37 @@
+import js from "@eslint/js";
+import tseslint from "typescript-eslint";
+
+export default tseslint.config(
+  {
+    ignores: [
+      "out/**",
+      "dist/**",
+      "node_modules/**",
+      "test/contract/fixtures/**",
+    ],
+  },
+  js.configs.recommended,
+  ...tseslint.configs.strict,
+  {
+    files: ["src/server/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "electron",
+              message: "src/server must run without Electron.",
+            },
+          ],
+          patterns: [
+            {
+              group: ["**/main/**", "**/preload/**", "**/renderer/**"],
+              message: "src/server must not depend on app layers.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+);

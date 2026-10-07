@@ -18,12 +18,12 @@ Calico is a desktop companion and developer kit for [grokbot-buddy](https://gith
 
 Each sub-project gets its own spec, plan, and implementation cycle.
 
-| # | Sub-project | Depends on |
-|---|---|---|
-| 1 | **Core app** (this spec): companion server, dashboard, device provisioning over USB and BLE, Linux packaging, public-repo scaffolding | grokbot-buddy USB serial console (see Prerequisites) |
-| 2 | Screen simulator: the firmware's real LVGL `ui.c` compiled to WASM (lv_web_emscripten) with HAL stubs, rendered in an app pane and fed by the live store | grokbot-buddy publishing a WASM UI build as a release asset |
-| 3 | SDK: firmware flashing with esptool-js over the v1 USB layer, first-run wizard (flash, provision, done), QEMU headless boot tests | grokbot-buddy publishing tagged firmware binaries |
-| 4 | Stretch: agent adapters (Claude Code and Codex hooks), status push over BLE and USB, macOS and Windows builds and signing, board abstraction (Improv Wi-Fi for other boards) | 1 to 3 |
+| #   | Sub-project                                                                                                                                                                  | Depends on                                                  |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| 1   | **Core app** (this spec): companion server, dashboard, device provisioning over USB and BLE, Linux packaging, public-repo scaffolding                                        | grokbot-buddy USB serial console (see Prerequisites)        |
+| 2   | Screen simulator: the firmware's real LVGL `ui.c` compiled to WASM (lv_web_emscripten) with HAL stubs, rendered in an app pane and fed by the live store                     | grokbot-buddy publishing a WASM UI build as a release asset |
+| 3   | SDK: firmware flashing with esptool-js over the v1 USB layer, first-run wizard (flash, provision, done), QEMU headless boot tests                                            | grokbot-buddy publishing tagged firmware binaries           |
+| 4   | Stretch: agent adapters (Claude Code and Codex hooks), status push over BLE and USB, macOS and Windows builds and signing, board abstraction (Improv Wi-Fi for other boards) | 1 to 3                                                      |
 
 ## Repo relationship
 
@@ -204,14 +204,14 @@ Ready before or at the first push:
 
 ## Tooling choices
 
-| Need | Choice | Why |
-|---|---|---|
-| Build | electron-vite | Main, preload, and renderer in one Vite config. The existing Vite React app drops in. |
-| Packaging | electron-builder | AppImage and pacman targets, which Forge lacks. Later macOS and Windows signing. |
-| BLE | Electron Web Bluetooth | Built in, cross-platform, no native module. Fallback if needed: @stoprocent/noble. |
-| USB | Electron Web Serial | Built in. Same layer esptool-js uses in sub-project 3. |
-| Headless UI | Base UI | Active, unstyled, now shadcn's default base. |
-| Package manager | pnpm | |
+| Need            | Choice                 | Why                                                                                   |
+| --------------- | ---------------------- | ------------------------------------------------------------------------------------- |
+| Build           | electron-vite          | Main, preload, and renderer in one Vite config. The existing Vite React app drops in. |
+| Packaging       | electron-builder       | AppImage and pacman targets, which Forge lacks. Later macOS and Windows signing.      |
+| BLE             | Electron Web Bluetooth | Built in, cross-platform, no native module. Fallback if needed: @stoprocent/noble.    |
+| USB             | Electron Web Serial    | Built in. Same layer esptool-js uses in sub-project 3.                                |
+| Headless UI     | Base UI                | Active, unstyled, now shadcn's default base.                                          |
+| Package manager | pnpm                   |                                                                                       |
 
 All checked active in September and October 2026.
 

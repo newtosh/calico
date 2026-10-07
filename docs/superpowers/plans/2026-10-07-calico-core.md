@@ -85,13 +85,13 @@ calico/
 
 ## Phases and branches
 
-| Phase | Tasks | Branch | Ends with |
-|---|---|---|---|
-| A. Public skeleton | 1 to 4 | `main` (local, then first push) | Repo public with docs, CI, protections |
-| B. Server | 5 to 11 | `feat/server` | PR, CI green, Bugbot reviewed, user merges |
-| C. App shell | 12 to 14 | `feat/app-shell` | PR |
-| D. Devices | 15 to 18 | `feat/devices` | PR |
-| E. Release | 19 to 21 | `feat/release` | PR, then user tags `v0.1.0` |
+| Phase              | Tasks    | Branch                          | Ends with                                  |
+| ------------------ | -------- | ------------------------------- | ------------------------------------------ |
+| A. Public skeleton | 1 to 4   | `main` (local, then first push) | Repo public with docs, CI, protections     |
+| B. Server          | 5 to 11  | `feat/server`                   | PR, CI green, Bugbot reviewed, user merges |
+| C. App shell       | 12 to 14 | `feat/app-shell`                | PR                                         |
+| D. Devices         | 15 to 18 | `feat/devices`                  | PR                                         |
+| E. Release         | 19 to 21 | `feat/release`                  | PR, then user tags `v0.1.0`                |
 
 From Task 5 on, `main` is protected. Every phase starts with `git switch main && git pull && git switch -c <branch>` and ends with the PR step written in its last task.
 
@@ -102,11 +102,13 @@ From Task 5 on, `main` is protected. Every phase starts with `git switch main &&
 ### Task 1: Scaffold the Electron app
 
 **Files:**
+
 - Create: `package.json`, `pnpm-workspace.yaml`, `electron.vite.config.ts`, `tsconfig.node.json`, `tsconfig.web.json`, `eslint.config.mjs`, `vitest.config.ts`, `.prettierrc`, `.prettierignore`, `.gitignore`
 - Create: `src/main/index.ts`, `src/preload/index.ts`, `src/shared/ipc.ts`, `src/renderer/index.html`, `src/renderer/src/main.tsx`, `src/renderer/src/App.tsx`, `src/renderer/src/styles.css`, `src/server/.gitkeep`
 - Test: `test/lint-boundary.test.ts`
 
 **Interfaces:**
+
 - Produces: scripts `pnpm dev`, `build`, `lint`, `format:check`, `typecheck`, `test`. `window.calico` typed as `CalicoApi` from `src/shared/ipc.ts` (empty interface for now, filled in Task 12).
 
 - [ ] **Step 1: Write package.json**
@@ -253,7 +255,14 @@ import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["out/**", "dist/**", "node_modules/**", "test/contract/fixtures/**"] },
+  {
+    ignores: [
+      "out/**",
+      "dist/**",
+      "node_modules/**",
+      "test/contract/fixtures/**",
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.strict,
   {
@@ -262,7 +271,12 @@ export default tseslint.config(
       "no-restricted-imports": [
         "error",
         {
-          paths: [{ name: "electron", message: "src/server must run without Electron." }],
+          paths: [
+            {
+              name: "electron",
+              message: "src/server must run without Electron.",
+            },
+          ],
           patterns: [
             {
               group: ["**/main/**", "**/preload/**", "**/renderer/**"],
@@ -321,7 +335,9 @@ describe("server boundary", () => {
       'import { app } from "electron";\nexport const name = app.name;\n',
       { filePath: "src/server/probe.ts" },
     );
-    expect(result?.messages.some((m) => m.ruleId === "no-restricted-imports")).toBe(true);
+    expect(
+      result?.messages.some((m) => m.ruleId === "no-restricted-imports"),
+    ).toBe(true);
   });
 
   it("allows electron imports in src/main", async () => {
@@ -330,7 +346,9 @@ describe("server boundary", () => {
       'import { app } from "electron";\nexport const name = app.name;\n',
       { filePath: "src/main/probe.ts" },
     );
-    expect(result?.messages.some((m) => m.ruleId === "no-restricted-imports")).toBe(false);
+    expect(
+      result?.messages.some((m) => m.ruleId === "no-restricted-imports"),
+    ).toBe(false);
   });
 });
 ```
@@ -468,9 +486,11 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 2: Public repo docs and hygiene files
 
 **Files:**
+
 - Create: `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, `LICENSE`, `DESIGN.md`, `.cursor/BUGBOT.md`, `.github/CODEOWNERS`, `.github/dependabot.yml`, `.github/pull_request_template.md`, `.github/ISSUE_TEMPLATE/bug.yml`, `.github/ISSUE_TEMPLATE/feature.yml`, `.github/ISSUE_TEMPLATE/config.yml`, `.pre-commit-config.yaml`
 
 **Interfaces:**
+
 - Produces: `DESIGN.md` (read by Task 13, 14, 17, 21), `.cursor/BUGBOT.md`, pre-commit hooks.
 
 - [ ] **Step 1: LICENSE**
@@ -486,7 +506,7 @@ Expected: `MIT License`, blank line, `Copyright (c) 2026 Jon Newton`.
 
 - [ ] **Step 2: README.md**
 
-```markdown
+````markdown
 # Calico
 
 Desktop companion and developer kit for [grokbot-buddy](https://github.com/newtosh/grokbot-buddy), an ESP32-S3 AMOLED desk panel that shows what your coding agents are doing.
@@ -510,6 +530,7 @@ Linux packages (AppImage, deb, pacman) are attached to each [release](https://gi
 sha256sum -c SHA256SUMS
 gh attestation verify Calico-*.AppImage --repo newtosh/calico
 ```
+````
 
 The tray icon needs a StatusNotifier host. KDE and most panels have one. GNOME needs the AppIndicator extension.
 
@@ -531,7 +552,8 @@ The companion listens on your LAN with no accounts. Anyone on the same network c
 ## License
 
 MIT. See [LICENSE](LICENSE).
-```
+
+````
 
 - [ ] **Step 3: CONTRIBUTING.md**
 
@@ -546,7 +568,7 @@ Thanks for looking. Calico is a solo project built in public, so the process is 
 pnpm install
 pre-commit install
 pnpm dev
-```
+````
 
 `pre-commit` runs eslint, prettier, and gitleaks before each commit.
 
@@ -574,7 +596,8 @@ pnpm dev
 ## Firmware
 
 The firmware lives in [grokbot-buddy](https://github.com/newtosh/grokbot-buddy). Changes to the Bluetooth or USB protocol start there. `docs/usb-console-protocol.md` here is the contract both sides follow.
-```
+
+````
 
 - [ ] **Step 4: SECURITY.md**
 
@@ -595,7 +618,7 @@ I aim to acknowledge reports within a week. Calico is a hobby project with one m
 ## Known posture
 
 The companion has no user accounts by design. Status reads are open to the LAN. When a panel token is pushed, `/api/status` includes it, because the panel polls without authentication. See the README.
-```
+````
 
 - [ ] **Step 5: DESIGN.md**
 
@@ -612,18 +635,18 @@ A developer glancing over between tasks, or setting up a board with a cable in o
 
 The palette comes from the panel firmware. Do not add colors.
 
-| Token | Hex | Use |
-|---|---|---|
-| glass | `#0c0e09` | window background, strips |
-| surface | `#14160f` | sidebar, raised areas |
-| field | `#2a2d24` | inputs, buttons, off states |
-| stroke | `#6d6756` | borders, dividers |
+| Token    | Hex       | Use                                |
+| -------- | --------- | ---------------------------------- |
+| glass    | `#0c0e09` | window background, strips          |
+| surface  | `#14160f` | sidebar, raised areas              |
+| field    | `#2a2d24` | inputs, buttons, off states        |
+| stroke   | `#6d6756` | borders, dividers                  |
 | selected | `#3d4f32` | selected rows, primary button fill |
-| sage | `#9bb57a` | ok, running, online, focus ring |
-| cream | `#efe7d6` | primary text |
-| muted | `#a39b88` | secondary text, idle |
-| amber | `#e2a23a` | needs you, warnings, connecting |
-| red | `#c4544a` | errors, offline |
+| sage     | `#9bb57a` | ok, running, online, focus ring    |
+| cream    | `#efe7d6` | primary text                       |
+| muted    | `#a39b88` | secondary text, idle               |
+| amber    | `#e2a23a` | needs you, warnings, connecting    |
+| red      | `#c4544a` | errors, offline                    |
 
 Type: the platform UI font (`system-ui`), tabular numerals everywhere. Monospace only in the Console and for commands the user copies.
 
@@ -843,9 +866,11 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 3: CI workflow with pinned actions
 
 **Files:**
+
 - Create: `.github/workflows/ci.yml`, `scripts/pin-actions.sh`
 
 **Interfaces:**
+
 - Produces: required status check named `ci` (job name). `scripts/pin-actions.sh` reused in Tasks 19 and 20.
 
 - [ ] **Step 1: Write ci.yml with major-version refs**
@@ -1018,6 +1043,7 @@ Expected: `main`; secret scanning and push protection `enabled`; the push run of
 - [ ] **Step 5: User: enable Cursor Bugbot**
 
 Ask the user to do this in the Cursor dashboard (cursor.com/dashboard → Bugbot):
+
 1. Connect GitHub if not connected, and enable `newtosh/calico`.
 2. Set Bugbot to run when a pull request is marked ready for review, not on draft pushes. Manual `bugbot run` comments stay on.
 3. Set a monthly spending cap.
@@ -1038,9 +1064,11 @@ Start: `git switch main && git pull && git switch -c feat/server`
 ### Task 5: Capture contract fixtures from the Python companion
 
 **Files:**
+
 - Create: `test/contract/capture.py`, `test/contract/scenario.json`, `test/contract/fixtures/companion.json` (generated)
 
 **Interfaces:**
+
 - Produces: `fixtures/companion.json` with shape `{ "source": string, "steps": Recorded[] }`, where `Recorded = { step, status, content_type, cors: [string, string, string], json?, body_b64? }`. Consumed by Task 9.
 
 - [ ] **Step 1: Write the scenario**
@@ -1050,34 +1078,149 @@ Start: `git switch main && git pull && git switch -c feat/server`
 ```json
 [
   { "method": "GET", "path": "/api/status" },
-  { "method": "POST", "path": "/api/webhook/grok-bot", "json": { "type": "agent.launched", "agent_id": "a1" } },
-  { "method": "POST", "path": "/api/webhook/grok-bot", "headers": { "Authorization": "Bearer nope" }, "json": { "type": "agent.launched", "agent_id": "a1" } },
-  { "method": "POST", "path": "/api/webhook/grok-bot", "auth": true, "json": { "type": "agent.launched", "agent_id": "a1", "title": "Scaffold", "color": "#9bb57a", "shape": " Diamond ", "icon": "https://example.com/i.png" } },
-  { "method": "POST", "path": "/api/webhook/grok-bot", "auth": true, "json": { "type": "nope", "agent_id": "a1" } },
-  { "method": "POST", "path": "/api/webhook/grok-bot", "auth": true, "json": { "type": "agent.needs_you", "agent_id": "a1", "title": "Question?", "message": "Pick one" } },
-  { "method": "POST", "path": "/api/webhook/grok-bot", "auth": true, "json": { "type": "agent.launched", "agent_id": "b2", "title": "Builder", "message": "Compiling" } },
-  { "method": "POST", "path": "/api/webhook/grok-bot", "auth": true, "json": { "type": "note", "message": "Deploy done" } },
-  { "method": "POST", "path": "/api/webhook/grok-bot", "auth": true, "json": { "type": "agent.launched", "agent_id": "c3", "title": "Café ✓ 🙂" } },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "json": { "type": "agent.launched", "agent_id": "a1" }
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "headers": { "Authorization": "Bearer nope" },
+    "json": { "type": "agent.launched", "agent_id": "a1" }
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "auth": true,
+    "json": {
+      "type": "agent.launched",
+      "agent_id": "a1",
+      "title": "Scaffold",
+      "color": "#9bb57a",
+      "shape": " Diamond ",
+      "icon": "https://example.com/i.png"
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "auth": true,
+    "json": { "type": "nope", "agent_id": "a1" }
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "auth": true,
+    "json": {
+      "type": "agent.needs_you",
+      "agent_id": "a1",
+      "title": "Question?",
+      "message": "Pick one"
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "auth": true,
+    "json": {
+      "type": "agent.launched",
+      "agent_id": "b2",
+      "title": "Builder",
+      "message": "Compiling"
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "auth": true,
+    "json": { "type": "note", "message": "Deploy done" }
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "auth": true,
+    "json": { "type": "agent.launched", "agent_id": "c3", "title": "Café ✓ 🙂" }
+  },
   { "method": "GET", "path": "/api/status" },
   { "method": "POST", "path": "/api/unread/dismiss", "auth": true },
-  { "method": "POST", "path": "/api/dismiss", "auth": true, "json": { "agent_id": "zz" } },
+  {
+    "method": "POST",
+    "path": "/api/dismiss",
+    "auth": true,
+    "json": { "agent_id": "zz" }
+  },
   { "method": "GET", "path": "/api/status" },
-  { "method": "POST", "path": "/api/dismiss", "auth": true, "json": { "agent_id": "a1" } },
-  { "method": "POST", "path": "/api/webhook/grok-bot", "auth": true, "json": { "type": "agent.finished", "agent_id": "b2" } },
+  {
+    "method": "POST",
+    "path": "/api/dismiss",
+    "auth": true,
+    "json": { "agent_id": "a1" }
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "auth": true,
+    "json": { "type": "agent.finished", "agent_id": "b2" }
+  },
   { "method": "GET", "path": "/api/status" },
-  { "method": "PUT", "path": "/api/panel", "auth": true, "json": { "ssid": "home" } },
-  { "method": "PUT", "path": "/api/panel", "auth": true, "json": { "token": "t" } },
-  { "method": "PUT", "path": "/api/panel", "auth": true, "json": { "url": "http://192.168.4.30:8787/", "token": "desk-secret" } },
+  {
+    "method": "PUT",
+    "path": "/api/panel",
+    "auth": true,
+    "json": { "ssid": "home" }
+  },
+  {
+    "method": "PUT",
+    "path": "/api/panel",
+    "auth": true,
+    "json": { "token": "t" }
+  },
+  {
+    "method": "PUT",
+    "path": "/api/panel",
+    "auth": true,
+    "json": { "url": "http://192.168.4.30:8787/", "token": "desk-secret" }
+  },
   { "method": "GET", "path": "/api/status" },
   { "method": "GET", "path": "/api/panel" },
   { "method": "POST", "path": "/api/frame/request", "auth": true },
   { "method": "GET", "path": "/api/status" },
-  { "method": "POST", "path": "/api/frame", "auth": true, "headers": { "Content-Type": "image/bmp" }, "body_b64": "Qk0AAQID" },
+  {
+    "method": "POST",
+    "path": "/api/frame",
+    "auth": true,
+    "headers": { "Content-Type": "image/bmp" },
+    "body_b64": "Qk0AAQID"
+  },
   { "method": "GET", "path": "/api/frame" },
-  { "method": "POST", "path": "/api/frame", "auth": true, "headers": { "Content-Type": "text/plain" }, "body_b64": "Qk0AAQID" },
-  { "method": "POST", "path": "/api/frame", "auth": true, "headers": { "Content-Type": "image/bmp" }, "body_b64": "WFhYWA==" },
-  { "method": "POST", "path": "/api/webhook/grok-bot", "auth": true, "headers": { "Content-Type": "application/json" }, "body_b64": "bm90IGpzb24=" },
-  { "method": "PUT", "path": "/api/panel", "auth": true, "json": { "clear": true } },
+  {
+    "method": "POST",
+    "path": "/api/frame",
+    "auth": true,
+    "headers": { "Content-Type": "text/plain" },
+    "body_b64": "Qk0AAQID"
+  },
+  {
+    "method": "POST",
+    "path": "/api/frame",
+    "auth": true,
+    "headers": { "Content-Type": "image/bmp" },
+    "body_b64": "WFhYWA=="
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "auth": true,
+    "headers": { "Content-Type": "application/json" },
+    "body_b64": "bm90IGpzb24="
+  },
+  {
+    "method": "PUT",
+    "path": "/api/panel",
+    "auth": true,
+    "json": { "clear": true }
+  },
   { "method": "GET", "path": "/api/status" },
   { "method": "GET", "path": "/api/nope" },
   { "method": "POST", "path": "/api/nope", "auth": true },
@@ -1207,36 +1350,95 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 6: DeskStore
 
 **Files:**
+
 - Create: `src/server/store.ts`
 - Delete: `src/server/.gitkeep`
 - Test: `test/server/store.test.ts`
 
 **Interfaces:**
+
 - Produces (exact names, used by Tasks 7, 9, 10, 12):
 
 ```ts
-export const EVENT_CAP = 50, COLOR_LIMIT = 32, SHAPE_LIMIT = 16, ICON_LIMIT = 200;
+export const EVENT_CAP = 50,
+  COLOR_LIMIT = 32,
+  SHAPE_LIMIT = 16,
+  ICON_LIMIT = 200;
 export const RUNNING_TTL_MS = 120_000;
 export const FRAME_MAX = 480 * 480 * 2 + 256;
 export class StoreError extends Error {}
-export interface EventIn { type: string; agent_id?: string; title?: string; message?: string; source?: string; color?: string; shape?: string; icon?: string }
-export interface DeskEvent { id: string; type: string; agent_id: string; title: string; message: string; source: string; at: string; color: string; shape: string; icon: string }
-export interface AgentRecord { id: string; title: string; status: "running" | "idle"; updated_at: string; color: string; shape: string; icon: string; attention: boolean; message: string }
-export interface Snapshot { events: DeskEvent[]; agents: AgentRecord[]; unread: number }
-export interface StatusBody { phase: Phase; needs_you: boolean; unread: number; capture: boolean; agents: PublicAgent[]; last_event: DeskEvent | null; events: DeskEvent[] }
+export interface EventIn {
+  type: string;
+  agent_id?: string;
+  title?: string;
+  message?: string;
+  source?: string;
+  color?: string;
+  shape?: string;
+  icon?: string;
+}
+export interface DeskEvent {
+  id: string;
+  type: string;
+  agent_id: string;
+  title: string;
+  message: string;
+  source: string;
+  at: string;
+  color: string;
+  shape: string;
+  icon: string;
+}
+export interface AgentRecord {
+  id: string;
+  title: string;
+  status: "running" | "idle";
+  updated_at: string;
+  color: string;
+  shape: string;
+  icon: string;
+  attention: boolean;
+  message: string;
+}
+export interface Snapshot {
+  events: DeskEvent[];
+  agents: AgentRecord[];
+  unread: number;
+}
+export interface StatusBody {
+  phase: Phase;
+  needs_you: boolean;
+  unread: number;
+  capture: boolean;
+  agents: PublicAgent[];
+  last_event: DeskEvent | null;
+  events: DeskEvent[];
+}
 export function clipText(value: unknown, limit: number): string;
 export function clipShape(value: unknown): string;
 export function isoSeconds(date: Date): string;
 export class DeskStore {
-  constructor(opts?: { now?: () => Date; snapshot?: Snapshot | null; onChange?: (s: Snapshot) => void });
-  applyEvent(raw: EventIn): DeskEvent;         // throws StoreError
+  constructor(opts?: {
+    now?: () => Date;
+    snapshot?: Snapshot | null;
+    onChange?: (s: Snapshot) => void;
+  });
+  applyEvent(raw: EventIn): DeskEvent; // throws StoreError
   dismiss(agentId?: string): void;
   requestFrame(): void;
   saveFrame(body: Buffer): "ok" | "too_big" | "bad";
   frame(): Buffer | null;
   clearUnread(): void;
   status(): StatusBody;
-  applyCursorItem(agentId: string, name: string, mapped: string, at: string, color?: string, shape?: string, icon?: string): boolean;
+  applyCursorItem(
+    agentId: string,
+    name: string,
+    mapped: string,
+    at: string,
+    color?: string,
+    shape?: string,
+    icon?: string,
+  ): boolean;
   snapshot(): Snapshot;
 }
 ```
@@ -1262,19 +1464,48 @@ function clock(start = "2026-10-07T12:00:00Z") {
 describe("DeskStore", () => {
   it("goes launched, needs_you, dismissed", () => {
     const store = new DeskStore({ now: clock().now });
-    store.applyEvent({ type: "agent.launched", agent_id: "a1", title: "Scaffold" });
+    store.applyEvent({
+      type: "agent.launched",
+      agent_id: "a1",
+      title: "Scaffold",
+    });
     expect(store.status().phase).toBe("running");
-    store.applyEvent({ type: "agent.needs_you", agent_id: "a1", message: "Pick one" });
-    expect(store.status()).toMatchObject({ phase: "needs_you", needs_you: true });
+    store.applyEvent({
+      type: "agent.needs_you",
+      agent_id: "a1",
+      message: "Pick one",
+    });
+    expect(store.status()).toMatchObject({
+      phase: "needs_you",
+      needs_you: true,
+    });
     store.dismiss();
     const after = store.status();
     expect(after).toMatchObject({ phase: "running", needs_you: false });
-    expect(after.last_event).toMatchObject({ type: "note", source: "manual", title: "", message: "" });
+    expect(after.last_event).toMatchObject({
+      type: "note",
+      source: "manual",
+      title: "",
+      message: "",
+    });
   });
 
   it("orders waiting agents first, then newest", () => {
-    const row = (id: string, status: "running" | "idle", at: string, attention = false) => ({
-      id, title: id.toUpperCase(), status, updated_at: at, color: "", shape: "", icon: "", attention, message: "",
+    const row = (
+      id: string,
+      status: "running" | "idle",
+      at: string,
+      attention = false,
+    ) => ({
+      id,
+      title: id.toUpperCase(),
+      status,
+      updated_at: at,
+      color: "",
+      shape: "",
+      icon: "",
+      attention,
+      message: "",
     });
     const snapshot: Snapshot = {
       events: [],
@@ -1287,15 +1518,28 @@ describe("DeskStore", () => {
         row("n", "running", "2026-10-05T10:00:00Z", true),
       ],
     };
-    const store = new DeskStore({ snapshot, now: clock("2026-10-05T12:01:00Z").now });
-    expect(store.status().agents.map((a) => a.id)).toEqual(["n", "z", "b", "a", "m"]);
+    const store = new DeskStore({
+      snapshot,
+      now: clock("2026-10-05T12:01:00Z").now,
+    });
+    expect(store.status().agents.map((a) => a.id)).toEqual([
+      "n",
+      "z",
+      "b",
+      "a",
+      "m",
+    ]);
   });
 
   it("returns every stored agent", () => {
     const store = new DeskStore({ now: clock().now });
     for (let i = 0; i < 17; i++) {
       const id = `a${String(i).padStart(2, "0")}`;
-      store.applyEvent({ type: "agent.launched", agent_id: id, title: `Agent ${i}` });
+      store.applyEvent({
+        type: "agent.launched",
+        agent_id: id,
+        title: `Agent ${i}`,
+      });
     }
     const agents = store.status().agents;
     expect(agents).toHaveLength(17);
@@ -1305,8 +1549,16 @@ describe("DeskStore", () => {
 
   it("counts unread as waiting agents and clears with them", () => {
     const store = new DeskStore({ now: clock().now });
-    store.applyEvent({ type: "agent.needs_you", agent_id: "a1", message: "one" });
-    store.applyEvent({ type: "agent.needs_you", agent_id: "b2", message: "two" });
+    store.applyEvent({
+      type: "agent.needs_you",
+      agent_id: "a1",
+      message: "one",
+    });
+    store.applyEvent({
+      type: "agent.needs_you",
+      agent_id: "b2",
+      message: "two",
+    });
     expect(store.status().unread).toBe(2);
     store.dismiss();
     expect(store.status().unread).toBe(0);
@@ -1323,13 +1575,18 @@ describe("DeskStore", () => {
 
   it("rejects unknown types and agent events without an id", () => {
     const store = new DeskStore();
-    expect(() => store.applyEvent({ type: "nope", agent_id: "a1" })).toThrow("unknown event type");
-    expect(() => store.applyEvent({ type: "agent.launched" })).toThrow("agent_id required");
+    expect(() => store.applyEvent({ type: "nope", agent_id: "a1" })).toThrow(
+      "unknown event type",
+    );
+    expect(() => store.applyEvent({ type: "agent.launched" })).toThrow(
+      "agent_id required",
+    );
   });
 
   it("caps events at 50", () => {
     const store = new DeskStore({ now: clock().now });
-    for (let i = 0; i < 60; i++) store.applyEvent({ type: "note", message: `n${i}` });
+    for (let i = 0; i < 60; i++)
+      store.applyEvent({ type: "note", message: `n${i}` });
     const events = store.status().events;
     expect(events).toHaveLength(50);
     expect(events[0]?.message).toBe("n59");
@@ -1337,8 +1594,14 @@ describe("DeskStore", () => {
 
   it("does not let cursor clear needs_you", () => {
     const store = new DeskStore({ now: clock().now });
-    store.applyEvent({ type: "agent.needs_you", agent_id: "a1", message: "wait" });
-    expect(store.applyCursorItem("a1", "Cursor", "idle", "2026-10-07T12:00:05Z")).toBe(false);
+    store.applyEvent({
+      type: "agent.needs_you",
+      agent_id: "a1",
+      message: "wait",
+    });
+    expect(
+      store.applyCursorItem("a1", "Cursor", "idle", "2026-10-07T12:00:05Z"),
+    ).toBe(false);
     expect(store.status().phase).toBe("needs_you");
   });
 
@@ -1359,13 +1622,24 @@ describe("DeskStore", () => {
     const store = new DeskStore({ now: c.now });
     store.applyEvent({ type: "agent.launched", agent_id: "a1" });
     c.advance(121);
-    expect(store.status()).toMatchObject({ phase: "idle", agents: [{ status: "idle" }] });
+    expect(store.status()).toMatchObject({
+      phase: "idle",
+      agents: [{ status: "idle" }],
+    });
   });
 
   it("dismisses one named agent and ignores a name that matches nobody", () => {
     const store = new DeskStore({ now: clock().now });
-    store.applyEvent({ type: "agent.needs_you", agent_id: "a1", message: "one" });
-    store.applyEvent({ type: "agent.needs_you", agent_id: "b2", message: "two" });
+    store.applyEvent({
+      type: "agent.needs_you",
+      agent_id: "a1",
+      message: "one",
+    });
+    store.applyEvent({
+      type: "agent.needs_you",
+      agent_id: "b2",
+      message: "two",
+    });
     store.dismiss("zz");
     expect(store.status().unread).toBe(2);
     store.dismiss("a1");
@@ -1377,9 +1651,21 @@ describe("DeskStore", () => {
 
   it("keeps a single waiter's question on last_event", () => {
     const store = new DeskStore({ now: clock().now });
-    store.applyEvent({ type: "agent.launched", agent_id: "a1", title: "Scaffold" });
-    store.applyEvent({ type: "agent.needs_you", agent_id: "a1", message: "Pick one" });
-    store.applyEvent({ type: "agent.launched", agent_id: "b2", title: "Builder" });
+    store.applyEvent({
+      type: "agent.launched",
+      agent_id: "a1",
+      title: "Scaffold",
+    });
+    store.applyEvent({
+      type: "agent.needs_you",
+      agent_id: "a1",
+      message: "Pick one",
+    });
+    store.applyEvent({
+      type: "agent.launched",
+      agent_id: "b2",
+      title: "Builder",
+    });
     expect(store.status().last_event).toMatchObject({
       type: "agent.launched",
       agent_id: "a1",
@@ -1403,15 +1689,28 @@ describe("DeskStore", () => {
 
   it("clips identity and lowercases the shape", () => {
     const store = new DeskStore({ now: clock().now });
-    store.applyEvent({ type: "agent.launched", agent_id: "a1", shape: "  DiamondDiamondDiamond ", color: " #9bb57a " });
-    expect(store.status().agents[0]).toMatchObject({ shape: "diamonddiamonddi", color: "#9bb57a" });
+    store.applyEvent({
+      type: "agent.launched",
+      agent_id: "a1",
+      shape: "  DiamondDiamondDiamond ",
+      color: " #9bb57a ",
+    });
+    expect(store.status().agents[0]).toMatchObject({
+      shape: "diamonddiamonddi",
+      color: "#9bb57a",
+    });
   });
 
   it("round-trips through a snapshot and reports every change", () => {
     const onChange = vi.fn();
     const c = clock();
     const store = new DeskStore({ now: c.now, onChange });
-    store.applyEvent({ type: "agent.needs_you", agent_id: "a1", title: "A", message: "q" });
+    store.applyEvent({
+      type: "agent.needs_you",
+      agent_id: "a1",
+      title: "A",
+      message: "q",
+    });
     expect(onChange).toHaveBeenCalledTimes(1);
     const copy = new DeskStore({ now: c.now, snapshot: store.snapshot() });
     expect(copy.status()).toEqual(store.status());
@@ -1431,7 +1730,11 @@ Expected: FAIL, cannot resolve `../../src/server/store`.
 ```ts
 import { randomUUID } from "node:crypto";
 
-export const AGENT_TYPES = new Set(["agent.launched", "agent.finished", "agent.needs_you"]);
+export const AGENT_TYPES = new Set([
+  "agent.launched",
+  "agent.finished",
+  "agent.needs_you",
+]);
 export const EVENT_CAP = 50;
 export const COLOR_LIMIT = 32;
 export const SHAPE_LIMIT = 16;
@@ -1571,8 +1874,11 @@ export class DeskStore {
     this.now = opts.now ?? (() => new Date());
     this.onChange = opts.onChange ?? (() => undefined);
     if (opts.snapshot) {
-      this.events = opts.snapshot.events.slice(0, EVENT_CAP).map((e) => ({ ...e }));
-      for (const agent of opts.snapshot.agents) this.agents.set(agent.id, { ...agent });
+      this.events = opts.snapshot.events
+        .slice(0, EVENT_CAP)
+        .map((e) => ({ ...e }));
+      for (const agent of opts.snapshot.agents)
+        this.agents.set(agent.id, { ...agent });
       this.unread = Math.max(0, opts.snapshot.unread);
     }
   }
@@ -1587,8 +1893,10 @@ export class DeskStore {
 
   applyEvent(raw: EventIn): DeskEvent {
     const agentId = raw.agent_id ?? "";
-    if (!AGENT_TYPES.has(raw.type) && raw.type !== "note") throw new StoreError("unknown event type");
-    if (AGENT_TYPES.has(raw.type) && !agentId) throw new StoreError("agent_id required");
+    if (!AGENT_TYPES.has(raw.type) && raw.type !== "note")
+      throw new StoreError("unknown event type");
+    if (AGENT_TYPES.has(raw.type) && !agentId)
+      throw new StoreError("agent_id required");
     const title = raw.title ?? "";
     const message = raw.message ?? "";
     const event = makeEvent({
@@ -1608,7 +1916,14 @@ export class DeskStore {
       const current = this.agents.get(agentId);
       if (current && (current.status === "running" || current.attention)) {
         const changed = Boolean(message) && message !== current.message;
-        this.touch(agentId, title, event, "running", current.attention, message || null);
+        this.touch(
+          agentId,
+          title,
+          event,
+          "running",
+          current.attention,
+          message || null,
+        );
         if (changed) this.remember(event);
         this.persist();
         return event;
@@ -1655,7 +1970,17 @@ export class DeskStore {
     }
     this.unread = 0;
     this.remember(
-      makeEvent({ type: "note", agent_id: "", title: "", message: "", source: "manual", at, color: "", shape: "", icon: "" }),
+      makeEvent({
+        type: "note",
+        agent_id: "",
+        title: "",
+        message: "",
+        source: "manual",
+        at,
+        color: "",
+        shape: "",
+        icon: "",
+      }),
     );
     this.persist();
   }
@@ -1689,11 +2014,15 @@ export class DeskStore {
     // the earlier key, exactly like the Python companion.
     const recent = new Map<string, number>();
     this.events.forEach((event, index) => {
-      if (event.agent_id && !recent.has(event.agent_id)) recent.set(event.agent_id, index);
+      if (event.agent_id && !recent.has(event.agent_id))
+        recent.set(event.agent_id, index);
     });
     const tail = this.events.length;
-    const ordered = [...this.agents.values()].sort((a, b) => compare(a.id, b.id));
-    const waitKey = (a: AgentRecord) => (a.attention ? (recent.get(a.id) ?? tail) : 0);
+    const ordered = [...this.agents.values()].sort((a, b) =>
+      compare(a.id, b.id),
+    );
+    const waitKey = (a: AgentRecord) =>
+      a.attention ? (recent.get(a.id) ?? tail) : 0;
     ordered.sort((a, b) => waitKey(a) - waitKey(b));
     ordered.sort((a, b) => compare(b.updated_at, a.updated_at));
     ordered.sort((a, b) => Number(!a.attention) - Number(!b.attention));
@@ -1710,7 +2039,11 @@ export class DeskStore {
       icon: agent.icon,
     }));
     const statuses = new Set(agents.map((a) => a.status));
-    const phase: Phase = statuses.has("needs_you") ? "needs_you" : statuses.has("running") ? "running" : "idle";
+    const phase: Phase = statuses.has("needs_you")
+      ? "needs_you"
+      : statuses.has("running")
+        ? "running"
+        : "idle";
     const unread = this.reportedUnread();
     if (unread === 0 && this.unread !== 0) {
       this.unread = 0;
@@ -1737,7 +2070,8 @@ export class DeskStore {
     shape = "",
     icon = "",
   ): boolean {
-    if (mapped !== "running" && mapped !== "idle") throw new StoreError("cursor status must be running or idle");
+    if (mapped !== "running" && mapped !== "idle")
+      throw new StoreError("cursor status must be running or idle");
     const current = this.agents.get(agentId);
     if (current?.attention) return false;
     if (current && current.status === mapped) {
@@ -1817,7 +2151,9 @@ export class DeskStore {
     const first = this.events[0];
     if (!first) return null;
     const data = publicEvent(first);
-    const waiters = [...this.agents.values()].filter((a) => a.attention && a.message);
+    const waiters = [...this.agents.values()].filter(
+      (a) => a.attention && a.message,
+    );
     const only = waiters.length === 1 ? waiters[0] : undefined;
     if (only) {
       data.agent_id = only.id;
@@ -1828,7 +2164,13 @@ export class DeskStore {
     if (data.message && data.agent_id) {
       const agent = this.agents.get(data.agent_id);
       const bound = agent ? agent.title || agent.id : "";
-      if (agent && bound && data.title !== agent.title && data.title !== agent.id) data.title = bound;
+      if (
+        agent &&
+        bound &&
+        data.title !== agent.title &&
+        data.title !== agent.id
+      )
+        data.title = bound;
     }
     return data;
   }
@@ -1838,7 +2180,9 @@ function visibleStatus(agent: AgentRecord, now: number): Phase {
   if (agent.attention) return "needs_you";
   if (agent.status !== "running") return "idle";
   if (!STAMP.test(agent.updated_at)) return agent.status;
-  return now - Date.parse(agent.updated_at) > RUNNING_TTL_MS ? "idle" : "running";
+  return now - Date.parse(agent.updated_at) > RUNNING_TTL_MS
+    ? "idle"
+    : "running";
 }
 ```
 
@@ -1861,10 +2205,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 7: Snapshot persistence
 
 **Files:**
+
 - Create: `src/server/state-file.ts`
 - Test: `test/server/state-file.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Snapshot`, `AgentRecord`, `DeskEvent` from Task 6.
 - Produces: `writeAtomic(path: string, text: string): void`, `parseSnapshot(value: unknown): Snapshot` (throws), `loadSnapshot(path: string): Snapshot | null`, `saveSnapshot(path: string, snapshot: Snapshot): void`.
 
@@ -1873,7 +2219,13 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 `test/server/state-file.test.ts`:
 
 ```ts
-import { existsSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -1885,10 +2237,31 @@ const dir = () => mkdtempSync(join(tmpdir(), "calico-state-"));
 const sample: Snapshot = {
   unread: 1,
   events: [
-    { id: "e1", type: "note", agent_id: "", title: "", message: "hi", source: "manual", at: "2026-10-07T12:00:00Z", color: "", shape: "", icon: "" },
+    {
+      id: "e1",
+      type: "note",
+      agent_id: "",
+      title: "",
+      message: "hi",
+      source: "manual",
+      at: "2026-10-07T12:00:00Z",
+      color: "",
+      shape: "",
+      icon: "",
+    },
   ],
   agents: [
-    { id: "a1", title: "A", status: "running", updated_at: "2026-10-07T12:00:00Z", color: "", shape: "", icon: "", attention: true, message: "q" },
+    {
+      id: "a1",
+      title: "A",
+      status: "running",
+      updated_at: "2026-10-07T12:00:00Z",
+      color: "",
+      shape: "",
+      icon: "",
+      attention: true,
+      message: "q",
+    },
   ],
 };
 
@@ -1922,7 +2295,10 @@ describe("state file", () => {
 
   it("coerces unknown agent status to idle", () => {
     const path = join(dir(), "state.json");
-    const raw = { ...sample, agents: [{ ...sample.agents[0], status: "needs_you" }] };
+    const raw = {
+      ...sample,
+      agents: [{ ...sample.agents[0], status: "needs_you" }],
+    };
     writeFileSync(path, JSON.stringify(raw));
     expect(loadSnapshot(path)?.agents[0]?.status).toBe("idle");
   });
@@ -1978,7 +2354,8 @@ function eventFrom(value: unknown): DeskEvent {
 }
 
 function agentFrom(value: unknown): AgentRecord {
-  if (!isRecord(value) || typeof value.id !== "string") throw new Error("bad agent");
+  if (!isRecord(value) || typeof value.id !== "string")
+    throw new Error("bad agent");
   return {
     id: value.id,
     title: str(value.title),
@@ -1993,13 +2370,20 @@ function agentFrom(value: unknown): AgentRecord {
 }
 
 export function parseSnapshot(value: unknown): Snapshot {
-  if (!isRecord(value) || !Array.isArray(value.events) || !Array.isArray(value.agents)) {
+  if (
+    !isRecord(value) ||
+    !Array.isArray(value.events) ||
+    !Array.isArray(value.agents)
+  ) {
     throw new Error("bad snapshot");
   }
   return {
     events: value.events.map(eventFrom),
     agents: value.agents.map(agentFrom),
-    unread: typeof value.unread === "number" && value.unread > 0 ? Math.floor(value.unread) : 0,
+    unread:
+      typeof value.unread === "number" && value.unread > 0
+        ? Math.floor(value.unread)
+        : 0,
   };
 }
 
@@ -2041,26 +2425,54 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 8: Config
 
 **Files:**
+
 - Create: `src/server/config.ts`
 - Test: `test/server/config.test.ts`
 
 **Interfaces:**
+
 - Consumes: `writeAtomic` from Task 7.
 - Produces:
 
 ```ts
-export interface CalicoConfig { port: number; webhook_token: string; cursor_api_key: string; cursor_poll_seconds: number; panel_url: string; panel_token: string }
+export interface CalicoConfig {
+  port: number;
+  webhook_token: string;
+  cursor_api_key: string;
+  cursor_poll_seconds: number;
+  panel_url: string;
+  panel_token: string;
+}
 export const DEFAULT_PORT = 8787;
-export class ConfigError extends Error {}   // startup-fatal, message names the file
-export class BadInput extends Error {}      // 400 from the HTTP layer
+export class ConfigError extends Error {} // startup-fatal, message names the file
+export class BadInput extends Error {} // 400 from the HTTP layer
 export function defaultConfig(): CalicoConfig;
-export function loadConfig(path: string): { config: CalicoConfig; existed: boolean };
+export function loadConfig(path: string): {
+  config: CalicoConfig;
+  existed: boolean;
+};
 export function saveConfig(path: string, config: CalicoConfig): void;
-export function publicView(c: CalicoConfig): { port: number; cursor_poll_seconds: number; webhook_token_set: boolean; cursor_api_key_set: boolean };
-export function mergeConfig(current: CalicoConfig, patch: Record<string, unknown>): { config: CalicoConfig; restart: boolean };
-export function panelPublicView(c: CalicoConfig): { url: string; token_set: boolean };
-export function panelStatusField(c: CalicoConfig): { url: string; token: string } | null;
-export function mergePanel(current: CalicoConfig, patch: Record<string, unknown>): CalicoConfig;
+export function publicView(c: CalicoConfig): {
+  port: number;
+  cursor_poll_seconds: number;
+  webhook_token_set: boolean;
+  cursor_api_key_set: boolean;
+};
+export function mergeConfig(
+  current: CalicoConfig,
+  patch: Record<string, unknown>,
+): { config: CalicoConfig; restart: boolean };
+export function panelPublicView(c: CalicoConfig): {
+  url: string;
+  token_set: boolean;
+};
+export function panelStatusField(
+  c: CalicoConfig,
+): { url: string; token: string } | null;
+export function mergePanel(
+  current: CalicoConfig,
+  patch: Record<string, unknown>,
+): CalicoConfig;
 ```
 
 - [ ] **Step 1: Write the failing tests**
@@ -2084,11 +2496,15 @@ import {
   saveConfig,
 } from "../../src/server/config";
 
-const file = () => join(mkdtempSync(join(tmpdir(), "calico-config-")), "config.json");
+const file = () =>
+  join(mkdtempSync(join(tmpdir(), "calico-config-")), "config.json");
 
 describe("config file", () => {
   it("uses defaults when missing", () => {
-    expect(loadConfig(file())).toEqual({ config: defaultConfig(), existed: false });
+    expect(loadConfig(file())).toEqual({
+      config: defaultConfig(),
+      existed: false,
+    });
   });
 
   it("saves with mode 600 and loads back", () => {
@@ -2126,7 +2542,9 @@ describe("config file", () => {
 describe("mergeConfig", () => {
   it("keeps an omitted secret", () => {
     const current = { ...defaultConfig(), webhook_token: "keep" };
-    expect(mergeConfig(current, { cursor_poll_seconds: 60 }).config.webhook_token).toBe("keep");
+    expect(
+      mergeConfig(current, { cursor_poll_seconds: 60 }).config.webhook_token,
+    ).toBe("keep");
   });
 
   it.each([0, 70000, "abc", true, 1.5])("rejects port %s", (port) => {
@@ -2134,15 +2552,26 @@ describe("mergeConfig", () => {
   });
 
   it("flags a port change as needing a restart", () => {
-    expect(mergeConfig(defaultConfig(), { port: "8790" })).toMatchObject({ config: { port: 8790 }, restart: true });
-    expect(mergeConfig(defaultConfig(), { cursor_poll_seconds: 10 }).restart).toBe(false);
+    expect(mergeConfig(defaultConfig(), { port: "8790" })).toMatchObject({
+      config: { port: 8790 },
+      restart: true,
+    });
+    expect(
+      mergeConfig(defaultConfig(), { cursor_poll_seconds: 10 }).restart,
+    ).toBe(false);
   });
 });
 
 describe("mergePanel", () => {
   it("stores url and token and strips trailing slashes", () => {
-    const merged = mergePanel(defaultConfig(), { url: "http://192.168.4.30:8787//", token: "desk-secret" });
-    expect(panelStatusField(merged)).toEqual({ url: "http://192.168.4.30:8787", token: "desk-secret" });
+    const merged = mergePanel(defaultConfig(), {
+      url: "http://192.168.4.30:8787//",
+      token: "desk-secret",
+    });
+    expect(panelStatusField(merged)).toEqual({
+      url: "http://192.168.4.30:8787",
+      token: "desk-secret",
+    });
   });
 
   it("requires a url before a token", () => {
@@ -2227,21 +2656,28 @@ function boundedInt(value: unknown, low: number, high: number): number {
   return n;
 }
 
-export function loadConfig(path: string): { config: CalicoConfig; existed: boolean } {
+export function loadConfig(path: string): {
+  config: CalicoConfig;
+  existed: boolean;
+} {
   let text: string;
   try {
     text = readFileSync(path, "utf8");
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return { config: defaultConfig(), existed: false };
+    if ((err as NodeJS.ErrnoException).code === "ENOENT")
+      return { config: defaultConfig(), existed: false };
     throw new ConfigError(`Cannot read ${path}: ${(err as Error).message}`);
   }
   let data: unknown;
   try {
     data = JSON.parse(text);
   } catch {
-    throw new ConfigError(`${path} is not valid JSON. Fix or delete it. Calico will not overwrite it.`);
+    throw new ConfigError(
+      `${path} is not valid JSON. Fix or delete it. Calico will not overwrite it.`,
+    );
   }
-  if (!isRecord(data)) throw new ConfigError(`${path} must contain a JSON object.`);
+  if (!isRecord(data))
+    throw new ConfigError(`${path} must contain a JSON object.`);
   const base = defaultConfig();
   try {
     return {
@@ -2251,13 +2687,17 @@ export function loadConfig(path: string): { config: CalicoConfig; existed: boole
         webhook_token: str(data.webhook_token),
         cursor_api_key: str(data.cursor_api_key),
         cursor_poll_seconds:
-          "cursor_poll_seconds" in data ? boundedInt(data.cursor_poll_seconds, 5, 86400) : base.cursor_poll_seconds,
+          "cursor_poll_seconds" in data
+            ? boundedInt(data.cursor_poll_seconds, 5, 86400)
+            : base.cursor_poll_seconds,
         panel_url: str(data.panel_url),
         panel_token: str(data.panel_token),
       },
     };
   } catch {
-    throw new ConfigError(`${path} has an invalid port or cursor_poll_seconds.`);
+    throw new ConfigError(
+      `${path} has an invalid port or cursor_poll_seconds.`,
+    );
   }
 }
 
@@ -2280,21 +2720,40 @@ export function mergeConfig(
 ): { config: CalicoConfig; restart: boolean } {
   const merged = { ...current };
   if ("port" in patch) merged.port = boundedInt(patch.port, 1, 65535);
-  if ("cursor_poll_seconds" in patch) merged.cursor_poll_seconds = boundedInt(patch.cursor_poll_seconds, 5, 86400);
-  if ("webhook_token" in patch) merged.webhook_token = String(patch.webhook_token);
-  if ("cursor_api_key" in patch) merged.cursor_api_key = String(patch.cursor_api_key);
+  if ("cursor_poll_seconds" in patch)
+    merged.cursor_poll_seconds = boundedInt(
+      patch.cursor_poll_seconds,
+      5,
+      86400,
+    );
+  if ("webhook_token" in patch)
+    merged.webhook_token = String(patch.webhook_token);
+  if ("cursor_api_key" in patch)
+    merged.cursor_api_key = String(patch.cursor_api_key);
   return { config: merged, restart: merged.port !== current.port };
 }
 
-const WIFI_KEYS = ["ssid", "pass", "password", "passphrase", "psk", "wifi", "wifi_ssid", "wifi_password", "wifi_pass"];
+const WIFI_KEYS = [
+  "ssid",
+  "pass",
+  "password",
+  "passphrase",
+  "psk",
+  "wifi",
+  "wifi_ssid",
+  "wifi_password",
+  "wifi_pass",
+];
 const PANEL_URL_MAX = 127;
 const PANEL_TOKEN_MAX = 127;
 
 function plainText(value: unknown, limit: number): string {
-  if (typeof value !== "string" || value.length > limit) throw new BadInput("bad panel");
+  if (typeof value !== "string" || value.length > limit)
+    throw new BadInput("bad panel");
   for (const ch of value) {
     const code = ch.codePointAt(0) ?? 0;
-    if (code <= 32 || code > 126 || ch === '"' || ch === "\\") throw new BadInput("bad panel");
+    if (code <= 32 || code > 126 || ch === '"' || ch === "\\")
+      throw new BadInput("bad panel");
   }
   return value;
 }
@@ -2302,9 +2761,11 @@ function plainText(value: unknown, limit: number): string {
 function panelUrl(value: unknown): string {
   if (typeof value !== "string") throw new BadInput("bad panel");
   const url = plainText(value.replace(/\/+$/, ""), PANEL_URL_MAX);
-  if (!url.startsWith("http://") && !url.startsWith("https://")) throw new BadInput("bad panel");
+  if (!url.startsWith("http://") && !url.startsWith("https://"))
+    throw new BadInput("bad panel");
   const host = url.split("://", 2)[1]?.split("/", 1)[0] ?? "";
-  if (!host || host.includes("@") || host.startsWith(":")) throw new BadInput("bad panel");
+  if (!host || host.includes("@") || host.startsWith(":"))
+    throw new BadInput("bad panel");
   return url;
 }
 
@@ -2312,17 +2773,27 @@ export function panelPublicView(config: CalicoConfig) {
   return { url: config.panel_url, token_set: Boolean(config.panel_token) };
 }
 
-export function panelStatusField(config: CalicoConfig): { url: string; token: string } | null {
-  return config.panel_url ? { url: config.panel_url, token: config.panel_token } : null;
+export function panelStatusField(
+  config: CalicoConfig,
+): { url: string; token: string } | null {
+  return config.panel_url
+    ? { url: config.panel_url, token: config.panel_token }
+    : null;
 }
 
-export function mergePanel(current: CalicoConfig, patch: Record<string, unknown>): CalicoConfig {
-  if (WIFI_KEYS.some((key) => key in patch)) throw new BadInput("wifi rejected");
+export function mergePanel(
+  current: CalicoConfig,
+  patch: Record<string, unknown>,
+): CalicoConfig {
+  if (WIFI_KEYS.some((key) => key in patch))
+    throw new BadInput("wifi rejected");
   const merged = { ...current };
-  if (patch.clear === true) return { ...merged, panel_url: "", panel_token: "" };
+  if (patch.clear === true)
+    return { ...merged, panel_url: "", panel_token: "" };
   if ("url" in patch) merged.panel_url = panelUrl(patch.url);
   else if (!merged.panel_url) throw new BadInput("bad panel");
-  if ("token" in patch) merged.panel_token = plainText(patch.token, PANEL_TOKEN_MAX);
+  if ("token" in patch)
+    merged.panel_token = plainText(patch.token, PANEL_TOKEN_MAX);
   return merged;
 }
 ```
@@ -2344,17 +2815,28 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 9: HTTP server and contract replay
 
 **Files:**
+
 - Create: `src/server/http.ts`
 - Test: `test/contract/contract.test.ts`, `test/server/http.test.ts`
 
 **Interfaces:**
+
 - Consumes: `DeskStore`, `StoreError`, `FRAME_MAX`, `COLOR_LIMIT`, `ICON_LIMIT`, `clipText`, `clipShape`, `EventIn` (Task 6); `CalicoConfig`, `BadInput`, `mergeConfig`, `mergePanel`, `panelPublicView`, `panelStatusField`, `publicView` (Task 8).
 - Produces:
 
 ```ts
-export interface ServerDeps { store: DeskStore; getConfig(): CalicoConfig; setConfig(next: CalicoConfig): void }
-export interface ServerStats { lastPanelPoll: number | null }   // epoch ms of last non-loopback GET /api/status
-export function createCompanionServer(deps: ServerDeps): { server: http.Server; stats: ServerStats };
+export interface ServerDeps {
+  store: DeskStore;
+  getConfig(): CalicoConfig;
+  setConfig(next: CalicoConfig): void;
+}
+export interface ServerStats {
+  lastPanelPoll: number | null;
+} // epoch ms of last non-loopback GET /api/status
+export function createCompanionServer(deps: ServerDeps): {
+  server: http.Server;
+  stats: ServerStats;
+};
 export function asciiJson(payload: unknown): string;
 export function isLoopback(address: string | undefined): boolean;
 ```
@@ -2393,14 +2875,21 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 function normalize(value: unknown, key = ""): unknown {
   if (Array.isArray(value)) return value.map((item) => normalize(item));
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, normalize(v, k)]));
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, normalize(v, k)]),
+    );
   }
-  if (typeof value === "string" && (key === "at" || key === "updated_at")) return "<ts>";
-  if (typeof value === "string" && key === "id" && UUID.test(value)) return "<uuid>";
+  if (typeof value === "string" && (key === "at" || key === "updated_at"))
+    return "<ts>";
+  if (typeof value === "string" && key === "id" && UUID.test(value))
+    return "<uuid>";
   return value;
 }
 
-async function replay(base: string, step: Step): Promise<Omit<Recorded, "step">> {
+async function replay(
+  base: string,
+  step: Step,
+): Promise<Omit<Recorded, "step">> {
   const headers: Record<string, string> = { ...(step.headers ?? {}) };
   if (step.auth) headers.Authorization = "Bearer secret";
   let body: string | Buffer | undefined;
@@ -2410,19 +2899,32 @@ async function replay(base: string, step: Step): Promise<Omit<Recorded, "step">>
   } else if (step.body_b64 !== undefined) {
     body = Buffer.from(step.body_b64, "base64");
   }
-  const res = await fetch(base + step.path, { method: step.method, headers, body });
+  const res = await fetch(base + step.path, {
+    method: step.method,
+    headers,
+    body,
+  });
   const contentType = res.headers.get("content-type") ?? "";
-  const cors = ["access-control-allow-origin", "access-control-allow-methods", "access-control-allow-headers"].map(
-    (h) => res.headers.get(h) ?? "",
-  );
+  const cors = [
+    "access-control-allow-origin",
+    "access-control-allow-methods",
+    "access-control-allow-headers",
+  ].map((h) => res.headers.get(h) ?? "");
   const raw = Buffer.from(await res.arrayBuffer());
-  const out: Omit<Recorded, "step"> = { status: res.status, content_type: contentType, cors };
-  if (contentType.startsWith("application/json")) out.json = JSON.parse(raw.toString("utf8"));
+  const out: Omit<Recorded, "step"> = {
+    status: res.status,
+    content_type: contentType,
+    cors,
+  };
+  if (contentType.startsWith("application/json"))
+    out.json = JSON.parse(raw.toString("utf8"));
   else if (raw.length) out.body_b64 = raw.toString("base64");
   return out;
 }
 
-const fixture = JSON.parse(readFileSync(new URL("./fixtures/companion.json", import.meta.url), "utf8")) as {
+const fixture = JSON.parse(
+  readFileSync(new URL("./fixtures/companion.json", import.meta.url), "utf8"),
+) as {
   steps: Recorded[];
 };
 
@@ -2436,7 +2938,9 @@ describe("frozen HTTP contract", () => {
         config = next;
       },
     });
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
     const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     try {
       for (const [index, recorded] of fixture.steps.entries()) {
@@ -2444,7 +2948,9 @@ describe("frozen HTTP contract", () => {
         const actual = await replay(base, step);
         expect(
           `${index} ${step.method} ${step.path} ${JSON.stringify(normalize(actual))}`,
-        ).toBe(`${index} ${step.method} ${step.path} ${JSON.stringify(normalize(expected))}`);
+        ).toBe(
+          `${index} ${step.method} ${step.path} ${JSON.stringify(normalize(expected))}`,
+        );
       }
     } finally {
       server.close();
@@ -2461,7 +2967,11 @@ describe("frozen HTTP contract", () => {
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { defaultConfig, type CalicoConfig } from "../../src/server/config";
-import { asciiJson, createCompanionServer, isLoopback } from "../../src/server/http";
+import {
+  asciiJson,
+  createCompanionServer,
+  isLoopback,
+} from "../../src/server/http";
 import { DeskStore } from "../../src/server/store";
 
 let close: (() => void) | null = null;
@@ -2479,7 +2989,11 @@ async function start(config: Partial<CalicoConfig> = {}) {
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   close = () => server.close();
-  return { base: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, store, stats };
+  return {
+    base: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+    store,
+    stats,
+  };
 }
 
 describe("companion server", () => {
@@ -2487,17 +3001,31 @@ describe("companion server", () => {
     const { base } = await start();
     await fetch(`${base}/api/webhook/grok-bot`, {
       method: "POST",
-      body: JSON.stringify({ type: "agent.launched", agent_id: "c3", title: "Café ✓ 🙂" }),
+      body: JSON.stringify({
+        type: "agent.launched",
+        agent_id: "c3",
+        title: "Café ✓ 🙂",
+      }),
     });
-    const raw = Buffer.from(await (await fetch(`${base}/api/status`)).arrayBuffer());
+    const raw = Buffer.from(
+      await (await fetch(`${base}/api/status`)).arrayBuffer(),
+    );
     expect(raw.every((byte) => byte < 0x80)).toBe(true);
     const text = raw.toString("ascii");
     expect(text).toContain("Caf\\u00e9 \\u2713 \\ud83d\\ude42");
   });
 
   it("keeps panel first and capture before agents", async () => {
-    const { base, store } = await start({ panel_url: "http://192.168.4.30:8787", panel_token: "t" });
-    for (let i = 0; i < 60; i++) store.applyEvent({ type: "agent.launched", agent_id: `a${i}`, message: "x".repeat(100) });
+    const { base, store } = await start({
+      panel_url: "http://192.168.4.30:8787",
+      panel_token: "t",
+    });
+    for (let i = 0; i < 60; i++)
+      store.applyEvent({
+        type: "agent.launched",
+        agent_id: `a${i}`,
+        message: "x".repeat(100),
+      });
     store.requestFrame();
     const text = await (await fetch(`${base}/api/status`)).text();
     expect(text.startsWith('{"panel":')).toBe(true);
@@ -2513,7 +3041,10 @@ describe("companion server", () => {
 
   it("rejects an oversized JSON body with 413", async () => {
     const { base } = await start();
-    const res = await fetch(`${base}/api/webhook/grok-bot`, { method: "POST", body: "x".repeat(1024 * 1024 + 1) });
+    const res = await fetch(`${base}/api/webhook/grok-bot`, {
+      method: "POST",
+      body: "x".repeat(1024 * 1024 + 1),
+    });
     expect(res.status).toBe(413);
   });
 
@@ -2593,7 +3124,11 @@ export function asciiJson(payload: unknown): string {
 
 export function isLoopback(address: string | undefined): boolean {
   if (!address) return false;
-  return address === "::1" || address.startsWith("127.") || address.startsWith("::ffff:127.");
+  return (
+    address === "::1" ||
+    address.startsWith("127.") ||
+    address.startsWith("::ffff:127.")
+  );
 }
 
 function pyStr(value: unknown, fallback = ""): string {
@@ -2619,7 +3154,12 @@ function eventIn(payload: Record<string, unknown>): EventIn {
   };
 }
 
-function send(res: http.ServerResponse, status: number, body: string | Buffer, contentType: string): void {
+function send(
+  res: http.ServerResponse,
+  status: number,
+  body: string | Buffer,
+  contentType: string,
+): void {
   const bytes = typeof body === "string" ? Buffer.from(body, "utf8") : body;
   res.writeHead(status, {
     "Content-Type": contentType,
@@ -2631,7 +3171,11 @@ function send(res: http.ServerResponse, status: number, body: string | Buffer, c
   res.end(bytes);
 }
 
-function json(res: http.ServerResponse, status: number, payload: unknown): void {
+function json(
+  res: http.ServerResponse,
+  status: number,
+  payload: unknown,
+): void {
   send(res, status, asciiJson(payload), "application/json");
 }
 
@@ -2639,7 +3183,10 @@ function empty(res: http.ServerResponse): void {
   send(res, 204, "", "text/plain");
 }
 
-async function readBody(req: http.IncomingMessage, limit: number): Promise<Buffer | "too_big"> {
+async function readBody(
+  req: http.IncomingMessage,
+  limit: number,
+): Promise<Buffer | "too_big"> {
   const declared = Number(req.headers["content-length"] ?? "0");
   if (declared > limit) {
     req.resume();
@@ -2659,18 +3206,25 @@ async function readBody(req: http.IncomingMessage, limit: number): Promise<Buffe
   return Buffer.concat(chunks);
 }
 
-async function readJson(req: http.IncomingMessage): Promise<Record<string, unknown> | null | "too_big"> {
+async function readJson(
+  req: http.IncomingMessage,
+): Promise<Record<string, unknown> | null | "too_big"> {
   const raw = await readBody(req, JSON_MAX);
   if (raw === "too_big") return raw;
   try {
     const parsed: unknown = JSON.parse(raw.toString("utf8") || "null");
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
   } catch {
     return null;
   }
 }
 
-export function createCompanionServer(deps: ServerDeps): { server: http.Server; stats: ServerStats } {
+export function createCompanionServer(deps: ServerDeps): {
+  server: http.Server;
+  stats: ServerStats;
+} {
   const stats: ServerStats = { lastPanelPoll: null };
   const { store } = deps;
 
@@ -2682,7 +3236,10 @@ export function createCompanionServer(deps: ServerDeps): { server: http.Server; 
     return got.length === want.length && timingSafeEqual(got, want);
   }
 
-  async function handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  async function handle(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+  ): Promise<void> {
     const path = new URL(req.url ?? "/", "http://calico").pathname;
     const method = req.method ?? "GET";
 
@@ -2691,17 +3248,22 @@ export function createCompanionServer(deps: ServerDeps): { server: http.Server; 
     if (method === "GET") {
       if (path === "/api/frame") {
         const frame = store.frame();
-        return frame ? send(res, 200, frame, "image/bmp") : json(res, 404, { error: "not found" });
+        return frame
+          ? send(res, 200, frame, "image/bmp")
+          : json(res, 404, { error: "not found" });
       }
       if (path === "/api/status") {
-        if (!isLoopback(req.socket.remoteAddress)) stats.lastPanelPoll = Date.now();
+        if (!isLoopback(req.socket.remoteAddress))
+          stats.lastPanelPoll = Date.now();
         const body = store.status();
         const panel = panelStatusField(deps.getConfig());
         // First key: the panel buffer is 16 KB and drops the tail.
         return json(res, 200, panel ? { panel, ...body } : body);
       }
-      if (path === "/api/panel") return json(res, 200, panelPublicView(deps.getConfig()));
-      if (path === "/api/config") return json(res, 200, publicView(deps.getConfig()));
+      if (path === "/api/panel")
+        return json(res, 200, panelPublicView(deps.getConfig()));
+      if (path === "/api/config")
+        return json(res, 200, publicView(deps.getConfig()));
       return json(res, 404, { error: "not found" });
     }
 
@@ -2719,7 +3281,11 @@ export function createCompanionServer(deps: ServerDeps): { server: http.Server; 
           } catch {
             return json(res, 400, { error: "bad json" });
           }
-          if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+          if (
+            !payload ||
+            typeof payload !== "object" ||
+            Array.isArray(payload)
+          ) {
             return json(res, 400, { error: "bad json" });
           }
           const id = (payload as Record<string, unknown>).agent_id;
@@ -2737,8 +3303,12 @@ export function createCompanionServer(deps: ServerDeps): { server: http.Server; 
         return empty(res);
       }
       if (path === "/api/frame") {
-        const kind = (req.headers["content-type"] ?? "").split(";", 1)[0]?.trim().toLowerCase();
-        if (kind !== "image/bmp") return json(res, 415, { error: "bmp required" });
+        const kind = (req.headers["content-type"] ?? "")
+          .split(";", 1)[0]
+          ?.trim()
+          .toLowerCase();
+        if (kind !== "image/bmp")
+          return json(res, 415, { error: "bmp required" });
         const raw = await readBody(req, FRAME_MAX);
         if (raw === "too_big") return json(res, 413, { error: "too large" });
         const saved = store.saveFrame(raw);
@@ -2752,13 +3322,15 @@ export function createCompanionServer(deps: ServerDeps): { server: http.Server; 
       try {
         return json(res, 201, store.applyEvent(eventIn(payload)));
       } catch (err) {
-        if (err instanceof StoreError) return json(res, 400, { error: "bad event" });
+        if (err instanceof StoreError)
+          return json(res, 400, { error: "bad event" });
         throw err;
       }
     }
 
     if (method === "PUT") {
-      if (path !== "/api/config" && path !== "/api/panel") return json(res, 404, { error: "not found" });
+      if (path !== "/api/config" && path !== "/api/panel")
+        return json(res, 404, { error: "not found" });
       if (!allowed(req)) return json(res, 401, { error: "unauthorized" });
       const payload = await readJson(req);
       if (payload === "too_big") return json(res, 413, { error: "too large" });
@@ -2767,7 +3339,8 @@ export function createCompanionServer(deps: ServerDeps): { server: http.Server; 
         try {
           deps.setConfig(mergePanel(deps.getConfig(), payload));
         } catch (err) {
-          if (err instanceof BadInput) return json(res, 400, { error: "bad panel" });
+          if (err instanceof BadInput)
+            return json(res, 400, { error: "bad panel" });
           throw err;
         }
         return json(res, 200, panelPublicView(deps.getConfig()));
@@ -2775,9 +3348,13 @@ export function createCompanionServer(deps: ServerDeps): { server: http.Server; 
       try {
         const { config, restart } = mergeConfig(deps.getConfig(), payload);
         deps.setConfig(config);
-        return json(res, 200, { ...publicView(config), restart_required: restart });
+        return json(res, 200, {
+          ...publicView(config),
+          restart_required: restart,
+        });
       } catch (err) {
-        if (err instanceof BadInput) return json(res, 400, { error: "bad config" });
+        if (err instanceof BadInput)
+          return json(res, 400, { error: "bad config" });
         throw err;
       }
     }
@@ -2812,10 +3389,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 10: Cursor poller
 
 **Files:**
+
 - Create: `src/server/cursor-poll.ts`
 - Test: `test/server/cursor-poll.test.ts`
 
 **Interfaces:**
+
 - Consumes: `DeskStore.applyCursorItem`, `clipText`, `clipShape`, `COLOR_LIMIT`, `ICON_LIMIT`, `isoSeconds` (Task 6); `CalicoConfig` (Task 8).
 - Produces: `mapCursorStatus(status: string): "running" | "idle" | null`, `pollOnce(store, apiKey, get, now, warn?): Promise<void>`, `fetchGet(url, apiKey): Promise<string>`, `startCursorPoll(store, getConfig): () => void`.
 
@@ -2842,14 +3421,28 @@ describe("cursor poll", () => {
     const store = new DeskStore({ now: () => new Date(NOW) });
     const body = JSON.stringify({
       items: [
-        { id: "c1", name: "Fix tests", status: "ACTIVE", color: "#9bb57a", shape: "Square" },
+        {
+          id: "c1",
+          name: "Fix tests",
+          status: "ACTIVE",
+          color: "#9bb57a",
+          shape: "Square",
+        },
         { id: "", name: "skip", status: "ACTIVE" },
         { id: "c2", name: "weird", status: "ERROR" },
         "junk",
       ],
     });
     await pollOnce(store, "key", async () => body, NOW);
-    expect(store.status().agents).toMatchObject([{ id: "c1", title: "Fix tests", status: "running", color: "#9bb57a", shape: "square" }]);
+    expect(store.status().agents).toMatchObject([
+      {
+        id: "c1",
+        title: "Fix tests",
+        status: "running",
+        color: "#9bb57a",
+        shape: "square",
+      },
+    ]);
   });
 
   it("does nothing without a key", async () => {
@@ -2860,7 +3453,15 @@ describe("cursor poll", () => {
 
   it("logs a transport error and keeps going", async () => {
     const warn = vi.fn();
-    await pollOnce(new DeskStore(), "key", async () => { throw new Error("boom"); }, NOW, warn);
+    await pollOnce(
+      new DeskStore(),
+      "key",
+      async () => {
+        throw new Error("boom");
+      },
+      NOW,
+      warn,
+    );
     expect(warn).toHaveBeenCalledWith("cursor poll failed: boom");
   });
 });
@@ -2877,7 +3478,14 @@ Expected: FAIL, module not found.
 
 ```ts
 import type { CalicoConfig } from "./config";
-import { COLOR_LIMIT, clipShape, clipText, type DeskStore, ICON_LIMIT, isoSeconds } from "./store";
+import {
+  COLOR_LIMIT,
+  clipShape,
+  clipText,
+  type DeskStore,
+  ICON_LIMIT,
+  isoSeconds,
+} from "./store";
 
 export const AGENTS_URL = "https://api.cursor.com/v1/agents?limit=20";
 
@@ -2903,7 +3511,10 @@ export async function pollOnce(
     warn(`cursor poll failed: ${(err as Error).message}`);
     return;
   }
-  const items = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>).items : undefined;
+  const items =
+    parsed && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>).items
+      : undefined;
   if (!Array.isArray(items)) return;
   for (const item of items) {
     if (!item || typeof item !== "object") continue;
@@ -2925,19 +3536,34 @@ export async function pollOnce(
 
 export async function fetchGet(url: string, apiKey: string): Promise<string> {
   const basic = Buffer.from(`${apiKey}:`).toString("base64");
-  const res = await fetch(url, { headers: { Authorization: `Basic ${basic}` }, signal: AbortSignal.timeout(10_000) });
+  const res = await fetch(url, {
+    headers: { Authorization: `Basic ${basic}` },
+    signal: AbortSignal.timeout(10_000),
+  });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.text();
 }
 
 /** Polls until the returned stop function is called. Reads the key and interval fresh each round. */
-export function startCursorPoll(store: DeskStore, getConfig: () => CalicoConfig): () => void {
+export function startCursorPoll(
+  store: DeskStore,
+  getConfig: () => CalicoConfig,
+): () => void {
   let timer: NodeJS.Timeout | undefined;
   let stopped = false;
   const round = async () => {
     const config = getConfig();
-    await pollOnce(store, config.cursor_api_key, fetchGet, isoSeconds(new Date()));
-    if (!stopped) timer = setTimeout(() => void round(), Math.max(5, config.cursor_poll_seconds) * 1000);
+    await pollOnce(
+      store,
+      config.cursor_api_key,
+      fetchGet,
+      isoSeconds(new Date()),
+    );
+    if (!stopped)
+      timer = setTimeout(
+        () => void round(),
+        Math.max(5, config.cursor_poll_seconds) * 1000,
+      );
   };
   void round();
   return () => {
@@ -2964,10 +3590,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 11: Port selection
 
 **Files:**
+
 - Create: `src/server/port.ts`
 - Test: `test/server/port.test.ts`
 
 **Interfaces:**
+
 - Produces: `PORT_SPAN = 12`, `class PortsBusyError extends Error { first: number; last: number }`, `listenWithFallback(server: http.Server, host: string, preferred: number, span?: number): Promise<number>`, `resolvePort(existed: boolean, configured: number, bound: number): { persist: boolean; drift: boolean }`, `lanUrls(port: number, ifaces?: NodeJS.Dict<os.NetworkInterfaceInfo[]>): string[]`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -2978,7 +3606,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { describe, expect, it } from "vitest";
-import { lanUrls, listenWithFallback, PortsBusyError, resolvePort } from "../../src/server/port";
+import {
+  lanUrls,
+  listenWithFallback,
+  PortsBusyError,
+  resolvePort,
+} from "../../src/server/port";
 
 async function occupy(): Promise<{ port: number; close: () => void }> {
   const s = http.createServer();
@@ -3004,19 +3637,30 @@ describe("port selection", () => {
     const busy = await occupy();
     const server = http.createServer();
     try {
-      await expect(listenWithFallback(server, "127.0.0.1", busy.port, 0)).rejects.toBeInstanceOf(PortsBusyError);
+      await expect(
+        listenWithFallback(server, "127.0.0.1", busy.port, 0),
+      ).rejects.toBeInstanceOf(PortsBusyError);
     } finally {
       busy.close();
     }
   });
 
   it("persists the bound port on first run", () => {
-    expect(resolvePort(false, 8787, 8788)).toEqual({ persist: true, drift: false });
+    expect(resolvePort(false, 8787, 8788)).toEqual({
+      persist: true,
+      drift: false,
+    });
   });
 
   it("does not persist a fallback over a saved port", () => {
-    expect(resolvePort(true, 8787, 8789)).toEqual({ persist: false, drift: true });
-    expect(resolvePort(true, 8787, 8787)).toEqual({ persist: false, drift: false });
+    expect(resolvePort(true, 8787, 8789)).toEqual({
+      persist: false,
+      drift: true,
+    });
+    expect(resolvePort(true, 8787, 8787)).toEqual({
+      persist: false,
+      drift: false,
+    });
   });
 
   it("lists non-internal IPv4 addresses", () => {
@@ -3056,7 +3700,11 @@ export class PortsBusyError extends Error {
   }
 }
 
-function listenOnce(server: http.Server, host: string, port: number): Promise<void> {
+function listenOnce(
+  server: http.Server,
+  host: string,
+  port: number,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const onError = (err: Error) => {
       server.off("listening", onListening);
@@ -3094,12 +3742,19 @@ export async function listenWithFallback(
  * First run keeps whatever port bound. After that the saved port is what the
  * panel was told, so a fallback is drift to report, never something to save.
  */
-export function resolvePort(existed: boolean, configured: number, bound: number): { persist: boolean; drift: boolean } {
+export function resolvePort(
+  existed: boolean,
+  configured: number,
+  bound: number,
+): { persist: boolean; drift: boolean } {
   if (!existed) return { persist: true, drift: false };
   return { persist: false, drift: bound !== configured };
 }
 
-export function lanUrls(port: number, ifaces: NodeJS.Dict<NetworkInterfaceInfo[]> = networkInterfaces()): string[] {
+export function lanUrls(
+  port: number,
+  ifaces: NodeJS.Dict<NetworkInterfaceInfo[]> = networkInterfaces(),
+): string[] {
   return Object.values(ifaces)
     .flatMap((list) => list ?? [])
     .filter((info) => info.family === "IPv4" && !info.internal)
@@ -3144,42 +3799,61 @@ Start: `git switch main && git pull && git switch -c feat/app-shell`
 ### Task 12: Main process lifecycle, tray, autostart
 
 **Files:**
+
 - Create: `src/main/tray.ts`, `src/main/autostart.ts`, `src/main/ipc.ts`, `resources/icon.png`, `resources/tray.png`
 - Modify: `src/main/index.ts` (replace), `src/preload/index.ts` (replace), `src/shared/ipc.ts` (replace)
 - Test: `test/main/autostart.test.ts`
 
 **Interfaces:**
+
 - Consumes: everything in `src/server/`.
 - Produces `src/shared/ipc.ts` (complete; later tasks only add handlers in main, never change these types):
 
 ```ts
-export interface Candidate { id: string; name: string }
-export interface ServerErrorInfo { first: number; last: number; holders: string[] }
+export interface Candidate {
+  id: string;
+  name: string;
+}
+export interface ServerErrorInfo {
+  first: number;
+  last: number;
+  holders: string[];
+}
 export interface CalicoInfo {
-  serverUrl: string | null;      // http://127.0.0.1:<port>, null if the server could not bind
-  port: number | null;           // bound port
-  expectedPort: number;          // saved port the panel was told
+  serverUrl: string | null; // http://127.0.0.1:<port>, null if the server could not bind
+  port: number | null; // bound port
+  expectedPort: number; // saved port the panel was told
   lanUrls: string[];
-  lastPanelPoll: number | null;  // epoch ms
+  lastPanelPoll: number | null; // epoch ms
   webhookToken: string;
   serverError: ServerErrorInfo | null;
   autostart: { enabled: boolean; available: boolean };
 }
 export type FirewallKind = "ufw" | "firewalld" | "nftables" | "none";
-export interface FirewallInfo { kind: FirewallKind; command: string | null }
-export interface SerialAccess { denied: string[]; group: string; command: string }
-export interface FixResult { ok: boolean; output: string }
+export interface FirewallInfo {
+  kind: FirewallKind;
+  command: string | null;
+}
+export interface SerialAccess {
+  denied: string[];
+  group: string;
+  command: string;
+}
+export interface FixResult {
+  ok: boolean;
+  output: string;
+}
 export interface CalicoApi {
   info(): Promise<CalicoInfo>;
   onBleCandidates(cb: (list: Candidate[]) => void): () => void;
-  chooseBle(id: string): void;               // "" cancels
+  chooseBle(id: string): void; // "" cancels
   onSerialCandidates(cb: (list: Candidate[]) => void): () => void;
-  chooseSerial(id: string): void;            // "" cancels
+  chooseSerial(id: string): void; // "" cancels
   firewall(): Promise<FirewallInfo>;
   serialAccess(): Promise<SerialAccess>;
   runFix(fix: "firewall" | "serial"): Promise<FixResult>;
   portHolders(port: number): Promise<string[]>;
-  adoptPort(): Promise<void>;                // save the bound port after the panel was re-pointed
+  adoptPort(): Promise<void>; // save the bound port after the panel was re-pointed
   setAutostart(on: boolean): Promise<boolean>;
 }
 ```
@@ -3204,7 +3878,9 @@ describe("autostart entry", () => {
   });
 
   it("leaves simple paths bare", () => {
-    expect(desktopEntry("/usr/bin/calico")).toContain("Exec=/usr/bin/calico --hidden\n");
+    expect(desktopEntry("/usr/bin/calico")).toContain(
+      "Exec=/usr/bin/calico --hidden\n",
+    );
   });
 });
 ```
@@ -3319,11 +3995,22 @@ export function createTray(actions: TrayActions): void {
 }
 
 /** lanUrl is null while the server is down. drift names the port the panel expects. */
-export function updateTray(actions: TrayActions, lanUrl: string | null, drift: number | null): void {
+export function updateTray(
+  actions: TrayActions,
+  lanUrl: string | null,
+  drift: number | null,
+): void {
   if (!tray) return;
-  const items: Electron.MenuItemConstructorOptions[] = [{ label: "Open Calico", click: actions.open }];
-  if (lanUrl) items.push({ label: `Copy ${lanUrl}`, click: () => clipboard.writeText(lanUrl) });
-  if (drift !== null) items.push({ label: `Panel expects port ${drift}`, enabled: false });
+  const items: Electron.MenuItemConstructorOptions[] = [
+    { label: "Open Calico", click: actions.open },
+  ];
+  if (lanUrl)
+    items.push({
+      label: `Copy ${lanUrl}`,
+      click: () => clipboard.writeText(lanUrl),
+    });
+  if (drift !== null)
+    items.push({ label: `Panel expects port ${drift}`, enabled: false });
   items.push({ type: "separator" }, { label: "Quit", click: actions.quit });
   tray.setContextMenu(Menu.buildFromTemplate(items));
 }
@@ -3347,7 +4034,9 @@ export interface IpcDeps {
 export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle("calico:info", () => deps.info());
   ipcMain.handle("calico:adopt-port", () => deps.adoptPort());
-  ipcMain.handle("calico:set-autostart", (_e, on: unknown) => (autostartAvailable() ? setAutostart(on === true) : false));
+  ipcMain.handle("calico:set-autostart", (_e, on: unknown) =>
+    autostartAvailable() ? setAutostart(on === true) : false,
+  );
 }
 
 export function autostartState(): CalicoInfo["autostart"] {
@@ -3362,10 +4051,20 @@ Replace `src/main/index.ts`:
 ```ts
 import { join } from "node:path";
 import { app, BrowserWindow, dialog, shell } from "electron";
-import { ConfigError, type CalicoConfig, loadConfig, saveConfig } from "../server/config";
+import {
+  ConfigError,
+  type CalicoConfig,
+  loadConfig,
+  saveConfig,
+} from "../server/config";
 import { startCursorPoll } from "../server/cursor-poll";
 import { createCompanionServer } from "../server/http";
-import { lanUrls, listenWithFallback, PortsBusyError, resolvePort } from "../server/port";
+import {
+  lanUrls,
+  listenWithFallback,
+  PortsBusyError,
+  resolvePort,
+} from "../server/port";
 import { loadSnapshot, saveSnapshot } from "../server/state-file";
 import { DeskStore } from "../server/store";
 import type { CalicoInfo, ServerErrorInfo } from "../shared/ipc";
@@ -3373,7 +4072,8 @@ import { autostartAvailable, setAutostart } from "./autostart";
 import { autostartState, registerIpc } from "./ipc";
 import { createTray, type TrayActions, updateTray } from "./tray";
 
-if (process.env.CALICO_USER_DATA) app.setPath("userData", process.env.CALICO_USER_DATA);
+if (process.env.CALICO_USER_DATA)
+  app.setPath("userData", process.env.CALICO_USER_DATA);
 
 let win: BrowserWindow | null = null;
 let quitting = false;
@@ -3412,7 +4112,8 @@ function createWindow(): BrowserWindow {
     return { action: "deny" };
   });
   w.once("ready-to-show", () => w.show());
-  if (process.env.ELECTRON_RENDERER_URL) void w.loadURL(process.env.ELECTRON_RENDERER_URL);
+  if (process.env.ELECTRON_RENDERER_URL)
+    void w.loadURL(process.env.ELECTRON_RENDERER_URL);
   else void w.loadFile(join(__dirname, "../renderer/index.html"));
   return w;
 }
@@ -3439,14 +4140,22 @@ async function start(): Promise<void> {
     saveConfig(configPath, config);
   };
 
-  const store = new DeskStore({ snapshot: loadSnapshot(statePath), onChange: (s) => saveSnapshot(statePath, s) });
-  const { server, stats } = createCompanionServer({ store, getConfig: () => config, setConfig: save });
+  const store = new DeskStore({
+    snapshot: loadSnapshot(statePath),
+    onChange: (s) => saveSnapshot(statePath, s),
+  });
+  const { server, stats } = createCompanionServer({
+    store,
+    getConfig: () => config,
+    setConfig: save,
+  });
 
   let bound: number | null = null;
   let serverError: ServerErrorInfo | null = null;
   try {
     bound = await listenWithFallback(server, "0.0.0.0", config.port);
-    if (resolvePort(loaded.existed, config.port, bound).persist) save({ ...config, port: bound });
+    if (resolvePort(loaded.existed, config.port, bound).persist)
+      save({ ...config, port: bound });
   } catch (err) {
     if (!(err instanceof PortsBusyError)) throw err;
     serverError = { first: err.first, last: err.last, holders: [] };
@@ -3518,7 +4227,10 @@ Replace `src/preload/index.ts`:
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import type { CalicoApi, Candidate } from "../shared/ipc";
 
-function subscribe(channel: string, cb: (list: Candidate[]) => void): () => void {
+function subscribe(
+  channel: string,
+  cb: (list: Candidate[]) => void,
+): () => void {
   const handler = (_event: IpcRendererEvent, list: Candidate[]) => cb(list);
   ipcRenderer.on(channel, handler);
   return () => ipcRenderer.off(channel, handler);
@@ -3561,10 +4273,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 13: Renderer shell, tokens, and dashboard
 
 **Files:**
+
 - Create: `src/renderer/src/lib/api.ts`, `src/renderer/src/lib/api.test.ts`, `src/renderer/src/lib/use-info.ts`, `src/renderer/src/shell/Sidebar.tsx`, `src/renderer/src/shell/UrlChip.tsx`, `src/renderer/src/shell/ServerErrorPanel.tsx`, `src/renderer/src/dashboard/Dashboard.tsx`, `AgentMark.tsx`, `AgentRows.tsx`, `EventRows.tsx`, `NeedsYouStrip.tsx`, `InjectBar.tsx`
 - Modify: `src/renderer/src/App.tsx`, `src/renderer/src/styles.css`
 
 **Interfaces:**
+
 - Consumes: `window.calico.info()` and `CalicoInfo` (Task 12). HTTP routes (Task 9).
 - Produces: `configureApi(serverUrl: string, webhookToken: string): void`, `fetchStatus()`, `postWebhook()`, `postDismiss()`, `fetchConfig()`, `putConfig()`, `fetchPanel()`, `putPanel()`, `agentMark()`, `injectBody()`, `useInfo(): CalicoInfo | null`, `type View = "dashboard" | "device" | "console" | "settings"`.
 
@@ -3574,13 +4288,26 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ```ts
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { agentMark, configureApi, fetchStatus, injectBody, NEUTRAL_MARK, parseStatus, postDismiss } from "./api";
+import {
+  agentMark,
+  configureApi,
+  fetchStatus,
+  injectBody,
+  NEUTRAL_MARK,
+  parseStatus,
+  postDismiss,
+} from "./api";
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe("api", () => {
   it("builds a manual inject body with optional identity", () => {
-    expect(injectBody("agent.needs_you", "a1", "Pick one", { color: " #9bb57a ", shape: "" })).toEqual({
+    expect(
+      injectBody("agent.needs_you", "a1", "Pick one", {
+        color: " #9bb57a ",
+        shape: "",
+      }),
+    ).toEqual({
       type: "agent.needs_you",
       agent_id: "a1",
       title: "a1",
@@ -3591,8 +4318,14 @@ describe("api", () => {
   });
 
   it("normalizes marks", () => {
-    expect(agentMark("9bb57a", "Diamond")).toEqual({ color: "#9bb57a", shape: "diamond" });
-    expect(agentMark("red", "blob")).toEqual({ color: NEUTRAL_MARK, shape: "circle" });
+    expect(agentMark("9bb57a", "Diamond")).toEqual({
+      color: "#9bb57a",
+      shape: "diamond",
+    });
+    expect(agentMark("red", "blob")).toEqual({
+      color: NEUTRAL_MARK,
+      shape: "circle",
+    });
   });
 
   it("parses status and keeps attention and message", () => {
@@ -3600,12 +4333,31 @@ describe("api", () => {
       phase: "needs_you",
       needs_you: true,
       unread: 1,
-      agents: [{ id: "a1", title: "A", status: "needs_you", attention: true, message: "q" }, { nope: 1 }],
+      agents: [
+        {
+          id: "a1",
+          title: "A",
+          status: "needs_you",
+          attention: true,
+          message: "q",
+        },
+        { nope: 1 },
+      ],
       last_event: null,
       events: [],
     });
     expect(status.agents).toEqual([
-      { id: "a1", title: "A", status: "needs_you", attention: true, message: "q", updated_at: "", color: "", shape: "", icon: "" },
+      {
+        id: "a1",
+        title: "A",
+        status: "needs_you",
+        attention: true,
+        message: "q",
+        updated_at: "",
+        color: "",
+        shape: "",
+        icon: "",
+      },
     ]);
     expect(status.unread).toBe(1);
   });
@@ -3617,12 +4369,17 @@ describe("api", () => {
     await postDismiss();
     expect(fetchMock).toHaveBeenCalledWith(
       "http://127.0.0.1:8788/api/dismiss",
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer secret" }) }),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer secret" }),
+      }),
     );
   });
 
   it("throws on a bad status body", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ nope: true })));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ nope: true })),
+    );
     configureApi("http://127.0.0.1:8787", "");
     await expect(fetchStatus()).rejects.toThrow("bad status");
   });
@@ -3723,10 +4480,19 @@ function headers(json = true): Record<string, string> {
   };
 }
 
-export function agentMark(color: string, shape: string): { color: string; shape: MarkShape } {
+export function agentMark(
+  color: string,
+  shape: string,
+): { color: string; shape: MarkShape } {
   const hex = /^#?([0-9a-fA-F]{6})$/.exec(color.trim());
   const key = shape.trim().toLowerCase();
-  const known = key === "square" || key === "diamond" || key === "triangle" || key === "circle" ? key : "circle";
+  const known =
+    key === "square" ||
+    key === "diamond" ||
+    key === "triangle" ||
+    key === "circle"
+      ? key
+      : "circle";
   return { color: hex ? `#${hex[1]}` : NEUTRAL_MARK, shape: known };
 }
 
@@ -3736,7 +4502,13 @@ export function injectBody(
   message: string,
   identity: { color?: string; shape?: string } = {},
 ): WebhookBody {
-  const body: WebhookBody = { type, agent_id: agentId, title: agentId, message, source: "manual" };
+  const body: WebhookBody = {
+    type,
+    agent_id: agentId,
+    title: agentId,
+    message,
+    source: "manual",
+  };
   const color = identity.color?.trim() ?? "";
   const shape = identity.shape?.trim() ?? "";
   if (color) body.color = color;
@@ -3751,7 +4523,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 const s = (value: unknown): string => (typeof value === "string" ? value : "");
 
 function eventFrom(value: unknown): DeskEvent | null {
-  if (!isRecord(value) || typeof value.id !== "string" || typeof value.type !== "string") return null;
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.type !== "string"
+  )
+    return null;
   return {
     id: value.id,
     type: value.type,
@@ -3779,7 +4556,11 @@ function agentFrom(value: unknown): DeskAgent | null {
 }
 
 export function parseStatus(value: unknown): DeskStatus {
-  if (!isRecord(value) || typeof value.phase !== "string" || !Array.isArray(value.agents)) {
+  if (
+    !isRecord(value) ||
+    typeof value.phase !== "string" ||
+    !Array.isArray(value.agents)
+  ) {
     throw new Error("bad status");
   }
   return {
@@ -3788,13 +4569,20 @@ export function parseStatus(value: unknown): DeskStatus {
     unread: typeof value.unread === "number" ? value.unread : 0,
     agents: value.agents.flatMap((item) => agentFrom(item) ?? []),
     last_event: eventFrom(value.last_event),
-    events: Array.isArray(value.events) ? value.events.flatMap((item) => eventFrom(item) ?? []) : [],
+    events: Array.isArray(value.events)
+      ? value.events.flatMap((item) => eventFrom(item) ?? [])
+      : [],
   };
 }
 
 async function call(path: string, init: RequestInit = {}): Promise<Response> {
   const res = await fetch(base + path, init);
-  if (!res.ok) throw new Error(res.status === 401 ? "Unauthorized. Check the webhook token in Settings." : `${path} ${res.status}`);
+  if (!res.ok)
+    throw new Error(
+      res.status === 401
+        ? "Unauthorized. Check the webhook token in Settings."
+        : `${path} ${res.status}`,
+    );
   return res;
 }
 
@@ -3803,7 +4591,11 @@ export async function fetchStatus(): Promise<DeskStatus> {
 }
 
 export async function postWebhook(body: WebhookBody): Promise<void> {
-  await call("/api/webhook/grok-bot", { method: "POST", headers: headers(), body: JSON.stringify(body) });
+  await call("/api/webhook/grok-bot", {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(body),
+  });
 }
 
 export async function postDismiss(agentId = ""): Promise<void> {
@@ -3816,22 +4608,37 @@ export async function postDismiss(agentId = ""): Promise<void> {
 
 export async function fetchConfig(): Promise<PublicConfig> {
   const value: unknown = await (await call("/api/config")).json();
-  if (!isRecord(value) || typeof value.port !== "number") throw new Error("bad config");
+  if (!isRecord(value) || typeof value.port !== "number")
+    throw new Error("bad config");
   return {
     port: value.port,
-    cursor_poll_seconds: typeof value.cursor_poll_seconds === "number" ? value.cursor_poll_seconds : 30,
+    cursor_poll_seconds:
+      typeof value.cursor_poll_seconds === "number"
+        ? value.cursor_poll_seconds
+        : 30,
     webhook_token_set: value.webhook_token_set === true,
     cursor_api_key_set: value.cursor_api_key_set === true,
   };
 }
 
-export async function putConfig(patch: ConfigPatch): Promise<{ restart_required: boolean }> {
-  const value: unknown = await (await call("/api/config", { method: "PUT", headers: headers(), body: JSON.stringify(patch) })).json();
-  return { restart_required: isRecord(value) && value.restart_required === true };
+export async function putConfig(
+  patch: ConfigPatch,
+): Promise<{ restart_required: boolean }> {
+  const value: unknown = await (
+    await call("/api/config", {
+      method: "PUT",
+      headers: headers(),
+      body: JSON.stringify(patch),
+    })
+  ).json();
+  return {
+    restart_required: isRecord(value) && value.restart_required === true,
+  };
 }
 
 function panelFrom(value: unknown): PanelPush {
-  if (!isRecord(value) || typeof value.url !== "string") throw new Error("bad panel");
+  if (!isRecord(value) || typeof value.url !== "string")
+    throw new Error("bad panel");
   return { url: value.url, token_set: value.token_set === true };
 }
 
@@ -3840,7 +4647,15 @@ export async function fetchPanel(): Promise<PanelPush> {
 }
 
 export async function putPanel(patch: PanelPatch): Promise<PanelPush> {
-  return panelFrom(await (await call("/api/panel", { method: "PUT", headers: headers(), body: JSON.stringify(patch) })).json());
+  return panelFrom(
+    await (
+      await call("/api/panel", {
+        method: "PUT",
+        headers: headers(),
+        body: JSON.stringify(patch),
+      })
+    ).json(),
+  );
 }
 ```
 
@@ -3952,16 +4767,31 @@ import type { ComponentType } from "react";
 
 export type View = "dashboard" | "device" | "console" | "settings";
 
-const ITEMS: { view: View; label: string; Icon: ComponentType<{ className?: string }> }[] = [
+const ITEMS: {
+  view: View;
+  label: string;
+  Icon: ComponentType<{ className?: string }>;
+}[] = [
   { view: "dashboard", label: "Dashboard", Icon: LayoutList },
   { view: "device", label: "Device", Icon: Cpu },
   { view: "console", label: "Console", Icon: SquareTerminal },
   { view: "settings", label: "Settings", Icon: Settings },
 ];
 
-export function Sidebar({ view, onSelect, panelOnline }: { view: View; onSelect: (v: View) => void; panelOnline: boolean }) {
+export function Sidebar({
+  view,
+  onSelect,
+  panelOnline,
+}: {
+  view: View;
+  onSelect: (v: View) => void;
+  panelOnline: boolean;
+}) {
   return (
-    <nav aria-label="Views" className="flex w-48 shrink-0 flex-col border-r border-stroke/40 bg-surface">
+    <nav
+      aria-label="Views"
+      className="flex w-48 shrink-0 flex-col border-r border-stroke/40 bg-surface"
+    >
       <p className="px-4 pt-4 pb-3 text-base font-medium">Calico</p>
       <ul>
         {ITEMS.map(({ view: v, label, Icon }) => (
@@ -3981,7 +4811,10 @@ export function Sidebar({ view, onSelect, panelOnline }: { view: View; onSelect:
         ))}
       </ul>
       <p className="mt-auto px-4 py-3 text-xs text-muted">
-        <span className={`mr-2 inline-block size-2 rounded-full ${panelOnline ? "bg-sage" : "bg-stroke"}`} aria-hidden="true" />
+        <span
+          className={`mr-2 inline-block size-2 rounded-full ${panelOnline ? "bg-sage" : "bg-stroke"}`}
+          aria-hidden="true"
+        />
         {panelOnline ? "Panel online" : "Panel not polling"}
       </p>
     </nav>
@@ -4010,7 +4843,9 @@ export function UrlChip({ url }: { url: string }) {
       aria-label={`Copy ${url}`}
     >
       <span>{url}</span>
-      <span className="text-muted">{copied ? "Copied" : <Copy className="size-3.5" />}</span>
+      <span className="text-muted">
+        {copied ? "Copied" : <Copy className="size-3.5" />}
+      </span>
     </button>
   );
 }
@@ -4024,11 +4859,18 @@ import type { ServerErrorInfo } from "../../../shared/ipc";
 export function ServerErrorPanel({ error }: { error: ServerErrorInfo }) {
   return (
     <section role="alert" className="m-4 border border-red/60 bg-surface p-4">
-      <p className="font-medium text-red">The companion server is not running.</p>
-      <p className="mt-1 text-muted">
-        Ports {error.first} to {error.last} are all in use, so the panel and agent webhooks cannot reach calico. Device setup over USB and Bluetooth still works.
+      <p className="font-medium text-red">
+        The companion server is not running.
       </p>
-      <p className="mt-2 text-muted">Close whatever holds those ports, then quit and reopen calico from the tray.</p>
+      <p className="mt-1 text-muted">
+        Ports {error.first} to {error.last} are all in use, so the panel and
+        agent webhooks cannot reach calico. Device setup over USB and Bluetooth
+        still works.
+      </p>
+      <p className="mt-2 text-muted">
+        Close whatever holds those ports, then quit and reopen calico from the
+        tray.
+      </p>
     </section>
   );
 }
@@ -4065,18 +4907,36 @@ export function AgentMark({ color, shape }: { color: string; shape: string }) {
 import type { DeskAgent } from "../lib/api";
 import { AgentMark } from "./AgentMark";
 
-const STATUS_CLASS: Record<string, string> = { needs_you: "text-amber", running: "text-sage" };
+const STATUS_CLASS: Record<string, string> = {
+  needs_you: "text-amber",
+  running: "text-sage",
+};
 
 export function AgentRows({ agents }: { agents: DeskAgent[] }) {
-  if (agents.length === 0) return <p className="px-4 py-3 text-muted">No agents yet. They appear when a webhook or the Cursor poll reports one.</p>;
+  if (agents.length === 0)
+    return (
+      <p className="px-4 py-3 text-muted">
+        No agents yet. They appear when a webhook or the Cursor poll reports
+        one.
+      </p>
+    );
   return (
     <ul>
       {agents.map((agent) => (
-        <li key={agent.id} className={`row ${agent.attention ? "bg-selected/60" : ""}`}>
+        <li
+          key={agent.id}
+          className={`row ${agent.attention ? "bg-selected/60" : ""}`}
+        >
           <AgentMark color={agent.color} shape={agent.shape} />
-          <span className="shrink-0 font-medium">{agent.title || agent.id}</span>
-          <span className="min-w-0 flex-1 truncate text-muted">{agent.message}</span>
-          <span className={`shrink-0 text-xs uppercase ${STATUS_CLASS[agent.status] ?? "text-muted"}`}>
+          <span className="shrink-0 font-medium">
+            {agent.title || agent.id}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-muted">
+            {agent.message}
+          </span>
+          <span
+            className={`shrink-0 text-xs uppercase ${STATUS_CLASS[agent.status] ?? "text-muted"}`}
+          >
             {agent.status.replaceAll("_", " ")}
           </span>
         </li>
@@ -4092,14 +4952,23 @@ export function AgentRows({ agents }: { agents: DeskAgent[] }) {
 import type { DeskEvent } from "../lib/api";
 
 export function EventRows({ events }: { events: DeskEvent[] }) {
-  if (events.length === 0) return <p className="px-4 py-3 text-muted">No events yet.</p>;
+  if (events.length === 0)
+    return <p className="px-4 py-3 text-muted">No events yet.</p>;
   return (
     <ul>
       {events.map((event) => (
         <li key={event.id} className="row">
-          <time className="shrink-0 font-mono text-xs text-muted">{event.at.slice(11, 19)}</time>
-          <span className={`shrink-0 text-xs ${event.type === "agent.needs_you" ? "text-amber" : "text-muted"}`}>{event.type}</span>
-          <span className="min-w-0 flex-1 truncate">{event.title || event.message || event.agent_id}</span>
+          <time className="shrink-0 font-mono text-xs text-muted">
+            {event.at.slice(11, 19)}
+          </time>
+          <span
+            className={`shrink-0 text-xs ${event.type === "agent.needs_you" ? "text-amber" : "text-muted"}`}
+          >
+            {event.type}
+          </span>
+          <span className="min-w-0 flex-1 truncate">
+            {event.title || event.message || event.agent_id}
+          </span>
           <span className="shrink-0 text-xs text-muted">{event.source}</span>
         </li>
       ))}
@@ -4113,12 +4982,26 @@ export function EventRows({ events }: { events: DeskEvent[] }) {
 ```tsx
 import type { DeskStatus } from "../lib/api";
 
-export function NeedsYouStrip({ status, onDismiss }: { status: DeskStatus; onDismiss: () => void }) {
+export function NeedsYouStrip({
+  status,
+  onDismiss,
+}: {
+  status: DeskStatus;
+  onDismiss: () => void;
+}) {
   if (!status.needs_you) return null;
-  const text = status.last_event?.message || status.last_event?.title || "An agent is waiting on you.";
+  const text =
+    status.last_event?.message ||
+    status.last_event?.title ||
+    "An agent is waiting on you.";
   return (
-    <div role="status" className="flex items-center gap-4 border-b border-amber/60 bg-surface px-4 py-3">
-      <span className="text-xs font-medium text-amber uppercase">Needs you</span>
+    <div
+      role="status"
+      className="flex items-center gap-4 border-b border-amber/60 bg-surface px-4 py-3"
+    >
+      <span className="text-xs font-medium text-amber uppercase">
+        Needs you
+      </span>
       <span className="min-w-0 flex-1 truncate">{text}</span>
       <button type="button" className="btn" onClick={onDismiss}>
         Dismiss all
@@ -4134,7 +5017,12 @@ export function NeedsYouStrip({ status, onDismiss }: { status: DeskStatus; onDis
 import { useState } from "react";
 import { injectBody, postWebhook } from "../lib/api";
 
-const TYPES = ["agent.launched", "agent.needs_you", "agent.finished", "note"] as const;
+const TYPES = [
+  "agent.launched",
+  "agent.needs_you",
+  "agent.finished",
+  "note",
+] as const;
 
 export function InjectBar({ onSent }: { onSent: () => void }) {
   const [agentId, setAgentId] = useState("demo");
@@ -4157,14 +5045,27 @@ export function InjectBar({ onSent }: { onSent: () => void }) {
       <div className="flex flex-wrap items-end gap-3 px-4 pb-4">
         <label className="label">
           Agent id
-          <input className="field mt-1 w-40" value={agentId} onChange={(e) => setAgentId(e.target.value)} />
+          <input
+            className="field mt-1 w-40"
+            value={agentId}
+            onChange={(e) => setAgentId(e.target.value)}
+          />
         </label>
         <label className="label flex-1">
           Message
-          <input className="field mt-1" value={message} onChange={(e) => setMessage(e.target.value)} />
+          <input
+            className="field mt-1"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+          />
         </label>
         {TYPES.map((type) => (
-          <button key={type} type="button" className="btn" onClick={() => void send(type)}>
+          <button
+            key={type}
+            type="button"
+            className="btn"
+            onClick={() => void send(type)}
+          >
             {type.replace("agent.", "")}
           </button>
         ))}
@@ -4207,9 +5108,16 @@ export function Dashboard({ serverUrl }: { serverUrl: string }) {
   const running = status?.agents.filter((a) => a.status !== "idle").length ?? 0;
   return (
     <div className="flex flex-col">
-      {status ? <NeedsYouStrip status={status} onDismiss={() => void postDismiss().then(refresh)} /> : null}
+      {status ? (
+        <NeedsYouStrip
+          status={status}
+          onDismiss={() => void postDismiss().then(refresh)}
+        />
+      ) : null}
       <div className="flex items-baseline gap-4 px-4 pt-4">
-        <h1 className="text-lg font-medium capitalize">{(status?.phase ?? "idle").replace("_", " ")}</h1>
+        <h1 className="text-lg font-medium capitalize">
+          {(status?.phase ?? "idle").replace("_", " ")}
+        </h1>
         <span className="text-muted">
           {running}/{status?.agents.length ?? 0} active
         </span>
@@ -4240,7 +5148,8 @@ import { UrlChip } from "./shell/UrlChip";
 export function App() {
   const info = useInfo();
   const [view, setView] = useState<View>("dashboard");
-  const panelOnline = info?.lastPanelPoll != null && Date.now() - info.lastPanelPoll < 10_000;
+  const panelOnline =
+    info?.lastPanelPoll != null && Date.now() - info.lastPanelPoll < 10_000;
   const lanUrl = info?.lanUrls[0];
 
   return (
@@ -4251,9 +5160,15 @@ export function App() {
           {lanUrl ? <UrlChip url={lanUrl} /> : null}
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto">
-          {info?.serverError ? <ServerErrorPanel error={info.serverError} /> : null}
-          {view === "dashboard" && info?.serverUrl ? <Dashboard serverUrl={info.serverUrl} /> : null}
-          {view !== "dashboard" ? <p className="p-4 text-muted">Coming in a later task.</p> : null}
+          {info?.serverError ? (
+            <ServerErrorPanel error={info.serverError} />
+          ) : null}
+          {view === "dashboard" && info?.serverUrl ? (
+            <Dashboard serverUrl={info.serverUrl} />
+          ) : null}
+          {view !== "dashboard" ? (
+            <p className="p-4 text-muted">Coming in a later task.</p>
+          ) : null}
         </main>
       </div>
     </div>
@@ -4281,10 +5196,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 14: Settings view
 
 **Files:**
+
 - Create: `src/renderer/src/settings/SettingsView.tsx`, `ConfigSection.tsx`, `PanelSection.tsx`, `AutostartSection.tsx`
 - Modify: `src/renderer/src/App.tsx`
 
 **Interfaces:**
+
 - Consumes: `fetchConfig`, `putConfig`, `fetchPanel`, `putPanel` (Task 13), `CalicoInfo.autostart`, `window.calico.setAutostart` (Task 12).
 - Produces: `<SettingsView info={CalicoInfo} />`.
 
@@ -4312,7 +5229,9 @@ export function ConfigSection() {
   };
 
   useEffect(() => {
-    load().catch((err: unknown) => setNotice(err instanceof Error ? err.message : "Could not load settings"));
+    load().catch((err: unknown) =>
+      setNotice(err instanceof Error ? err.message : "Could not load settings"),
+    );
   }, []);
 
   async function save() {
@@ -4326,7 +5245,11 @@ export function ConfigSection() {
       setToken(null);
       setApiKey(null);
       await load();
-      setNotice(restart_required ? "Saved. Quit and reopen calico to use the new port." : "Saved.");
+      setNotice(
+        restart_required
+          ? "Saved. Quit and reopen calico to use the new port."
+          : "Saved.",
+      );
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Save failed");
     }
@@ -4338,11 +5261,21 @@ export function ConfigSection() {
       <div className="grid max-w-2xl grid-cols-2 gap-3 px-4">
         <label className="label">
           Port
-          <input className="field mt-1" inputMode="numeric" value={port} onChange={(e) => setPort(e.target.value)} />
+          <input
+            className="field mt-1"
+            inputMode="numeric"
+            value={port}
+            onChange={(e) => setPort(e.target.value)}
+          />
         </label>
         <label className="label">
           Cursor poll seconds
-          <input className="field mt-1" inputMode="numeric" value={poll} onChange={(e) => setPoll(e.target.value)} />
+          <input
+            className="field mt-1"
+            inputMode="numeric"
+            value={poll}
+            onChange={(e) => setPoll(e.target.value)}
+          />
         </label>
         <label className="label">
           Webhook token
@@ -4350,7 +5283,11 @@ export function ConfigSection() {
             type="password"
             className="field mt-1"
             value={token ?? ""}
-            placeholder={config?.webhook_token_set ? "Set (type to replace, clear to remove)" : "Not set"}
+            placeholder={
+              config?.webhook_token_set
+                ? "Set (type to replace, clear to remove)"
+                : "Not set"
+            }
             onChange={(e) => setToken(e.target.value)}
           />
         </label>
@@ -4366,10 +5303,18 @@ export function ConfigSection() {
         </label>
       </div>
       <div className="flex items-center gap-3 px-4 py-3">
-        <button type="button" className="btn btn-primary" onClick={() => void save()}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => void save()}
+        >
           Save
         </button>
-        {notice ? <span role="status" className="text-muted">{notice}</span> : null}
+        {notice ? (
+          <span role="status" className="text-muted">
+            {notice}
+          </span>
+        ) : null}
       </div>
     </section>
   );
@@ -4396,7 +5341,11 @@ export function PanelSection() {
         setPanel(p);
         setUrl(p.url);
       })
-      .catch((err: unknown) => setNotice(err instanceof Error ? err.message : "Could not load panel push"));
+      .catch((err: unknown) =>
+        setNotice(
+          err instanceof Error ? err.message : "Could not load panel push",
+        ),
+      );
   }, []);
 
   async function apply(patch: Parameters<typeof putPanel>[0]) {
@@ -4405,7 +5354,11 @@ export function PanelSection() {
       setPanel(saved);
       setUrl(saved.url);
       setToken(null);
-      setNotice(patch.clear ? "Cleared." : "Saved. The panel applies it on its next successful poll.");
+      setNotice(
+        patch.clear
+          ? "Cleared."
+          : "Saved. The panel applies it on its next successful poll.",
+      );
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Save failed");
     }
@@ -4415,12 +5368,18 @@ export function PanelSection() {
     <section>
       <h2 className="section-title">Panel push</h2>
       <p className="max-w-2xl px-4 pb-2 text-muted">
-        Sends a companion URL and token to the panel through its status poll. Use this when the panel is already online. For a panel that is offline, use Device.
+        Sends a companion URL and token to the panel through its status poll.
+        Use this when the panel is already online. For a panel that is offline,
+        use Device.
       </p>
       <div className="grid max-w-2xl grid-cols-2 gap-3 px-4">
         <label className="label">
           Companion URL
-          <input className="field mt-1 font-mono" value={url} onChange={(e) => setUrl(e.target.value)} />
+          <input
+            className="field mt-1 font-mono"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+          />
         </label>
         <label className="label">
           Panel token
@@ -4434,13 +5393,27 @@ export function PanelSection() {
         </label>
       </div>
       <div className="flex items-center gap-3 px-4 py-3">
-        <button type="button" className="btn btn-primary" onClick={() => void apply({ url, ...(token !== null ? { token } : {}) })}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() =>
+            void apply({ url, ...(token !== null ? { token } : {}) })
+          }
+        >
           Save
         </button>
-        <button type="button" className="btn" onClick={() => void apply({ clear: true })}>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => void apply({ clear: true })}
+        >
           Clear
         </button>
-        {notice ? <span role="status" className="text-muted">{notice}</span> : null}
+        {notice ? (
+          <span role="status" className="text-muted">
+            {notice}
+          </span>
+        ) : null}
       </div>
     </section>
   );
@@ -4455,7 +5428,11 @@ export function PanelSection() {
 import { useState } from "react";
 import type { CalicoInfo } from "../../../shared/ipc";
 
-export function AutostartSection({ autostart }: { autostart: CalicoInfo["autostart"] }) {
+export function AutostartSection({
+  autostart,
+}: {
+  autostart: CalicoInfo["autostart"];
+}) {
   const [enabled, setEnabled] = useState(autostart.enabled);
   return (
     <section>
@@ -4465,11 +5442,17 @@ export function AutostartSection({ autostart }: { autostart: CalicoInfo["autosta
           type="checkbox"
           checked={enabled}
           disabled={!autostart.available}
-          onChange={(e) => void window.calico.setAutostart(e.target.checked).then(setEnabled)}
+          onChange={(e) =>
+            void window.calico.setAutostart(e.target.checked).then(setEnabled)
+          }
         />
         Start calico in the tray when I log in
       </label>
-      {!autostart.available ? <p className="px-4 text-xs text-muted">Available in installed builds.</p> : null}
+      {!autostart.available ? (
+        <p className="px-4 text-xs text-muted">
+          Available in installed builds.
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -4499,8 +5482,14 @@ export function SettingsView({ info }: { info: CalicoInfo }) {
 In `src/renderer/src/App.tsx`, import `SettingsView` and replace the placeholder line with:
 
 ```tsx
-          {view === "settings" && info ? <SettingsView info={info} /> : null}
-          {view === "device" || view === "console" ? <p className="p-4 text-muted">Coming in a later task.</p> : null}
+{
+  view === "settings" && info ? <SettingsView info={info} /> : null;
+}
+{
+  view === "device" || view === "console" ? (
+    <p className="p-4 text-muted">Coming in a later task.</p>
+  ) : null;
+}
 ```
 
 - [ ] **Step 5: Verify**
@@ -4538,31 +5527,59 @@ Start: `git switch main && git pull && git switch -c feat/devices`
 ### Task 15: Command model and BLE link
 
 **Files:**
+
 - Create: `src/renderer/src/device/commands.ts`, `src/renderer/src/device/ble.ts`, `test/parity/ble_desk.h`
 - Test: `src/renderer/src/device/commands.test.ts`, `src/renderer/src/device/ble.test.ts`
 
 **Interfaces:**
+
 - Produces (`commands.ts`):
 
 ```ts
-export const SSID_MAX = 32, PASS_MAX = 64, URL_MAX = 127, TOKEN_MAX = 127;
-export interface DeskInfo { name: string; fw: string; ssid: string; url: string; token: "set" | "none" }
-export interface Ap { rssi: number; ssid: string }
+export const SSID_MAX = 32,
+  PASS_MAX = 64,
+  URL_MAX = 127,
+  TOKEN_MAX = 127;
+export interface DeskInfo {
+  name: string;
+  fw: string;
+  ssid: string;
+  url: string;
+  token: "set" | "none";
+}
+export interface Ap {
+  rssi: number;
+  ssid: string;
+}
 export type ProbeReason = "auth" | "missing" | "timeout" | "radio" | "other";
 export type Cmd =
-  | { op: "status" } | { op: "scan" }
-  | { op: "verify"; ssid: string; pass: string } | { op: "wifi"; ssid: string; pass: string }
-  | { op: "url"; value: string } | { op: "token"; value: string } | { op: "reboot" };
-export type Reply = { ok: true; info?: DeskInfo; aps?: Ap[] } | { ok: false; error: string; reason?: ProbeReason };
-export interface DeviceLink { kind: "usb" | "ble"; send(cmd: Cmd): Promise<Reply>; close(): void }
+  | { op: "status" }
+  | { op: "scan" }
+  | { op: "verify"; ssid: string; pass: string }
+  | { op: "wifi"; ssid: string; pass: string }
+  | { op: "url"; value: string }
+  | { op: "token"; value: string }
+  | { op: "reboot" };
+export type Reply =
+  | { ok: true; info?: DeskInfo; aps?: Ap[] }
+  | { ok: false; error: string; reason?: ProbeReason };
+export interface DeviceLink {
+  kind: "usb" | "ble";
+  send(cmd: Cmd): Promise<Reply>;
+  close(): void;
+}
 export class FieldError extends Error {}
-export function validateCmd(cmd: Cmd): void;          // throws FieldError
-export function timeoutFor(cmd: Cmd): number;         // 30000 for scan/verify, else 10000
-export function secretsOf(cmd: Cmd): string[];        // pass or token values, non-empty
+export function validateCmd(cmd: Cmd): void; // throws FieldError
+export function timeoutFor(cmd: Cmd): number; // 30000 for scan/verify, else 10000
+export function secretsOf(cmd: Cmd): string[]; // pass or token values, non-empty
 export function parseKv(body: string): Record<string, string>;
 export function infoFromKv(kv: Record<string, string>): DeskInfo;
 export function parseScan(body: string): { state: string; aps: Ap[] };
-export function parseProbe(body: string): { state: string; ssid: string; reason: string };
+export function parseProbe(body: string): {
+  state: string;
+  ssid: string;
+  reason: string;
+};
 export function describeProbeFailure(ssid: string, reason: string): string;
 export function toReason(value: string): ProbeReason;
 ```
@@ -4624,18 +5641,30 @@ describe("validateCmd", () => {
   });
 
   it("counts bytes, not characters", () => {
-    expect(() => validateCmd({ op: "wifi", ssid: "é".repeat(17), pass: "" })).toThrow(FieldError);
+    expect(() =>
+      validateCmd({ op: "wifi", ssid: "é".repeat(17), pass: "" }),
+    ).toThrow(FieldError);
   });
 });
 
 describe("parsers", () => {
   it("reads the status body", () => {
-    const kv = parseKv("name=grokbot-buddy\nfw=1.2\nssid=none\nurl=http://h:8787\ntoken=set\n");
-    expect(infoFromKv(kv)).toEqual({ name: "grokbot-buddy", fw: "1.2", ssid: "", url: "http://h:8787", token: "set" });
+    const kv = parseKv(
+      "name=grokbot-buddy\nfw=1.2\nssid=none\nurl=http://h:8787\ntoken=set\n",
+    );
+    expect(infoFromKv(kv)).toEqual({
+      name: "grokbot-buddy",
+      fw: "1.2",
+      ssid: "",
+      url: "http://h:8787",
+      token: "set",
+    });
   });
 
   it("reads a scan and sorts by signal", () => {
-    expect(parseScan("state=ready\n-70\tfar\n-40\tnear\nbad line\n-50\t\n")).toEqual({
+    expect(
+      parseScan("state=ready\n-70\tfar\n-40\tnear\nbad line\n-50\t\n"),
+    ).toEqual({
       state: "ready",
       aps: [
         { rssi: -40, ssid: "near" },
@@ -4645,14 +5674,22 @@ describe("parsers", () => {
   });
 
   it("reads a probe", () => {
-    expect(parseProbe("state=fail\nssid=home\nreason=auth\n")).toEqual({ state: "fail", ssid: "home", reason: "auth" });
-    expect(describeProbeFailure("home", "auth")).toBe("Could not join home. The password was rejected. Nothing was saved.");
+    expect(parseProbe("state=fail\nssid=home\nreason=auth\n")).toEqual({
+      state: "fail",
+      ssid: "home",
+      reason: "auth",
+    });
+    expect(describeProbeFailure("home", "auth")).toBe(
+      "Could not join home. The password was rejected. Nothing was saved.",
+    );
   });
 
   it("knows timeouts and secrets", () => {
     expect(timeoutFor({ op: "scan" })).toBe(30_000);
     expect(timeoutFor({ op: "url", value: "http://h" })).toBe(10_000);
-    expect(secretsOf({ op: "verify", ssid: "home", pass: "hunter22" })).toEqual(["hunter22"]);
+    expect(secretsOf({ op: "verify", ssid: "home", pass: "hunter22" })).toEqual(
+      ["hunter22"],
+    );
     expect(secretsOf({ op: "token", value: "" })).toEqual([]);
   });
 });
@@ -4666,7 +5703,10 @@ describe("parsers", () => {
 import { describe, expect, it } from "vitest";
 import { BleLink, type Gatt, UUID } from "./ble";
 
-function fakeGatt(reads: Record<string, string[]>, opts: { failWrite?: string } = {}) {
+function fakeGatt(
+  reads: Record<string, string[]>,
+  opts: { failWrite?: string } = {},
+) {
   const writes: [string, string][] = [];
   const gatt: Gatt = {
     async read(uuid) {
@@ -4674,7 +5714,8 @@ function fakeGatt(reads: Record<string, string[]>, opts: { failWrite?: string } 
       return queue.length > 1 ? (queue.shift() ?? "") : (queue[0] ?? "");
     },
     async write(uuid, data) {
-      if (uuid === opts.failWrite) throw new Error("GATT Server is disconnected.");
+      if (uuid === opts.failWrite)
+        throw new Error("GATT Server is disconnected.");
       writes.push([uuid, new TextDecoder().decode(data)]);
     },
     disconnect() {},
@@ -4686,10 +5727,20 @@ const instant = async () => undefined;
 
 describe("BleLink", () => {
   it("reads status", async () => {
-    const { gatt } = fakeGatt({ [UUID.status]: ["name=grokbot-buddy\nfw=1\nssid=home\nurl=none\ntoken=none\n"] });
+    const { gatt } = fakeGatt({
+      [UUID.status]: [
+        "name=grokbot-buddy\nfw=1\nssid=home\nurl=none\ntoken=none\n",
+      ],
+    });
     expect(await new BleLink(gatt, instant).send({ op: "status" })).toEqual({
       ok: true,
-      info: { name: "grokbot-buddy", fw: "1", ssid: "home", url: "", token: "none" },
+      info: {
+        name: "grokbot-buddy",
+        fw: "1",
+        ssid: "home",
+        url: "",
+        token: "none",
+      },
     });
   });
 
@@ -4700,34 +5751,64 @@ describe("BleLink", () => {
   });
 
   it("scans until ready", async () => {
-    const { gatt, writes } = fakeGatt({ [UUID.scan]: ["state=busy\n", "state=busy\n", "state=ready\n-40\thome\n"] });
+    const { gatt, writes } = fakeGatt({
+      [UUID.scan]: ["state=busy\n", "state=busy\n", "state=ready\n-40\thome\n"],
+    });
     const reply = await new BleLink(gatt, instant).send({ op: "scan" });
     expect(writes).toEqual([[UUID.scan, "scan"]]);
     expect(reply).toEqual({ ok: true, aps: [{ rssi: -40, ssid: "home" }] });
   });
 
   it("reports a failed verify with its reason and never writes wifi", async () => {
-    const { gatt, writes } = fakeGatt({ [UUID.verify]: ["state=busy\nssid=home\n", "state=fail\nssid=home\nreason=auth\n"] });
-    const reply = await new BleLink(gatt, instant).send({ op: "verify", ssid: "home", pass: "wrongpass" });
-    expect(reply).toEqual({ ok: false, reason: "auth", error: "Could not join home. The password was rejected. Nothing was saved." });
+    const { gatt, writes } = fakeGatt({
+      [UUID.verify]: [
+        "state=busy\nssid=home\n",
+        "state=fail\nssid=home\nreason=auth\n",
+      ],
+    });
+    const reply = await new BleLink(gatt, instant).send({
+      op: "verify",
+      ssid: "home",
+      pass: "wrongpass",
+    });
+    expect(reply).toEqual({
+      ok: false,
+      reason: "auth",
+      error:
+        "Could not join home. The password was rejected. Nothing was saved.",
+    });
     expect(writes.map(([uuid]) => uuid)).toEqual([UUID.verify]);
   });
 
   it("times out a scan that never finishes", async () => {
     let t = 0;
     const { gatt } = fakeGatt({ [UUID.scan]: ["state=busy\n"] });
-    const link = new BleLink(gatt, async () => { t += 1000; }, () => t);
-    expect(await link.send({ op: "scan" })).toEqual({ ok: false, error: "The desk did not finish scanning in 30 seconds." });
+    const link = new BleLink(
+      gatt,
+      async () => {
+        t += 1000;
+      },
+      () => t,
+    );
+    expect(await link.send({ op: "scan" })).toEqual({
+      ok: false,
+      error: "The desk did not finish scanning in 30 seconds.",
+    });
   });
 
   it("reboot counts a dropped link as success", async () => {
     const { gatt } = fakeGatt({}, { failWrite: UUID.reboot });
-    expect(await new BleLink(gatt, instant).send({ op: "reboot" })).toEqual({ ok: true });
+    expect(await new BleLink(gatt, instant).send({ op: "reboot" })).toEqual({
+      ok: true,
+    });
   });
 
   it("turns validation errors into a failed reply", async () => {
     const { gatt, writes } = fakeGatt({});
-    const reply = await new BleLink(gatt, instant).send({ op: "url", value: "nope" });
+    const reply = await new BleLink(gatt, instant).send({
+      op: "url",
+      value: "nope",
+    });
     expect(reply.ok).toBe(false);
     expect(writes).toEqual([]);
   });
@@ -4782,7 +5863,9 @@ export type Cmd =
   | { op: "token"; value: string }
   | { op: "reboot" };
 
-export type Reply = { ok: true; info?: DeskInfo; aps?: Ap[] } | { ok: false; error: string; reason?: ProbeReason };
+export type Reply =
+  | { ok: true; info?: DeskInfo; aps?: Ap[] }
+  | { ok: false; error: string; reason?: ProbeReason };
 
 export interface DeviceLink {
   kind: "usb" | "ble";
@@ -4795,34 +5878,47 @@ export class FieldError extends Error {}
 const bytes = (s: string) => new TextEncoder().encode(s).length;
 
 function noBreaks(value: string, label: string): void {
-  if (/[\r\n\0]/.test(value)) throw new FieldError(`${label} cannot contain a newline or NUL.`);
+  if (/[\r\n\0]/.test(value))
+    throw new FieldError(`${label} cannot contain a newline or NUL.`);
 }
 
 function checkSsid(ssid: string): void {
   noBreaks(ssid, "SSID");
   if (!ssid) throw new FieldError("SSID is required.");
-  if (bytes(ssid) > SSID_MAX) throw new FieldError(`SSID must be at most ${SSID_MAX} bytes.`);
+  if (bytes(ssid) > SSID_MAX)
+    throw new FieldError(`SSID must be at most ${SSID_MAX} bytes.`);
 }
 
 function checkPass(pass: string): void {
   noBreaks(pass, "Password");
   const n = bytes(pass);
-  if (n > PASS_MAX) throw new FieldError(`Password must be at most ${PASS_MAX} bytes.`);
-  if (n > 0 && n < 8) throw new FieldError("Password must be empty (open network) or 8 to 64 bytes.");
+  if (n > PASS_MAX)
+    throw new FieldError(`Password must be at most ${PASS_MAX} bytes.`);
+  if (n > 0 && n < 8)
+    throw new FieldError(
+      "Password must be empty (open network) or 8 to 64 bytes.",
+    );
 }
 
 export function validateCmd(cmd: Cmd): void {
   switch (cmd.op) {
     case "url": {
       noBreaks(cmd.value, "URL");
-      const ok = (cmd.value.startsWith("http://") && cmd.value.length > 7) || (cmd.value.startsWith("https://") && cmd.value.length > 8);
-      if (!ok) throw new FieldError("URL must start with http:// or https:// and name a host.");
-      if (bytes(cmd.value) > URL_MAX) throw new FieldError(`URL must be at most ${URL_MAX} bytes.`);
+      const ok =
+        (cmd.value.startsWith("http://") && cmd.value.length > 7) ||
+        (cmd.value.startsWith("https://") && cmd.value.length > 8);
+      if (!ok)
+        throw new FieldError(
+          "URL must start with http:// or https:// and name a host.",
+        );
+      if (bytes(cmd.value) > URL_MAX)
+        throw new FieldError(`URL must be at most ${URL_MAX} bytes.`);
       return;
     }
     case "token":
       noBreaks(cmd.value, "Token");
-      if (bytes(cmd.value) > TOKEN_MAX) throw new FieldError(`Token must be at most ${TOKEN_MAX} bytes.`);
+      if (bytes(cmd.value) > TOKEN_MAX)
+        throw new FieldError(`Token must be at most ${TOKEN_MAX} bytes.`);
       return;
     case "verify":
     case "wifi":
@@ -4839,7 +5935,8 @@ export function timeoutFor(cmd: Cmd): number {
 }
 
 export function secretsOf(cmd: Cmd): string[] {
-  if (cmd.op === "verify" || cmd.op === "wifi") return cmd.pass ? [cmd.pass] : [];
+  if (cmd.op === "verify" || cmd.op === "wifi")
+    return cmd.pass ? [cmd.pass] : [];
   if (cmd.op === "token") return cmd.value ? [cmd.value] : [];
   return [];
 }
@@ -4853,7 +5950,8 @@ export function parseKv(body: string): Record<string, string> {
   return out;
 }
 
-const orEmpty = (value: string | undefined) => (value === undefined || value === "none" ? "" : value);
+const orEmpty = (value: string | undefined) =>
+  value === undefined || value === "none" ? "" : value;
 
 export function infoFromKv(kv: Record<string, string>): DeskInfo {
   return {
@@ -4879,13 +5977,26 @@ export function parseScan(body: string): { state: string; aps: Ap[] } {
   return { state: parseKv(body).state ?? "", aps };
 }
 
-export function parseProbe(body: string): { state: string; ssid: string; reason: string } {
+export function parseProbe(body: string): {
+  state: string;
+  ssid: string;
+  reason: string;
+} {
   const kv = parseKv(body);
-  return { state: kv.state ?? "", ssid: kv.ssid ?? "", reason: kv.reason ?? "" };
+  return {
+    state: kv.state ?? "",
+    ssid: kv.ssid ?? "",
+    reason: kv.reason ?? "",
+  };
 }
 
 export function toReason(value: string): ProbeReason {
-  return value === "auth" || value === "missing" || value === "timeout" || value === "radio" ? value : "other";
+  return value === "auth" ||
+    value === "missing" ||
+    value === "timeout" ||
+    value === "radio"
+    ? value
+    : "other";
 }
 
 export function describeProbeFailure(ssid: string, reason: string): string {
@@ -4947,7 +6058,8 @@ export class BleLink implements DeviceLink {
 
   constructor(
     private readonly gatt: Gatt,
-    private readonly sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+    private readonly sleep: (ms: number) => Promise<void> = (ms) =>
+      new Promise((r) => setTimeout(r, ms)),
     private readonly now: () => number = () => Date.now(),
   ) {}
 
@@ -4968,13 +6080,19 @@ export class BleLink implements DeviceLink {
   private async run(cmd: Cmd): Promise<Reply> {
     switch (cmd.op) {
       case "status":
-        return { ok: true, info: infoFromKv(parseKv(await this.gatt.read(UUID.status))) };
+        return {
+          ok: true,
+          info: infoFromKv(parseKv(await this.gatt.read(UUID.status))),
+        };
       case "url":
         await this.gatt.write(UUID.url, encode(cmd.value));
         return { ok: true };
       case "token":
         // A zero-length ATT write is easy to drop. One newline strips to empty on the desk.
-        await this.gatt.write(UUID.token, encode(cmd.value === "" ? "\n" : cmd.value));
+        await this.gatt.write(
+          UUID.token,
+          encode(cmd.value === "" ? "\n" : cmd.value),
+        );
         return { ok: true };
       case "wifi":
         await this.gatt.write(UUID.wifi, encode(`${cmd.ssid}\n${cmd.pass}`));
@@ -4988,23 +6106,50 @@ export class BleLink implements DeviceLink {
         return { ok: true };
       case "scan": {
         await this.gatt.write(UUID.scan, encode("scan"));
-        const body = await this.pollUntil(UUID.scan, ["ready", "fail"], timeoutFor(cmd));
-        if (body === null) return { ok: false, error: "The desk did not finish scanning in 30 seconds." };
+        const body = await this.pollUntil(
+          UUID.scan,
+          ["ready", "fail"],
+          timeoutFor(cmd),
+        );
+        if (body === null)
+          return {
+            ok: false,
+            error: "The desk did not finish scanning in 30 seconds.",
+          };
         const { state, aps } = parseScan(body);
-        return state === "ready" ? { ok: true, aps } : { ok: false, error: "The desk could not scan for networks." };
+        return state === "ready"
+          ? { ok: true, aps }
+          : { ok: false, error: "The desk could not scan for networks." };
       }
       case "verify": {
         await this.gatt.write(UUID.verify, encode(`${cmd.ssid}\n${cmd.pass}`));
-        const body = await this.pollUntil(UUID.verify, ["ok", "fail"], timeoutFor(cmd));
-        if (body === null) return { ok: false, reason: "timeout", error: describeProbeFailure(cmd.ssid, "timeout") };
+        const body = await this.pollUntil(
+          UUID.verify,
+          ["ok", "fail"],
+          timeoutFor(cmd),
+        );
+        if (body === null)
+          return {
+            ok: false,
+            reason: "timeout",
+            error: describeProbeFailure(cmd.ssid, "timeout"),
+          };
         const probe = parseProbe(body);
         if (probe.state === "ok") return { ok: true };
-        return { ok: false, reason: toReason(probe.reason), error: describeProbeFailure(probe.ssid || cmd.ssid, probe.reason) };
+        return {
+          ok: false,
+          reason: toReason(probe.reason),
+          error: describeProbeFailure(probe.ssid || cmd.ssid, probe.reason),
+        };
       }
     }
   }
 
-  private async pollUntil(uuid: string, done: string[], timeoutMs: number): Promise<string | null> {
+  private async pollUntil(
+    uuid: string,
+    done: string[],
+    timeoutMs: number,
+  ): Promise<string | null> {
     const deadline = this.now() + timeoutMs;
     while (this.now() < deadline) {
       const body = await this.gatt.read(uuid);
@@ -5037,7 +6182,9 @@ export async function connectBle(onClosed: () => void): Promise<BleLink> {
   return new BleLink({
     async read(uuid) {
       const view = await (await char(uuid)).readValue();
-      return decoder.decode(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+      return decoder.decode(
+        new Uint8Array(view.buffer, view.byteOffset, view.byteLength),
+      );
     },
     async write(uuid, data) {
       await (await char(uuid)).writeValueWithResponse(data);
@@ -5064,10 +6211,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 16: USB link and protocol doc
 
 **Files:**
+
 - Create: `docs/usb-console-protocol.md`, `src/renderer/src/device/usb.ts`
 - Test: `src/renderer/src/device/usb.test.ts`
 
 **Interfaces:**
+
 - Consumes: `Cmd`, `Reply`, `DeviceLink`, `validateCmd`, `timeoutFor`, `secretsOf`, `FieldError`, `toReason`, `DeskInfo`, `Ap` (Task 15).
 - Produces: `interface LineTransport { write(line: string): Promise<void>; close(): Promise<void> | void }`, `class LineSplitter { push(chunk: string): string[] }`, `class UsbLink implements DeviceLink { constructor(transport: LineTransport, onLog: (line: string) => void); handleLine(line: string): void }`, `toReply(obj: Record<string, unknown>): Reply`, `connectUsb(onLog: (line: string) => void, onClosed: () => void): Promise<UsbLink>`.
 
@@ -5075,7 +6224,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 `docs/usb-console-protocol.md`:
 
-```markdown
+````markdown
 # USB console protocol
 
 The contract between calico and grokbot-buddy firmware over USB. The firmware side is a separate spec in grokbot-buddy; this file is the source of truth both sides follow.
@@ -5091,18 +6240,19 @@ The contract between calico and grokbot-buddy firmware over USB. The firmware si
 One JSON object per line:
 
 ```json
-{"id": 7, "op": "verify", "ssid": "home", "pass": "hunter22"}
+{ "id": 7, "op": "verify", "ssid": "home", "pass": "hunter22" }
 ```
+````
 
-| op | fields | behavior |
-|---|---|---|
-| `status` | none | Reply with `name`, `fw`, `ssid`, `url`, `token` (`"set"` or `"none"`). Empty ssid or url is `""`. |
-| `scan` | none | Block until the scan finishes (up to 25 s). Reply with `aps`: up to 16 `{"rssi": -40, "ssid": "home"}`, strongest first. |
-| `verify` | `ssid`, `pass` | Associate in RAM without touching NVS. Block up to 20 s. `ok: true` if it joined, else `ok: false` with `reason`. |
-| `wifi` | `ssid`, `pass` | Same as the BLE `wifi` write: update the password of an existing SSID and keep its url and token, or append a new one. Calico only sends this after `verify` succeeded. |
-| `url` | `value` | Set the global companion URL. |
-| `token` | `value` | Set the global bearer token. `""` clears it. |
-| `reboot` | none | Reply first, then restart. |
+| op       | fields         | behavior                                                                                                                                                                |
+| -------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status` | none           | Reply with `name`, `fw`, `ssid`, `url`, `token` (`"set"` or `"none"`). Empty ssid or url is `""`.                                                                       |
+| `scan`   | none           | Block until the scan finishes (up to 25 s). Reply with `aps`: up to 16 `{"rssi": -40, "ssid": "home"}`, strongest first.                                                |
+| `verify` | `ssid`, `pass` | Associate in RAM without touching NVS. Block up to 20 s. `ok: true` if it joined, else `ok: false` with `reason`.                                                       |
+| `wifi`   | `ssid`, `pass` | Same as the BLE `wifi` write: update the password of an existing SSID and keep its url and token, or append a new one. Calico only sends this after `verify` succeeded. |
+| `url`    | `value`        | Set the global companion URL.                                                                                                                                           |
+| `token`  | `value`        | Set the global bearer token. `""` clears it.                                                                                                                            |
+| `reboot` | none           | Reply first, then restart.                                                                                                                                              |
 
 Field limits match `ble_desk.h`: ssid 1 to 32 bytes, pass empty or 8 to 64 bytes, url up to 127 bytes and starting with `http://` or `https://`, token up to 127 bytes. No CR, LF, or NUL in any field. A violation is `ok: false`.
 
@@ -5120,7 +6270,8 @@ Field limits match `ble_desk.h`: ssid 1 to 32 bytes, pass empty or 8 to 64 bytes
 ## Logs
 
 Any line that does not start with `{` is ordinary ESP log output. Calico shows it in the Console pane. The firmware must never log a password or token value. Calico also redacts any secret it sent during the session from log lines, as a second guard.
-```
+
+````
 
 - [ ] **Step 2: Write the failing tests**
 
@@ -5213,7 +6364,7 @@ describe("UsbLink", () => {
     expect(toReply({ ok: false, error: "auth failed", reason: "auth" })).toEqual({ ok: false, error: "auth failed", reason: "auth" });
   });
 });
-```
+````
 
 - [ ] **Step 3: Run to confirm failure**
 
@@ -5257,17 +6408,29 @@ const str = (v: unknown) => (typeof v === "string" ? v : "");
 
 export function toReply(obj: Record<string, unknown>): Reply {
   if (obj.ok !== true) {
-    const reply: Reply = { ok: false, error: str(obj.error) || "The desk reported an error." };
+    const reply: Reply = {
+      ok: false,
+      error: str(obj.error) || "The desk reported an error.",
+    };
     if (typeof obj.reason === "string") reply.reason = toReason(obj.reason);
     return reply;
   }
   const reply: Reply = { ok: true };
   if (typeof obj.name === "string") {
-    reply.info = { name: obj.name, fw: str(obj.fw), ssid: str(obj.ssid), url: str(obj.url), token: obj.token === "set" ? "set" : "none" };
+    reply.info = {
+      name: obj.name,
+      fw: str(obj.fw),
+      ssid: str(obj.ssid),
+      url: str(obj.url),
+      token: obj.token === "set" ? "set" : "none",
+    };
   }
   if (Array.isArray(obj.aps)) {
     reply.aps = obj.aps.flatMap((ap): Ap[] =>
-      ap && typeof ap === "object" && typeof (ap as Ap).rssi === "number" && typeof (ap as Ap).ssid === "string"
+      ap &&
+      typeof ap === "object" &&
+      typeof (ap as Ap).rssi === "number" &&
+      typeof (ap as Ap).ssid === "string"
         ? [{ rssi: (ap as Ap).rssi, ssid: (ap as Ap).ssid }]
         : [],
     );
@@ -5296,7 +6459,8 @@ export class UsbLink implements DeviceLink {
     if (line.startsWith("{")) {
       try {
         const obj = JSON.parse(line) as Record<string, unknown>;
-        const entry = typeof obj.id === "number" ? this.pending.get(obj.id) : undefined;
+        const entry =
+          typeof obj.id === "number" ? this.pending.get(obj.id) : undefined;
         if (entry && typeof obj.id === "number") {
           clearTimeout(entry.timer);
           this.pending.delete(obj.id);
@@ -5322,7 +6486,10 @@ export class UsbLink implements DeviceLink {
     const reply = new Promise<Reply>((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        resolve({ ok: false, error: `The desk did not answer in ${seconds} seconds.` });
+        resolve({
+          ok: false,
+          error: `The desk did not answer in ${seconds} seconds.`,
+        });
       }, timeoutFor(cmd));
       this.pending.set(id, { resolve, timer });
     });
@@ -5335,7 +6502,8 @@ export class UsbLink implements DeviceLink {
   }
 
   close(): void {
-    for (const id of [...this.pending.keys()]) this.settle(id, { ok: false, error: "The USB link closed." });
+    for (const id of [...this.pending.keys()])
+      this.settle(id, { ok: false, error: "The USB link closed." });
     void this.transport.close();
   }
 
@@ -5354,11 +6522,17 @@ export class UsbLink implements DeviceLink {
   }
 }
 
-export async function connectUsb(onLog: (line: string) => void, onClosed: () => void): Promise<UsbLink> {
+export async function connectUsb(
+  onLog: (line: string) => void,
+  onClosed: () => void,
+): Promise<UsbLink> {
   // 0x303a is Espressif. The S3's USB-Serial-JTAG enumerates with it.
-  const port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x303a }] });
+  const port = await navigator.serial.requestPort({
+    filters: [{ usbVendorId: 0x303a }],
+  });
   await port.open({ baudRate: 115200 });
-  if (!port.readable || !port.writable) throw new Error("The serial port opened without streams.");
+  if (!port.readable || !port.writable)
+    throw new Error("The serial port opened without streams.");
   const writer = port.writable.getWriter();
   const reader = port.readable.pipeThrough(new TextDecoderStream()).getReader();
   const encoder = new TextEncoder();
@@ -5409,10 +6583,12 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 17: Pickers, Device view, provisioning, Console
 
 **Files:**
+
 - Create: `src/main/devices.ts`, `src/renderer/src/lib/panel-online.ts`, `src/renderer/src/lib/panel-online.test.ts`, `src/renderer/src/device/Picker.tsx`, `DeviceView.tsx`, `ProvisionFlow.tsx`, `LinkActions.tsx`, `src/renderer/src/console/ConsoleView.tsx`
 - Modify: `src/main/index.ts` (call `wireDevicePickers`), `src/renderer/src/App.tsx`
 
 **Interfaces:**
+
 - Consumes: `connectBle` (Task 15), `connectUsb` (Task 16), `DeviceLink`, `Reply`, `Ap`, `DeskInfo`, `CalicoInfo`, `Candidate`, `window.calico.*` (Task 12).
 - Produces: `wireDevicePickers(win: BrowserWindow): void`; `panelOnlineSince(lastPanelPoll: number | null, since: number): boolean`; `<DeviceView info link setLink onLog />`; `<ConsoleView lines onClear />`; App-level state `link: DeviceLink | null`, `log: string[]` (cap 500).
 
@@ -5436,7 +6612,10 @@ describe("panelOnlineSince", () => {
 Run: `pnpm test src/renderer/src/lib/panel-online.test.ts` → FAIL. Then create `src/renderer/src/lib/panel-online.ts`:
 
 ```ts
-export function panelOnlineSince(lastPanelPoll: number | null, since: number): boolean {
+export function panelOnlineSince(
+  lastPanelPoll: number | null,
+  since: number,
+): boolean {
   return lastPanelPoll !== null && lastPanelPoll > since;
 }
 ```
@@ -5461,7 +6640,10 @@ export function wireDevicePickers(win: BrowserWindow): void {
   contents.on("select-bluetooth-device", (event, devices, callback) => {
     event.preventDefault();
     bleCallback = callback;
-    const list: Candidate[] = devices.map((d) => ({ id: d.deviceId, name: d.deviceName || d.deviceId }));
+    const list: Candidate[] = devices.map((d) => ({
+      id: d.deviceId,
+      name: d.deviceName || d.deviceId,
+    }));
     contents.send("device:ble-candidates", list);
   });
   ipcMain.on("device:ble-choose", (_event, id: unknown) => {
@@ -5472,7 +6654,10 @@ export function wireDevicePickers(win: BrowserWindow): void {
   session.on("select-serial-port", (event, ports, _wc, callback) => {
     event.preventDefault();
     serialCallback = callback;
-    const list: Candidate[] = ports.map((p) => ({ id: p.portId, name: p.displayName || p.portName }));
+    const list: Candidate[] = ports.map((p) => ({
+      id: p.portId,
+      name: p.displayName || p.portName,
+    }));
     contents.send("device:serial-candidates", list);
   });
   ipcMain.on("device:serial-choose", (_event, id: unknown) => {
@@ -5481,8 +6666,12 @@ export function wireDevicePickers(win: BrowserWindow): void {
   });
 
   const allowed = new Set(["serial", "clipboard-sanitized-write"]);
-  session.setPermissionCheckHandler((wc, permission) => wc === contents && allowed.has(permission));
-  session.setDevicePermissionHandler((details) => details.deviceType === "serial");
+  session.setPermissionCheckHandler(
+    (wc, permission) => wc === contents && allowed.has(permission),
+  );
+  session.setDevicePermissionHandler(
+    (details) => details.deviceType === "serial",
+  );
 }
 ```
 
@@ -5526,18 +6715,31 @@ export function Picker() {
   }
 
   return (
-    <Dialog.Root open={kind !== null} onOpenChange={(open) => !open && choose("")}>
+    <Dialog.Root
+      open={kind !== null}
+      onOpenChange={(open) => !open && choose("")}
+    >
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 bg-glass/80" />
         <Dialog.Popup className="fixed top-1/2 left-1/2 w-96 -translate-x-1/2 -translate-y-1/2 border border-stroke bg-surface">
-          <Dialog.Title className="section-title">{kind === "ble" ? "Bluetooth desks nearby" : "USB serial ports"}</Dialog.Title>
+          <Dialog.Title className="section-title">
+            {kind === "ble" ? "Bluetooth desks nearby" : "USB serial ports"}
+          </Dialog.Title>
           {list.length === 0 ? (
-            <p className="px-4 pb-3 text-muted">{kind === "ble" ? "Scanning. Make sure Bluetooth is on in the panel's Control Center." : "No Espressif ports found. Plug the panel in with a data cable."}</p>
+            <p className="px-4 pb-3 text-muted">
+              {kind === "ble"
+                ? "Scanning. Make sure Bluetooth is on in the panel's Control Center."
+                : "No Espressif ports found. Plug the panel in with a data cable."}
+            </p>
           ) : (
             <ul>
               {list.map((c) => (
                 <li key={c.id}>
-                  <button type="button" className="row w-full text-left hover:bg-selected" onClick={() => choose(c.id)}>
+                  <button
+                    type="button"
+                    className="row w-full text-left hover:bg-selected"
+                    onClick={() => choose(c.id)}
+                  >
                     {c.name}
                   </button>
                 </li>
@@ -5563,7 +6765,13 @@ import { useEffect, useState } from "react";
 import type { CalicoInfo } from "../../../shared/ipc";
 import type { DeskInfo, DeviceLink } from "./commands";
 
-export function LinkActions({ info, link }: { info: CalicoInfo; link: DeviceLink }) {
+export function LinkActions({
+  info,
+  link,
+}: {
+  info: CalicoInfo;
+  link: DeviceLink;
+}) {
   const [desk, setDesk] = useState<DeskInfo | null>(null);
   const [url, setUrl] = useState(info.lanUrls[0] ?? "");
   const [notice, setNotice] = useState("");
@@ -5581,14 +6789,21 @@ export function LinkActions({ info, link }: { info: CalicoInfo; link: DeviceLink
   async function setPanelUrl() {
     const reply = await link.send({ op: "url", value: url });
     if (!reply.ok) return setNotice(reply.error);
-    if (info.port && url.endsWith(`:${info.port}`)) await window.calico.adoptPort();
+    if (info.port && url.endsWith(`:${info.port}`))
+      await window.calico.adoptPort();
     setNotice("URL saved on the desk. It applies after a reboot.");
     await refresh();
   }
 
   async function sendToken() {
     const reply = await link.send({ op: "token", value: info.webhookToken });
-    setNotice(reply.ok ? (info.webhookToken ? "Token sent." : "Token cleared on the desk.") : reply.error);
+    setNotice(
+      reply.ok
+        ? info.webhookToken
+          ? "Token sent."
+          : "Token cleared on the desk."
+        : reply.error,
+    );
     await refresh();
   }
 
@@ -5617,9 +6832,17 @@ export function LinkActions({ info, link }: { info: CalicoInfo; link: DeviceLink
       <div className="flex max-w-2xl items-end gap-3 px-4 pt-3">
         <label className="label flex-1">
           Companion URL for the desk
-          <input className="field mt-1 font-mono" value={url} onChange={(e) => setUrl(e.target.value)} />
+          <input
+            className="field mt-1 font-mono"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+          />
         </label>
-        <button type="button" className="btn" onClick={() => void setPanelUrl()}>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => void setPanelUrl()}
+        >
           Set URL
         </button>
       </div>
@@ -5631,7 +6854,11 @@ export function LinkActions({ info, link }: { info: CalicoInfo; link: DeviceLink
           Reboot desk
         </button>
       </div>
-      {notice ? <p role="status" className="px-4 pt-2 text-muted">{notice}</p> : null}
+      {notice ? (
+        <p role="status" className="px-4 pt-2 text-muted">
+          {notice}
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -5647,9 +6874,25 @@ import type { CalicoInfo } from "../../../shared/ipc";
 import { panelOnlineSince } from "../lib/panel-online";
 import type { Ap, DeviceLink } from "./commands";
 
-type Stage = "idle" | "scanning" | "pick" | "verifying" | "saving" | "waiting" | "online" | "silent";
+type Stage =
+  | "idle"
+  | "scanning"
+  | "pick"
+  | "verifying"
+  | "saving"
+  | "waiting"
+  | "online"
+  | "silent";
 
-export function ProvisionFlow({ info, link, onSilent }: { info: CalicoInfo; link: DeviceLink; onSilent: () => void }) {
+export function ProvisionFlow({
+  info,
+  link,
+  onSilent,
+}: {
+  info: CalicoInfo;
+  link: DeviceLink;
+  onSilent: () => void;
+}) {
   const [stage, setStage] = useState<Stage>("idle");
   const [aps, setAps] = useState<Ap[]>([]);
   const [ssid, setSsid] = useState("");
@@ -5698,27 +6941,43 @@ export function ProvisionFlow({ info, link, onSilent }: { info: CalicoInfo; link
     for (let i = 0; i < 15; i++) {
       await new Promise((r) => setTimeout(r, 2000));
       const next = await window.calico.info();
-      if (panelOnlineSince(next.lastPanelPoll, rebootAt)) return setStage("online");
+      if (panelOnlineSince(next.lastPanelPoll, rebootAt))
+        return setStage("online");
     }
     setStage("silent");
     onSilent();
   }
 
-  const busy = stage === "scanning" || stage === "verifying" || stage === "saving" || stage === "waiting";
+  const busy =
+    stage === "scanning" ||
+    stage === "verifying" ||
+    stage === "saving" ||
+    stage === "waiting";
   return (
     <section>
       <h2 className="section-title">Set up Wi-Fi</h2>
       <p className="max-w-2xl px-4 text-muted">
-        The desk tries the network first. A wrong password is not saved. When it joins, calico also sends this computer's URL and the webhook token, then reboots the desk.
+        The desk tries the network first. A wrong password is not saved. When it
+        joins, calico also sends this computer's URL and the webhook token, then
+        reboots the desk.
       </p>
       <div className="flex max-w-2xl flex-wrap items-end gap-3 px-4 pt-3">
-        <button type="button" className="btn" disabled={busy} onClick={() => void scan()}>
+        <button
+          type="button"
+          className="btn"
+          disabled={busy}
+          onClick={() => void scan()}
+        >
           {stage === "scanning" ? "Scanning (up to 30 s)" : "Scan networks"}
         </button>
         {aps.length > 0 ? (
           <label className="label">
             Network
-            <select className="field mt-1 w-56" value={ssid} onChange={(e) => setSsid(e.target.value)}>
+            <select
+              className="field mt-1 w-56"
+              value={ssid}
+              onChange={(e) => setSsid(e.target.value)}
+            >
               <option value="">Choose a network</option>
               {aps.map((ap) => (
                 <option key={ap.ssid} value={ap.ssid}>
@@ -5730,21 +6989,49 @@ export function ProvisionFlow({ info, link, onSilent }: { info: CalicoInfo; link
         ) : null}
         <label className="label">
           Or type an SSID
-          <input className="field mt-1 w-48" value={ssid} onChange={(e) => setSsid(e.target.value)} />
+          <input
+            className="field mt-1 w-48"
+            value={ssid}
+            onChange={(e) => setSsid(e.target.value)}
+          />
         </label>
         <label className="label">
           Password
-          <input type="password" className="field mt-1 w-48" value={pass} onChange={(e) => setPass(e.target.value)} />
+          <input
+            type="password"
+            className="field mt-1 w-48"
+            value={pass}
+            onChange={(e) => setPass(e.target.value)}
+          />
         </label>
-        <button type="button" className="btn btn-primary" disabled={busy || !ssid} onClick={() => void connect()}>
-          {stage === "verifying" ? "Testing (up to 30 s)" : stage === "saving" ? "Saving" : "Test and save"}
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={busy || !ssid}
+          onClick={() => void connect()}
+        >
+          {stage === "verifying"
+            ? "Testing (up to 30 s)"
+            : stage === "saving"
+              ? "Saving"
+              : "Test and save"}
         </button>
       </div>
       <p role="status" className="px-4 pt-2">
         {error ? <span className="text-red">{error}</span> : null}
-        {stage === "waiting" ? <span className="text-amber">Rebooted. Waiting up to 30 s for the panel to poll calico.</span> : null}
-        {stage === "online" ? <span className="text-sage">Panel online.</span> : null}
-        {stage === "silent" ? <span className="text-amber">The panel joined Wi-Fi but has not reached calico. See below.</span> : null}
+        {stage === "waiting" ? (
+          <span className="text-amber">
+            Rebooted. Waiting up to 30 s for the panel to poll calico.
+          </span>
+        ) : null}
+        {stage === "online" ? (
+          <span className="text-sage">Panel online.</span>
+        ) : null}
+        {stage === "silent" ? (
+          <span className="text-amber">
+            The panel joined Wi-Fi but has not reached calico. See below.
+          </span>
+        ) : null}
       </p>
     </section>
   );
@@ -5787,7 +7074,9 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
       setError("Lost the connection to the desk. Connect again.");
     };
     try {
-      setLink(kind === "usb" ? await connectUsb(onLog, lost) : await connectBle(lost));
+      setLink(
+        kind === "usb" ? await connectUsb(onLog, lost) : await connectBle(lost),
+      );
     } catch (err) {
       const e = err as Error;
       if (e.name === "NotFoundError" || e.name === "AbortError") return; // picker cancelled
@@ -5801,17 +7090,31 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
       <div>
         <h2 className="section-title">Connect to the desk</h2>
         <div className="flex gap-3 px-4">
-          <button type="button" className="btn btn-primary" onClick={() => void open("usb")}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => void open("usb")}
+          >
             Connect over USB
           </button>
-          <button type="button" className="btn" onClick={() => void open("ble")}>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => void open("ble")}
+          >
             Connect over Bluetooth
           </button>
         </div>
         <p className="max-w-2xl px-4 pt-2 text-muted">
-          USB works with any firmware that has the serial console and is the only way to recover a desk that will not boot. Bluetooth works without a cable once the desk is advertising.
+          USB works with any firmware that has the serial console and is the
+          only way to recover a desk that will not boot. Bluetooth works without
+          a cable once the desk is advertising.
         </p>
-        {error ? <p role="alert" className="px-4 pt-2 text-red">{error}</p> : null}
+        {error ? (
+          <p role="alert" className="px-4 pt-2 text-red">
+            {error}
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -5819,7 +7122,9 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
   return (
     <div className="pb-6">
       <div className="flex items-center gap-3 px-4 pt-4">
-        <span className="text-sage">Connected over {link.kind === "usb" ? "USB" : "Bluetooth"}</span>
+        <span className="text-sage">
+          Connected over {link.kind === "usb" ? "USB" : "Bluetooth"}
+        </span>
         <button
           type="button"
           className="btn"
@@ -5833,7 +7138,11 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
         </button>
       </div>
       <LinkActions info={info} link={link} />
-      <ProvisionFlow info={info} link={link} onSilent={() => setAssist("firewall")} />
+      <ProvisionFlow
+        info={info}
+        link={link}
+        onSilent={() => setAssist("firewall")}
+      />
     </div>
   );
 }
@@ -5848,13 +7157,25 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
 ```tsx
 import { useEffect, useRef } from "react";
 
-export function ConsoleView({ lines, usbConnected, onClear }: { lines: string[]; usbConnected: boolean; onClear: () => void }) {
+export function ConsoleView({
+  lines,
+  usbConnected,
+  onClear,
+}: {
+  lines: string[];
+  usbConnected: boolean;
+  onClear: () => void;
+}) {
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => end.current?.scrollIntoView({ block: "end" }), [lines]);
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 border-b border-stroke/40 px-4 py-2">
-        <span className="text-muted">{usbConnected ? "Serial output from the desk" : "Connect over USB in Device to see serial output."}</span>
+        <span className="text-muted">
+          {usbConnected
+            ? "Serial output from the desk"
+            : "Connect over USB in Device to see serial output."}
+        </span>
         <button type="button" className="btn ml-auto" onClick={onClear}>
           Clear
         </button>
@@ -5882,16 +7203,28 @@ import { Picker } from "./device/Picker";
 Inside `App()` add state:
 
 ```tsx
-  const [link, setLink] = useState<DeviceLink | null>(null);
-  const [log, setLog] = useState<string[]>([]);
-  const onLog = (line: string) => setLog((prev) => [...prev.slice(-499), line]);
+const [link, setLink] = useState<DeviceLink | null>(null);
+const [log, setLog] = useState<string[]>([]);
+const onLog = (line: string) => setLog((prev) => [...prev.slice(-499), line]);
 ```
 
 Replace the remaining placeholder line in `<main>` with:
 
 ```tsx
-          {view === "device" && info ? <DeviceView info={info} link={link} setLink={setLink} onLog={onLog} /> : null}
-          {view === "console" ? <ConsoleView lines={log} usbConnected={link?.kind === "usb"} onClear={() => setLog([])} /> : null}
+{
+  view === "device" && info ? (
+    <DeviceView info={info} link={link} setLink={setLink} onLog={onLog} />
+  ) : null;
+}
+{
+  view === "console" ? (
+    <ConsoleView
+      lines={log}
+      usbConnected={link?.kind === "usb"}
+      onClear={() => setLog([])}
+    />
+  ) : null;
+}
 ```
 
 and render `<Picker />` once, just before the closing `</div>` of the outer flex container.
@@ -5901,6 +7234,7 @@ and render `<Picker />` once, just before the closing `</div>` of the outer flex
 Run: `pnpm test && pnpm typecheck && pnpm lint && pnpm build`, then `pnpm dev`.
 
 Bluetooth (works against current firmware):
+
 1. Device → Connect over Bluetooth. The picker lists `grokbot-buddy`. Choose it.
 2. The Desk section shows firmware, Wi-Fi, companion URL, token.
 3. Scan networks lists nearby SSIDs strongest first. A wrong password gives "The password was rejected. Nothing was saved."
@@ -5922,18 +7256,23 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 18: Assists: firewall, serial permission, port drift
 
 **Files:**
+
 - Create: `src/main/assist.ts`, `src/renderer/src/device/FirewallAssist.tsx`, `src/renderer/src/device/SerialAssist.tsx`, `src/renderer/src/shell/DriftBanner.tsx`
 - Modify: `src/main/ipc.ts`, `src/renderer/src/device/DeviceView.tsx`, `src/renderer/src/App.tsx`, `src/main/index.ts` (fill `serverError.holders`)
 - Test: `test/main/assist.test.ts`
 
 **Interfaces:**
+
 - Produces (`assist.ts`, no Electron import):
 
 ```ts
-export type Exec = (file: string, args: string[]) => Promise<{ code: number; stdout: string }>;
+export type Exec = (
+  file: string,
+  args: string[],
+) => Promise<{ code: number; stdout: string }>;
 export const execFileP: Exec;
 export function detectFirewall(exec: Exec): Promise<FirewallKind>;
-export function firewallFix(kind: FirewallKind, port: number): string[] | null;   // argv after pkexec
+export function firewallFix(kind: FirewallKind, port: number): string[] | null; // argv after pkexec
 export function serialGroup(osRelease: string): "uucp" | "dialout";
 export function serialFix(group: string, user: string): string[];
 export function displayCommand(argv: string[]): string;
@@ -5960,10 +7299,12 @@ import {
   validPort,
 } from "../../src/main/assist";
 
-const fakeExec = (active: string[]): Exec => async (_file, args) => ({
-  code: active.includes(args[1] ?? "") ? 0 : 3,
-  stdout: active.includes(args[1] ?? "") ? "active\n" : "inactive\n",
-});
+const fakeExec =
+  (active: string[]): Exec =>
+  async (_file, args) => ({
+    code: active.includes(args[1] ?? "") ? 0 : 3,
+    stdout: active.includes(args[1] ?? "") ? "active\n" : "inactive\n",
+  });
 
 describe("firewall assist", () => {
   it("detects the active firewall", async () => {
@@ -5974,7 +7315,13 @@ describe("firewall assist", () => {
   });
 
   it("builds fixes only from a valid port", () => {
-    expect(firewallFix("ufw", 8787)).toEqual(["ufw", "allow", "8787/tcp", "comment", "calico"]);
+    expect(firewallFix("ufw", 8787)).toEqual([
+      "ufw",
+      "allow",
+      "8787/tcp",
+      "comment",
+      "calico",
+    ]);
     expect(firewallFix("firewalld", 8788)).toEqual([
       "sh",
       "-c",
@@ -5986,24 +7333,34 @@ describe("firewall assist", () => {
   });
 
   it("displays commands for copying", () => {
-    expect(displayCommand(["sudo", "ufw", "allow", "8787/tcp", "comment", "calico"])).toBe("sudo ufw allow 8787/tcp comment calico");
+    expect(
+      displayCommand(["sudo", "ufw", "allow", "8787/tcp", "comment", "calico"]),
+    ).toBe("sudo ufw allow 8787/tcp comment calico");
     expect(displayCommand(["sh", "-c", "a && b"])).toBe("sudo sh -c 'a && b'");
   });
 });
 
 describe("serial assist", () => {
   it("picks the distro's group", () => {
-    expect(serialGroup('NAME="CachyOS Linux"\nID=cachyos\nID_LIKE=arch\n')).toBe("uucp");
+    expect(
+      serialGroup('NAME="CachyOS Linux"\nID=cachyos\nID_LIKE=arch\n'),
+    ).toBe("uucp");
     expect(serialGroup("ID=arch\n")).toBe("uucp");
     expect(serialGroup('ID=ubuntu\nID_LIKE="debian"\n')).toBe("dialout");
     expect(serialGroup("")).toBe("dialout");
-    expect(serialFix("uucp", "jonn")).toEqual(["usermod", "-aG", "uucp", "jonn"]);
+    expect(serialFix("uucp", "jonn")).toEqual([
+      "usermod",
+      "-aG",
+      "uucp",
+      "jonn",
+    ]);
   });
 });
 
 describe("port holders", () => {
   it("parses ss output", () => {
-    const out = 'LISTEN 0 511 0.0.0.0:8787 0.0.0.0:* users:(("python3",pid=4242,fd=3))\n';
+    const out =
+      'LISTEN 0 511 0.0.0.0:8787 0.0.0.0:* users:(("python3",pid=4242,fd=3))\n';
     expect(parseSsHolders(out)).toEqual(["python3 (pid 4242)"]);
     expect(parseSsHolders("")).toEqual([]);
   });
@@ -6031,7 +7388,10 @@ import { accessSync, constants, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { FirewallKind } from "../shared/ipc";
 
-export type Exec = (file: string, args: string[]) => Promise<{ code: number; stdout: string }>;
+export type Exec = (
+  file: string,
+  args: string[],
+) => Promise<{ code: number; stdout: string }>;
 
 export const execFileP: Exec = (file, args) =>
   new Promise((resolve) => {
@@ -6042,7 +7402,12 @@ export const execFileP: Exec = (file, args) =>
   });
 
 export function validPort(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 65535;
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 1 &&
+    value <= 65535
+  );
 }
 
 export async function detectFirewall(exec: Exec): Promise<FirewallKind> {
@@ -6055,20 +7420,28 @@ export async function detectFirewall(exec: Exec): Promise<FirewallKind> {
 
 export function firewallFix(kind: FirewallKind, port: number): string[] | null {
   if (!validPort(port)) return null;
-  if (kind === "ufw") return ["ufw", "allow", `${port}/tcp`, "comment", "calico"];
+  if (kind === "ufw")
+    return ["ufw", "allow", `${port}/tcp`, "comment", "calico"];
   if (kind === "firewalld") {
-    return ["sh", "-c", `firewall-cmd --permanent --add-port=${port}/tcp && firewall-cmd --reload`];
+    return [
+      "sh",
+      "-c",
+      `firewall-cmd --permanent --add-port=${port}/tcp && firewall-cmd --reload`,
+    ];
   }
   return null;
 }
 
 export function displayCommand(argv: string[]): string {
-  if (argv[0] === "sh" && argv[1] === "-c") return `sudo sh -c '${argv[2] ?? ""}'`;
+  if (argv[0] === "sh" && argv[1] === "-c")
+    return `sudo sh -c '${argv[2] ?? ""}'`;
   return argv.join(" ");
 }
 
 export function serialGroup(osRelease: string): "uucp" | "dialout" {
-  const ids = [...osRelease.matchAll(/^(?:ID|ID_LIKE)=(.*)$/gm)].flatMap((m) => (m[1] ?? "").replace(/"/g, "").split(/\s+/));
+  const ids = [...osRelease.matchAll(/^(?:ID|ID_LIKE)=(.*)$/gm)].flatMap((m) =>
+    (m[1] ?? "").replace(/"/g, "").split(/\s+/),
+  );
   return ids.includes("arch") ? "uucp" : "dialout";
 }
 
@@ -6096,7 +7469,9 @@ export function deniedSerialPorts(devDir = "/dev"): string[] {
 }
 
 export function parseSsHolders(stdout: string): string[] {
-  return [...stdout.matchAll(/\("([^"]+)",pid=(\d+)/g)].map((m) => `${m[1]} (pid ${m[2]})`);
+  return [...stdout.matchAll(/\("([^"]+)",pid=(\d+)/g)].map(
+    (m) => `${m[1]} (pid ${m[2]})`,
+  );
 }
 
 export async function portHolders(port: number, exec: Exec): Promise<string[]> {
@@ -6113,56 +7488,77 @@ export async function portHolders(port: number, exec: Exec): Promise<string[]> {
 Append to `registerIpc` in `src/main/ipc.ts` (add the imports `readFileSync` from `node:fs`, `userInfo` from `node:os`, and the assist functions):
 
 ```ts
-  const osRelease = () => {
-    try {
-      return readFileSync("/etc/os-release", "utf8");
-    } catch {
-      return "";
-    }
+const osRelease = () => {
+  try {
+    return readFileSync("/etc/os-release", "utf8");
+  } catch {
+    return "";
+  }
+};
+
+ipcMain.handle("calico:firewall", async () => {
+  const kind = await detectFirewall(execFileP);
+  const port = deps.boundPort();
+  const argv = port ? firewallFix(kind, port) : null;
+  return {
+    kind,
+    command: argv
+      ? displayCommand(argv[0] === "sh" ? argv : ["sudo", ...argv])
+      : null,
   };
+});
 
-  ipcMain.handle("calico:firewall", async () => {
-    const kind = await detectFirewall(execFileP);
+ipcMain.handle("calico:serial-access", () => {
+  const group = serialGroup(osRelease());
+  return {
+    denied: deniedSerialPorts(),
+    group,
+    command: displayCommand(["sudo", ...serialFix(group, userInfo().username)]),
+  };
+});
+
+ipcMain.handle("calico:run-fix", async (_e, fix: unknown) => {
+  let argv: string[] | null = null;
+  if (fix === "firewall") {
     const port = deps.boundPort();
-    const argv = port ? firewallFix(kind, port) : null;
-    return { kind, command: argv ? displayCommand(argv[0] === "sh" ? argv : ["sudo", ...argv]) : null };
-  });
+    argv = port ? firewallFix(await detectFirewall(execFileP), port) : null;
+  } else if (fix === "serial") {
+    argv = serialFix(serialGroup(osRelease()), userInfo().username);
+  }
+  if (!argv) return { ok: false, output: "Nothing to run for this setup." };
+  const { code, stdout } = await execFileP("pkexec", argv);
+  return {
+    ok: code === 0,
+    output:
+      stdout.trim() || (code === 0 ? "Done." : `pkexec exited with ${code}.`),
+  };
+});
 
-  ipcMain.handle("calico:serial-access", () => {
-    const group = serialGroup(osRelease());
-    return {
-      denied: deniedSerialPorts(),
-      group,
-      command: displayCommand(["sudo", ...serialFix(group, userInfo().username)]),
-    };
-  });
-
-  ipcMain.handle("calico:run-fix", async (_e, fix: unknown) => {
-    let argv: string[] | null = null;
-    if (fix === "firewall") {
-      const port = deps.boundPort();
-      argv = port ? firewallFix(await detectFirewall(execFileP), port) : null;
-    } else if (fix === "serial") {
-      argv = serialFix(serialGroup(osRelease()), userInfo().username);
-    }
-    if (!argv) return { ok: false, output: "Nothing to run for this setup." };
-    const { code, stdout } = await execFileP("pkexec", argv);
-    return { ok: code === 0, output: stdout.trim() || (code === 0 ? "Done." : `pkexec exited with ${code}.`) };
-  });
-
-  ipcMain.handle("calico:port-holders", (_e, port: unknown) => (validPort(port) ? portHolders(port, execFileP) : []));
+ipcMain.handle("calico:port-holders", (_e, port: unknown) =>
+  validPort(port) ? portHolders(port, execFileP) : [],
+);
 ```
 
 In `src/main/index.ts`, after a `PortsBusyError` is caught, fill the holders:
 
 ```ts
-    serverError = { first: err.first, last: err.last, holders: await portHolders(err.first, execFileP) };
+serverError = {
+  first: err.first,
+  last: err.last,
+  holders: await portHolders(err.first, execFileP),
+};
 ```
 
 and add `holders` to `ServerErrorPanel`: below the existing paragraphs render
 
 ```tsx
-      {error.holders.length ? <p className="mt-2 font-mono text-xs">Port {error.first}: {error.holders.join(", ")}</p> : null}
+{
+  error.holders.length ? (
+    <p className="mt-2 font-mono text-xs">
+      Port {error.first}: {error.holders.join(", ")}
+    </p>
+  ) : null;
+}
 ```
 
 - [ ] **Step 5: Firewall and serial assist components**
@@ -6187,29 +7583,54 @@ export function FirewallAssist({ port }: { port: number | null }) {
       <h2 className="section-title">Panel cannot reach calico</h2>
       {fw.kind === "none" ? (
         <p className="max-w-2xl px-4 text-muted">
-          No firewall service is active here. Check that the panel and this computer are on the same network, and that the router does not isolate wireless clients.
+          No firewall service is active here. Check that the panel and this
+          computer are on the same network, and that the router does not isolate
+          wireless clients.
         </p>
       ) : fw.command ? (
         <div className="px-4">
           <p className="max-w-2xl text-muted">
-            {fw.kind} is active and may be blocking TCP port {port}. This command allows it:
+            {fw.kind} is active and may be blocking TCP port {port}. This
+            command allows it:
           </p>
-          <pre className="mt-2 max-w-2xl border border-stroke bg-field px-3 py-2 font-mono text-xs">{fw.command}</pre>
+          <pre className="mt-2 max-w-2xl border border-stroke bg-field px-3 py-2 font-mono text-xs">
+            {fw.command}
+          </pre>
           <div className="flex gap-3 pt-2">
-            <button type="button" className="btn" onClick={() => void navigator.clipboard.writeText(fw.command ?? "")}>
+            <button
+              type="button"
+              className="btn"
+              onClick={() =>
+                void navigator.clipboard.writeText(fw.command ?? "")
+              }
+            >
               Copy
             </button>
-            <button type="button" className="btn btn-primary" onClick={() => void window.calico.runFix("firewall").then(setResult)}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() =>
+                void window.calico.runFix("firewall").then(setResult)
+              }
+            >
               Run (asks for your password)
             </button>
           </div>
         </div>
       ) : (
         <p className="max-w-2xl px-4 text-muted">
-          {fw.kind} is active. Allow inbound TCP port {port} from your LAN in its ruleset, then reboot the desk.
+          {fw.kind} is active. Allow inbound TCP port {port} from your LAN in
+          its ruleset, then reboot the desk.
         </p>
       )}
-      {result ? <p role="status" className={`px-4 pt-2 ${result.ok ? "text-sage" : "text-red"}`}>{result.output}</p> : null}
+      {result ? (
+        <p
+          role="status"
+          className={`px-4 pt-2 ${result.ok ? "text-sage" : "text-red"}`}
+        >
+          {result.output}
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -6221,7 +7642,8 @@ export function FirewallAssist({ port }: { port: number | null }) {
 import { useEffect, useState } from "react";
 import type { FixResult, SerialAccess } from "../../../shared/ipc";
 
-const UDEV = 'SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", MODE="0660", TAG+="uaccess"';
+const UDEV =
+  'SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", MODE="0660", TAG+="uaccess"';
 
 export function SerialAssist() {
   const [access, setAccess] = useState<SerialAccess | null>(null);
@@ -6236,22 +7658,46 @@ export function SerialAssist() {
     <section className="border-t border-stroke/40">
       <h2 className="section-title">USB permission</h2>
       <p className="max-w-2xl px-4 text-muted">
-        Your user cannot open {access.denied.join(", ")}. Add yourself to the {access.group} group, then log out and back in:
+        Your user cannot open {access.denied.join(", ")}. Add yourself to the{" "}
+        {access.group} group, then log out and back in:
       </p>
-      <pre className="mx-4 mt-2 max-w-2xl border border-stroke bg-field px-3 py-2 font-mono text-xs">{access.command}</pre>
+      <pre className="mx-4 mt-2 max-w-2xl border border-stroke bg-field px-3 py-2 font-mono text-xs">
+        {access.command}
+      </pre>
       <div className="flex gap-3 px-4 pt-2">
-        <button type="button" className="btn" onClick={() => void navigator.clipboard.writeText(access.command)}>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => void navigator.clipboard.writeText(access.command)}
+        >
           Copy
         </button>
-        <button type="button" className="btn btn-primary" onClick={() => void window.calico.runFix("serial").then(setResult)}>
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => void window.calico.runFix("serial").then(setResult)}
+        >
           Run (asks for your password)
         </button>
       </div>
       <p className="max-w-2xl px-4 pt-3 text-muted">
-        Or, without a group change, save this as /etc/udev/rules.d/60-calico.rules and run sudo udevadm control --reload && sudo udevadm trigger:
+        Or, without a group change, save this as
+        /etc/udev/rules.d/60-calico.rules and run sudo udevadm control --reload
+        && sudo udevadm trigger:
       </p>
-      <pre className="mx-4 mt-2 max-w-2xl border border-stroke bg-field px-3 py-2 font-mono text-xs">{UDEV}</pre>
-      {result ? <p role="status" className={`px-4 pt-2 ${result.ok ? "text-sage" : "text-red"}`}>{result.ok ? "Done. Log out and back in, then connect again." : result.output}</p> : null}
+      <pre className="mx-4 mt-2 max-w-2xl border border-stroke bg-field px-3 py-2 font-mono text-xs">
+        {UDEV}
+      </pre>
+      {result ? (
+        <p
+          role="status"
+          className={`px-4 pt-2 ${result.ok ? "text-sage" : "text-red"}`}
+        >
+          {result.ok
+            ? "Done. Log out and back in, then connect again."
+            : result.output}
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -6262,16 +7708,24 @@ export function SerialAssist() {
 In `src/renderer/src/device/DeviceView.tsx`, change `const [, setAssist]` to `const [assist, setAssist]`, import both assist components, and render before the closing tag of **both** return branches:
 
 ```tsx
-      {assist === "serial" ? <SerialAssist /> : null}
-      {assist === "firewall" ? <FirewallAssist port={info.port} /> : null}
+{
+  assist === "serial" ? <SerialAssist /> : null;
+}
+{
+  assist === "firewall" ? <FirewallAssist port={info.port} /> : null;
+}
 ```
 
 In the connected branch also add a manual entry point below `ProvisionFlow`:
 
 ```tsx
-      <button type="button" className="btn mx-4 mt-4" onClick={() => setAssist("firewall")}>
-        Panel not connecting?
-      </button>
+<button
+  type="button"
+  className="btn mx-4 mt-4"
+  onClick={() => setAssist("firewall")}
+>
+  Panel not connecting?
+</button>
 ```
 
 - [ ] **Step 7: Drift banner**
@@ -6282,23 +7736,41 @@ In the connected branch also add a manual entry point below `ProvisionFlow`:
 import { useState } from "react";
 import type { CalicoInfo } from "../../../shared/ipc";
 
-export function DriftBanner({ info, onRepoint }: { info: CalicoInfo; onRepoint: () => void }) {
+export function DriftBanner({
+  info,
+  onRepoint,
+}: {
+  info: CalicoInfo;
+  onRepoint: () => void;
+}) {
   const [holders, setHolders] = useState<string[] | null>(null);
   if (!info.port || info.port === info.expectedPort) return null;
   return (
-    <div role="status" className="flex flex-wrap items-center gap-3 border-b border-amber/60 bg-surface px-4 py-2">
+    <div
+      role="status"
+      className="flex flex-wrap items-center gap-3 border-b border-amber/60 bg-surface px-4 py-2"
+    >
       <span className="text-amber">
-        The panel is set to port {info.expectedPort}, but calico is on {info.port} because {info.expectedPort} was busy.
+        The panel is set to port {info.expectedPort}, but calico is on{" "}
+        {info.port} because {info.expectedPort} was busy.
       </span>
       <button type="button" className="btn" onClick={onRepoint}>
         Re-point panel
       </button>
-      <button type="button" className="btn" onClick={() => void window.calico.portHolders(info.expectedPort).then(setHolders)}>
+      <button
+        type="button"
+        className="btn"
+        onClick={() =>
+          void window.calico.portHolders(info.expectedPort).then(setHolders)
+        }
+      >
         What holds {info.expectedPort}?
       </button>
       {holders ? (
         <span className="font-mono text-xs text-muted">
-          {holders.length ? holders.join(", ") : "Nothing you own. It may be another user's process."}
+          {holders.length
+            ? holders.join(", ")
+            : "Nothing you own. It may be another user's process."}
         </span>
       ) : null}
     </div>
@@ -6309,7 +7781,9 @@ export function DriftBanner({ info, onRepoint }: { info: CalicoInfo; onRepoint: 
 In `App.tsx`, import it and render inside `<main>` before `ServerErrorPanel`:
 
 ```tsx
-          {info ? <DriftBanner info={info} onRepoint={() => setView("device")} /> : null}
+{
+  info ? <DriftBanner info={info} onRepoint={() => setView("device")} /> : null;
+}
 ```
 
 `LinkActions` already prefills the LAN URL with the bound port and calls `adoptPort()` after a successful `url` write, which clears the banner on the next info poll.
@@ -6355,10 +7829,12 @@ Start: `git switch main && git pull && git switch -c feat/release`
 ### Task 19: Electron smoke test in CI
 
 **Files:**
+
 - Create: `playwright.config.ts`, `test/e2e/smoke.spec.ts`
 - Modify: `.github/workflows/ci.yml`
 
 **Interfaces:**
+
 - Consumes: built app in `out/` (Task 12), `CALICO_USER_DATA` override (Task 12).
 
 - [ ] **Step 1: Write the smoke test**
@@ -6395,7 +7871,11 @@ test("launches, serves status, and renders the dashboard", async () => {
     await expect(page.getByRole("heading", { name: "Agents" })).toBeVisible();
     // The e2e tsconfig has no DOM types, so reach the bridge through globalThis.
     const info = await page.evaluate(() =>
-      (globalThis as unknown as { calico: { info(): Promise<{ serverUrl: string | null }> } }).calico.info(),
+      (
+        globalThis as unknown as {
+          calico: { info(): Promise<{ serverUrl: string | null }> };
+        }
+      ).calico.info(),
     );
     expect(info.serverUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
     const status = await (await fetch(`${info.serverUrl}/api/status`)).json();
@@ -6416,7 +7896,7 @@ Expected: 1 passed. If it fails because 8787 is in use by a running calico, that
 Append to the `ci` job steps in `.github/workflows/ci.yml`:
 
 ```yaml
-      - run: xvfb-run -a pnpm test:e2e
+- run: xvfb-run -a pnpm test:e2e
 ```
 
 Run `scripts/pin-actions.sh` (no new actions, so it should print nothing) and commit.
@@ -6431,6 +7911,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 20: Linux packaging and release workflow
 
 **Files:**
+
 - Create: `electron-builder.yml`, `.github/workflows/release.yml`
 
 - [ ] **Step 1: Packaging config**
@@ -6520,6 +8001,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ### Task 21: UI audit pass and README refresh
 
 **Files:**
+
 - Modify: files under `src/renderer/src/` as findings require, `README.md`
 
 - [ ] **Step 1: Install the audit skills (ask the user first)**
