@@ -2,7 +2,8 @@
 
 /* Control Center. A downward swipe that starts on the status strip pulls
  * the sheet out from under the bar. Host tests compile this without LVGL.
- * The sheet uses the 24px case line and stops above the dock. */
+ * The sheet uses the 24px case line on the sides and runs to the bottom
+ * edge of the glass. */
 
 enum {
     CC_SCREEN = 480,
@@ -20,8 +21,11 @@ enum {
     CC_TILE_H = 72,
     CC_PANEL_W = CC_SCREEN - (CC_INSET * 2),
     CC_TILE_W = (CC_PANEL_W - (CC_STROKE * 2) - (CC_PAD * 2) - (CC_GAP * (CC_COLS - 1))) / CC_COLS,
-    CC_PANEL_H = (CC_STROKE * 2) + (CC_PAD * 2) + (CC_TILE_H * CC_ROWS) + (CC_GAP * (CC_ROWS - 1)),
-    /* ui.c dock top: 480 - 16 - 8 - 16 - 58. */
+    /* Tile block, including the sheet stroke and pad. The sheet is taller. */
+    CC_TILES_H = (CC_STROKE * 2) + (CC_PAD * 2) + (CC_TILE_H * CC_ROWS) + (CC_GAP * (CC_ROWS - 1)),
+    /* Under the status strip, through the dock, to the bottom edge. */
+    CC_PANEL_H = CC_SCREEN - CC_OPEN_Y,
+    /* ui.c dock top: 480 - 16 - 8 - 16 - 58. The open sheet covers it. */
     CC_DOCK_TOP = 382,
     CC_SLOP = 10,
     CC_OPEN_DY = 64,
@@ -32,11 +36,13 @@ enum {
 
 _Static_assert(CC_GRAB == 48, "grab is the status strip");
 _Static_assert(CC_INSET == 24, "case line");
-_Static_assert(CC_OPEN_Y + CC_PANEL_H < CC_DOCK_TOP, "sheet stops above the dock");
+_Static_assert(CC_OPEN_Y + CC_PANEL_H == CC_SCREEN, "sheet meets the bottom edge");
+_Static_assert(CC_OPEN_Y + CC_PANEL_H > CC_DOCK_TOP, "sheet covers the dock");
+_Static_assert(CC_TILES_H < CC_PANEL_H, "tiles sit above the bottom edge");
 _Static_assert(CC_TILE_W * CC_COLS + CC_GAP * (CC_COLS - 1) + CC_PAD * 2 + CC_STROKE * 2 == CC_PANEL_W,
                "a row of tiles fills the sheet");
-_Static_assert(CC_TILE_H * CC_ROWS + CC_GAP * (CC_ROWS - 1) + CC_PAD * 2 + CC_STROKE * 2 == CC_PANEL_H,
-               "the rows fill the sheet");
+_Static_assert(CC_TILE_H * CC_ROWS + CC_GAP * (CC_ROWS - 1) + CC_PAD * 2 + CC_STROKE * 2 == CC_TILES_H,
+               "the rows fill the tile block");
 _Static_assert(CC_OPEN_DY > CC_FLICK_DY, "a flick is shorter than a full pull");
 _Static_assert(CC_SLOP < CC_FLICK_DY, "a flick clears the slop");
 

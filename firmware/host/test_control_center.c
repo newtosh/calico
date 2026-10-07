@@ -21,7 +21,9 @@ int main(void) {
     int decision;
 
     check(CC_GRAB == 48, "grab height");
-    check(CC_OPEN_Y + CC_PANEL_H < CC_DOCK_TOP, "room to tap outside");
+    check(CC_OPEN_Y + CC_PANEL_H == CC_SCREEN, "sheet meets the bottom edge");
+    check(CC_OPEN_Y + CC_PANEL_H > CC_DOCK_TOP, "sheet covers the dock");
+    check(CC_TILES_H < CC_PANEL_H, "tiles sit above the bottom edge");
     check(CC_TILE_W > 80, "tile is a finger target");
 
     desk_cc_init(&cc);

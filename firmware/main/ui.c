@@ -133,7 +133,8 @@ _Static_assert(SHEET_INNER_NEAR_OPA > SHEET_INNER_FAR_OPA, "inner highlight is s
 _Static_assert(SHEET_MARK == MARK_PX * 5, "sheet mark is five times the list mark");
 _Static_assert(SHEET_OPA >= 248, "sheet stays opaque enough to hide roster type");
 _Static_assert((int)MESSAGE_Y == (int)FACE_MESSAGE_Y, "sleep origin");
-_Static_assert((int)CC_DOCK_TOP == (int)DOCK_TOP, "control center clears the dock");
+_Static_assert((int)CC_DOCK_TOP == (int)DOCK_TOP, "control center dock line");
+_Static_assert((int)CC_OPEN_Y + (int)CC_PANEL_H == (int)SCREEN_PX, "control center meets the bottom edge");
 _Static_assert((int)CC_GRAB == (int)EDGE_PX + (int)BAR_H, "grab is the status strip");
 _Static_assert((int)CC_INSET == (int)SHEET_SAFE, "control center uses the case line");
 _Static_assert((int)CC_STROKE == (int)SHEET_BORDER, "control center stroke");
@@ -1767,10 +1768,13 @@ static void psram_objects_end(void) {
     heap_caps_malloc_extmem_enable(CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL);
 }
 
-/* Ring while rotation may snap. Padlock while it is held. Not a button. */
+/* Arrow-path while rotation may snap. Padlock while it is held. Not a button.
+ * desk_icon_rot is the Heroicons outline (stroke 1.5, 24 viewBox) as A8 in
+ * flash. Recolor makes it cream. The image object is a malloc, so callers
+ * build this inside the PSRAM window. */
 static lv_obj_t *make_rot_symbol(lv_obj_t *parent, int px, lv_obj_t **ring_out, lv_obj_t **lock_out) {
     lv_obj_t *box = glyph_frame(parent, px, px);
-    lv_obj_t *ring = lv_obj_create(box);
+    lv_obj_t *ring = lv_image_create(box);
     lv_obj_t *lock = glyph_frame(box, px, px);
     lv_obj_t *shackle;
     lv_obj_t *body;
@@ -1782,14 +1786,11 @@ static lv_obj_t *make_rot_symbol(lv_obj_t *parent, int px, lv_obj_t **ring_out, 
     if (body_w < 8) {
         body_w = 8;
     }
-    lv_obj_set_size(ring, px, px);
-    lv_obj_set_style_radius(ring, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_opa(ring, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(ring, 2, 0);
-    lv_obj_set_style_border_color(ring, lv_color_hex(INK), 0);
-    lv_obj_set_style_pad_all(ring, 0, 0);
-    lv_obj_set_style_shadow_width(ring, 0, 0);
-    lv_obj_clear_flag(ring, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_image_set_src(ring, &desk_icon_rot);
+    lv_obj_set_style_image_recolor(ring, lv_color_hex(INK), 0);
+    lv_obj_set_style_image_recolor_opa(ring, LV_OPA_COVER, 0);
+    lv_obj_align(ring, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_clear_flag(ring, LV_OBJ_FLAG_CLICKABLE);
     shackle = lv_obj_create(lock);
     lv_obj_set_size(shackle, shackle_w, px / 2);
     lv_obj_align(shackle, LV_ALIGN_TOP_MID, 0, 0);
@@ -1846,10 +1847,16 @@ static void cc_place(int reveal) {
         reveal = CC_PANEL_H;
     }
     s_cc_reveal = reveal;
-    y = (CC_OPEN_Y - CC_PANEL_H) + reveal;
+    /* Top stays under the strip. Height grows to the bottom edge, so the
+     * tiles lead and the empty glass follows. Sliding a full-height sheet
+     * would show that empty glass first. */
+    y = CC_OPEN_Y;
     if (s_cc_panel) {
         was_hidden = lv_obj_has_flag(s_cc_panel, LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_y(s_cc_panel, y);
+        if (reveal > 0) {
+            lv_obj_set_height(s_cc_panel, reveal);
+        }
     }
     if (!s_cc_scrim || !s_cc_panel) {
         return;
@@ -2207,7 +2214,7 @@ static void build_control_center(lv_obj_t *screen) {
 
     row = cc_row(s_cc_panel);
     s_cc_rot = cc_tile(row, on_cc_rot);
-    make_rot_symbol(s_cc_rot, 16, &s_cc_rot_ring, &s_cc_rot_lock);
+    make_rot_symbol(s_cc_rot, DESK_ROT_PX, &s_cc_rot_ring, &s_cc_rot_lock);
     cc_caption(s_cc_rot, "Rotation", &s_cc_rot_state);
     s_cc_mic = cc_tile(row, on_cc_mic);
     cc_mic_glyph(s_cc_mic);
@@ -2407,7 +2414,7 @@ static void build_status_bar(lv_obj_t *screen) {
     paint_bt();
 
     psram_objects_begin();
-    make_rot_symbol(cluster, 16, &s_rot_ring, &s_rot_lock);
+    make_rot_symbol(cluster, DESK_ROT_PX, &s_rot_ring, &s_rot_lock);
     psram_objects_end();
     paint_rotlock();
     paint_bars(0);

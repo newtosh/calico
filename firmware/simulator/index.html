@@ -152,8 +152,8 @@
         opacity: 1;
       }
       #rot {
-        width: 16px;
-        height: 16px;
+        width: 24px;
+        height: 24px;
         color: #efe7d6;
       }
       #rot svg {
@@ -184,19 +184,40 @@
         top: 48px;
         box-sizing: border-box;
         width: 432px;
-        height: 278px;
+        height: 432px;
         display: flex;
         flex-wrap: wrap;
         align-content: flex-start;
         gap: 12px;
         padding: 16px;
+        overflow: hidden;
         border: 3px solid #6d6756;
         border-radius: 28px;
         outline: 2px solid rgba(109, 103, 86, 0.16);
         outline-offset: 1px;
         background: rgba(12, 14, 9, 0.98);
-        transform: translateY(-278px);
         touch-action: none;
+      }
+      #cc button[data-tile="rot"] {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+      #cc button[data-tile="rot"] svg {
+        display: block;
+        width: 24px;
+        height: 24px;
+      }
+      #cc button[data-tile="rot"] .ring {
+        color: #efe7d6;
+      }
+      #cc button[data-tile="rot"] .lock {
+        color: #9bb57a;
+      }
+      #cc button[data-tile="rot"][aria-pressed="false"] .lock,
+      #cc button[data-tile="rot"][aria-pressed="true"] .ring {
+        display: none;
       }
       #cc[hidden] {
         display: none;
@@ -984,10 +1005,10 @@
             </svg>
           </span>
           <span id="rot" data-state="auto" title="Rotation on">
-            <svg class="ring" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-              <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2"/>
+            <svg class="ring" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="24" height="24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 0 0-3.7-3.7 48.678 48.678 0 0 0-7.324 0 4.006 4.006 0 0 0-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 0 0 3.7 3.7 48.656 48.656 0 0 0 7.324 0 4.006 4.006 0 0 0 3.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3-3 3" />
             </svg>
-            <svg class="lock" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+            <svg class="lock" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="24" height="24" aria-hidden="true">
               <path d="M5 7 V5.5 a3 3 0 0 1 6 0 V7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
               <rect x="3.5" y="7" width="9" height="6.5" rx="1.5" fill="currentColor"/>
             </svg>
@@ -1038,7 +1059,16 @@
       <div id="cc" hidden>
         <button type="button" data-tile="wifi" aria-pressed="true">Wi-Fi<small>On</small></button>
         <button type="button" data-tile="bt" aria-pressed="true">Bluetooth<small>On</small></button>
-        <button type="button" data-tile="rot" aria-pressed="false">Rotation<small>Auto</small></button>
+        <button type="button" data-tile="rot" aria-pressed="false">
+          <svg class="ring" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 0 0-3.7-3.7 48.678 48.678 0 0 0-7.324 0 4.006 4.006 0 0 0-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 0 0 3.7 3.7 48.656 48.656 0 0 0 7.324 0 4.006 4.006 0 0 0 3.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3-3 3" />
+          </svg>
+          <svg class="lock" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M5 7 V5.5 a3 3 0 0 1 6 0 V7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <rect x="3.5" y="7" width="9" height="6.5" rx="1.5" fill="currentColor"/>
+          </svg>
+          Rotation<small>Auto</small>
+        </button>
         <button type="button" data-tile="mic" aria-pressed="false">Mic<small>On</small></button>
         <button type="button" data-tile="spk" aria-pressed="false">Speaker<small>On</small></button>
       </div>
@@ -1398,16 +1428,17 @@
       const CC_FLICK_DY = 28;
       const CC_FLICK_MS = 320;
       const CC_SLOP = 10;
-      const CC_PANEL_H = 278;
-      const CC_TRAVEL = CC_PANEL_H;
+      const CC_SCREEN = 480;
+      const CC_OPEN_Y = 48;
+      const CC_PANEL_H = CC_SCREEN - CC_OPEN_Y;
       let ccOpen = false;
       let ccReveal = 0;
       let ccDrag = null;
       let ccAte = false;
       function ccPlace(reveal) {
         ccReveal = Math.max(0, Math.min(CC_PANEL_H, reveal));
-        const shift = -CC_TRAVEL + (ccReveal * CC_TRAVEL) / CC_PANEL_H;
-        ccSheet.style.transform = "translateY(" + shift + "px)";
+        ccSheet.style.top = CC_OPEN_Y + "px";
+        ccSheet.style.height = ccReveal + "px";
         ccScrim.style.opacity = String(ccReveal / CC_PANEL_H);
         const show = ccReveal > 0;
         ccSheet.hidden = !show;
@@ -1415,10 +1446,19 @@
       }
       function ccSnap(open) {
         ccOpen = open;
-        ccSheet.style.transition = "transform 220ms ease-out";
-        ccPlace(open ? CC_PANEL_H : 0);
+        ccSheet.style.transition = "height 220ms ease-out";
+        ccReveal = open ? CC_PANEL_H : 0;
+        ccSheet.hidden = false;
+        ccScrim.hidden = false;
+        ccSheet.style.top = CC_OPEN_Y + "px";
+        ccSheet.style.height = ccReveal + "px";
+        ccScrim.style.opacity = String(ccReveal / CC_PANEL_H);
         window.setTimeout(() => {
           ccSheet.style.transition = "";
+          if (!ccOpen) {
+            ccSheet.hidden = true;
+            ccScrim.hidden = true;
+          }
         }, 230);
       }
       function paintRot(locked) {

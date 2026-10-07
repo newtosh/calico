@@ -41,7 +41,7 @@ Optional Cursor list polling starts when `CURSOR_API_KEY` is set. It maps `ACTIV
 
 ## Flash the panel
 
-See [firmware/README.md](firmware/README.md). ESP-IDF 5.5, target `esp32s3`, BSP `waveshare/esp32_s3_touch_amoled_2_16`. Without a toolchain, run the host tests and open `firmware/simulator/index.html`.
+See [firmware/README.md](firmware/README.md). ESP-IDF 5.5, target `esp32s3`, BSP `waveshare/esp32_s3_touch_amoled_2_16`. Without a toolchain, run the host tests and open `firmware/simulator/index.html`. Control Center grows from under the status strip to the bottom edge of the glass. The rotation mark is a cream arrow-path while the picture can still turn, and a sage padlock while that is held.
 
 ## Grok Bot
 

@@ -7,9 +7,13 @@
 /* Status-bar Bluetooth rune. Same height as the Wi-Fi bars. */
 #define DESK_BT_W 20
 #define DESK_BT_H 14
+/* Heroicons arrow-path, stroke 1.5 in a 24 viewBox. */
+#define DESK_ROT_PX 24
 
 extern const lv_image_dsc_t desk_icon_mic;
 extern const lv_image_dsc_t desk_icon_settings;
 /* Rune only. The live mark is the same rune with a dot on each side. */
 extern const lv_image_dsc_t desk_icon_bt;
 extern const lv_image_dsc_t desk_icon_bt_on;
+/* Cream when recolored. Shown while rotation may still snap. */
+extern const lv_image_dsc_t desk_icon_rot;
