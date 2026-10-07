@@ -128,11 +128,23 @@
         opacity: 1;
       }
       #bt {
-        color: #a39b88;
-        opacity: 0.45;
         font-size: 14px;
         line-height: 1;
+      }
+      #bt[data-state="off"] {
+        color: #a39b88;
+        opacity: 0.45;
         text-decoration: line-through;
+      }
+      #bt[data-state="adv"] {
+        color: #efe7d6;
+        opacity: 1;
+        text-decoration: none;
+      }
+      #bt[data-state="conn"] {
+        color: #9bb57a;
+        opacity: 1;
+        text-decoration: none;
       }
       #rotlock {
         height: 28px;
@@ -895,7 +907,7 @@
         <div id="toast"></div>
         <div id="glance">
           <span id="wifi" data-bars="0" title="Wi-Fi"><i></i><i></i><i></i></span>
-          <span id="bt" title="Bluetooth off">BT</span>
+          <span id="bt" data-state="adv" title="Bluetooth advertising">BT</span>
           <button id="rotlock" type="button" aria-pressed="false">Auto</button>
         </div>
       </div>

@@ -1,3 +1,4 @@
+#include "ble_link.h"
 #include "dma_stripe.h"
 #include "net.h"
 #include "orient.h"
@@ -68,6 +69,7 @@ static void save_and_restart(const char *ssid, const char *pass, const char *url
         return;
     }
     /* Same text as the global default means this network keeps following it. */
+    ble_link_enter();
     if (url && s_store.url[0] && strcmp(url, s_store.url) == 0) {
         net_url = "";
     }
@@ -75,10 +77,12 @@ static void save_and_restart(const char *ssid, const char *pass, const char *url
         net_token = "";
     }
     if (wifi_upsert(&s_store, ssid, pass, net_url, net_token) != 0) {
+        ble_link_leave();
         ui_set_settings_status("Could not save that network.");
         return;
     }
     net_save(&s_store);
+    ble_link_leave();
     esp_restart();
 }
 
@@ -147,15 +151,27 @@ static int probe_url(const char *url, const char *token) {
 
 static void apply_panel_push(const char *body) {
     desk_panel_t panel;
+    char cur_url[128];
+    char cur_token[128];
     int answers = 1;
     if (desk_panel_from_json(body, &panel) != 0 || !panel.present) {
         return;
     }
+    ble_link_enter();
+    copy_setting(cur_url, sizeof(cur_url), s_store.url);
+    copy_setting(cur_token, sizeof(cur_token), s_store.token);
+    ble_link_leave();
     /* A pushed URL on another host is stored only if that host answers. */
-    if (strcmp(panel.url, s_store.url) != 0) {
-        answers = probe_url(panel.url, panel.token_set ? panel.token : s_store.token);
+    if (strcmp(panel.url, cur_url) != 0) {
+        answers = probe_url(panel.url, panel.token_set ? panel.token : cur_token);
     }
-    if (!desk_panel_adopt(&panel, s_store.url, s_store.token, answers)) {
+    if (!desk_panel_adopt(&panel, cur_url, cur_token, answers)) {
+        return;
+    }
+    ble_link_enter();
+    /* A BLE write landed while the probe was in flight. Leave it. The next poll can push again. */
+    if (strcmp(s_store.url, cur_url) != 0 || strcmp(s_store.token, cur_token) != 0) {
+        ble_link_leave();
         return;
     }
     copy_setting(s_store.url, sizeof(s_store.url), panel.url);
@@ -163,6 +179,7 @@ static void apply_panel_push(const char *body) {
         copy_setting(s_store.token, sizeof(s_store.token), panel.token);
     }
     net_save_globals(s_store.url, s_store.token);
+    ble_link_leave();
     esp_restart();
 }
 
@@ -328,6 +345,19 @@ static void pin_dma_draw_buffers(void) {
              (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA));
 }
 
+static void on_ble_state(int state) {
+    if (!lock_lvgl()) {
+        ESP_LOGW("desk", "BT mark not updated");
+        return;
+    }
+    ui_set_bt(state);
+    unlock_lvgl();
+}
+
+static void on_ble_restart(void) {
+    esp_restart();
+}
+
 static void load_rotlock(void) {
     char stored[8];
     int quarter = 0;
@@ -410,6 +440,7 @@ void app_main(void) {
         }
         unlock_lvgl();
     }
+    ble_link_start(&s_store, on_ble_state, on_ble_restart);
     if (s_store.count == 0) {
         return;
     }

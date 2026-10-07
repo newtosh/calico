@@ -32,6 +32,8 @@ void net_save_globals(const char *url, const char *token);
 void net_rotlock_load(char *out, size_t out_len);
 void net_rotlock_save(const char *value);
 void net_link(net_link_t *out);
+/* Associated SSID, or empty when the STA is down or not joined. */
+void net_joined_ssid(char *out, size_t out_len);
 /* A status poll completed. The STA give-up latch is stale. */
 void net_mark_reachable(void);
 void net_wifi_start(const desk_settings_t *in);

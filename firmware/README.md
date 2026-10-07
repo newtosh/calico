@@ -39,7 +39,7 @@ At boot the panel scans and joins whichever saved SSID is actually in range. If 
 
 ## Status bar
 
-The top strip and the bottom strip are `#0c0e09` and run to the 480px edges of the glass. Lamp, toast, the resting `grokbot-buddy` label, Wi-Fi, struck-through BT, Auto, and the running count stay inside the 16px bezel. The center of the bar reads `grokbot-buddy` until a status toast replaces that label, then the name comes back. Title and agent rows start just below the bar. A swipe on the agent list scrolls that list. The bar and the dock stay fixed. The row under the bar is an unread badge, not an agent name. It shows the companion's `unread` count, as `3 unread`, when that count is above zero. That count is agents waiting on you. If none are, a note that still has text shows 1. It is not Grok Bot's own chat unread. A tap POSTs `/api/unread/dismiss`. The next poll clears a note, and leaves the badge up while a row is still NEEDS YOU. `POST /api/dismiss` clears the waiting rows and the badge together. With nothing unread the row is empty. Mic and Settings are icon buttons, Lucide `mic` and `settings` as 40px alpha bitmaps. Both are 72×58, about ten percent under 80×64. The dock pads them 24px from the glass on the sides and bottom (the 16px bezel plus 8px) so the case corner does not clip the button, and 16px above them so the list band does not sit on the button tops. Mic is dimmed and still only shows `Voice not in this PoC`. Settings opens settings. The running count stays Montserrat 28: `n/X running` while any stored agent is running, and a dimmed `idle` when none are. X is every agent in the companion store, not a fixed roster. Agent titles and marks stay 24px. A row's own `message` sits beside the name. If that is empty, the last event's message does, matched by `agent_id`, then by title or id. It is Montserrat 20. The name is only as wide as its title. A 12px gap stays between the name and the status, and the status takes the rest of the row. It stays one line. When that agent jumps to the top with the row filled in, the line scrolls for 20 seconds so the whole message can be read, then it clips at the start. It does not wrap. Status strings decode JSON `\uXXXX` escapes, including a surrogate pair. Montserrat here is ASCII plus degree and bullet. Other codepoints fold to an ASCII stand-in (accents, dashes, arrows, box drawing) or are dropped (emoji, private-use), so a missing glyph is not drawn as a box. Other rows clip. A `needs_you` row is filled `#527044` with a `#9bb57a` left edge, and so is a row that is showing that message. Aside text on that fill is `#d4ccba`. A quiet running or idle row stays plain. If the list is scrolled down and a poll adds an agent or changes a row's status, attention, or aside, a `3 new` pill sits on the top edge of the list. A tap scrolls to the top and clears it. Scrolling back to the top clears it too. It stays hidden while the list is already at the top, and it does not cover the dock. Each row is 30px, down from 32. The list starts at y=86 instead of y=98 unless a note is still centered under the title, so a long roster shows another name before it scrolls.
+The top strip and the bottom strip are `#0c0e09` and run to the 480px edges of the glass. Lamp, toast, the resting `grokbot-buddy` label, Wi-Fi, BT, Auto, and the running count stay inside the 16px bezel. The center of the bar reads `grokbot-buddy` until a status toast replaces that label, then the name comes back. Title and agent rows start just below the bar. A swipe on the agent list scrolls that list. The bar and the dock stay fixed. The row under the bar is an unread badge, not an agent name. It shows the companion's `unread` count, as `3 unread`, when that count is above zero. That count is agents waiting on you. If none are, a note that still has text shows 1. It is not Grok Bot's own chat unread. A tap POSTs `/api/unread/dismiss`. The next poll clears a note, and leaves the badge up while a row is still NEEDS YOU. `POST /api/dismiss` clears the waiting rows and the badge together. With nothing unread the row is empty. Mic and Settings are icon buttons, Lucide `mic` and `settings` as 40px alpha bitmaps. Both are 72×58, about ten percent under 80×64. The dock pads them 24px from the glass on the sides and bottom (the 16px bezel plus 8px) so the case corner does not clip the button, and 16px above them so the list band does not sit on the button tops. Mic is dimmed and still only shows `Voice not in this PoC`. Settings opens settings. The running count stays Montserrat 28: `n/X running` while any stored agent is running, and a dimmed `idle` when none are. X is every agent in the companion store, not a fixed roster. Agent titles and marks stay 24px. A row's own `message` sits beside the name. If that is empty, the last event's message does, matched by `agent_id`, then by title or id. It is Montserrat 20. The name is only as wide as its title. A 12px gap stays between the name and the status, and the status takes the rest of the row. It stays one line. When that agent jumps to the top with the row filled in, the line scrolls for 20 seconds so the whole message can be read, then it clips at the start. It does not wrap. Status strings decode JSON `\uXXXX` escapes, including a surrogate pair. Montserrat here is ASCII plus degree and bullet. Other codepoints fold to an ASCII stand-in (accents, dashes, arrows, box drawing) or are dropped (emoji, private-use), so a missing glyph is not drawn as a box. Other rows clip. A `needs_you` row is filled `#527044` with a `#9bb57a` left edge, and so is a row that is showing that message. Aside text on that fill is `#d4ccba`. A quiet running or idle row stays plain. If the list is scrolled down and a poll adds an agent or changes a row's status, attention, or aside, a `3 new` pill sits on the top edge of the list. A tap scrolls to the top and clears it. Scrolling back to the top clears it too. It stays hidden while the list is already at the top, and it does not cover the dock. Each row is 30px, down from 32. The list starts at y=86 instead of y=98 unless a note is still centered under the title, so a long roster shows another name before it scrolls.
 
 The left lamp uses the phase label plus the poll-failure count and the Wi-Fi facts the STA path already tracks:
 
@@ -53,7 +53,7 @@ A stale STA give-up does not override a poll that just succeeded while the stati
 
 `NEEDS YOU` is green. The companion answered. The sheet covers the list and the dock and leaves the bar visible, so the lamp, toast, and Wi-Fi stay readable. A short toast slides into the center of the bar when that status text changes (`IDLE` → `RUNNING`, `reconnecting`, `link down`, and the panel notes). One line is on screen and one can wait. A newer one replaces the waiter.
 
-Wi-Fi is three bars from the associated AP's RSSI (`esp_wifi_sta_get_ap_info`): 3 at -60 dBm and up, 2 at -75 dBm and up, 1 if associated but weaker, none if there is no IP. Bluetooth is a dim struck-through `BT`. The ESP32-S3 and this board's 2.4 GHz antenna can do Bluetooth 5 LE, and the BSP does not start it. `sdkconfig.defaults` does not enable a controller, and the app never opens one. The mark means off.
+Wi-Fi is three bars from the associated AP's RSSI (`esp_wifi_sta_get_ap_info`): 3 at -60 dBm and up, 2 at -75 dBm and up, 1 if associated but weaker, none if there is no IP. Bluetooth is the same `BT` letters. Dim and struck through means the controller is not up. Plain cream means it is advertising. Sage `#9bb57a` means a central is connected. The mark is not a button.
 
 `Auto` / `Lock` toggles the QMI8658 snap. Locked writes NVS namespace `desk` key `rotlock` as `0`, `1`, `2`, or `3` (the quarter on screen) and ignores the IMU until unlock, including across reboot. Unlock erases that key. It does not use `ssid`, `pass`, `url`, `token`, or `n{i}*`.
 
@@ -78,6 +78,48 @@ Ship this UI with app-flash only:
 
 ```bash
 idf.py -p PORT app-flash
+```
+
+## Provision over BLE
+
+A phone or laptop can write the same NVS `desk` keys without USB and without a joined network. The firmware starts NimBLE after the DMA stripe is pinned and before Wi-Fi. It advertises the complete local name `grokbot-buddy`. One connection. The link is open: no pairing, no bonding, no encryption. Anyone in radio range can write the companion URL, replace the bearer, or add a Wi-Fi network. The bearer is write-only. Wi-Fi passwords are write-only. This is a desk PoC. A PIN on the glass is the upgrade when that stops being acceptable.
+
+Preferred ATT MTU is 256 (the NimBLE default). A URL or token is at most 127 bytes, so the central needs an MTU of at least 130. BlueZ does the exchange. A status read that is longer than one packet still completes: NimBLE serves the rest on Read Blob.
+
+Service `8d7c4b10-6e2a-4f91-a3c5-67726f6b6465`:
+
+| Characteristic | UUID | Access | Write body |
+| --- | --- | --- | --- |
+| status | `8d7c4b11-6e2a-4f91-a3c5-67726f6b6465` | read | |
+| url | `8d7c4b12-6e2a-4f91-a3c5-67726f6b6465` | read, write | `http://` or `https://` URL, optional trailing newline |
+| token | `8d7c4b13-6e2a-4f91-a3c5-67726f6b6465` | write | bearer, or empty to clear. Optional trailing newline |
+| wifi | `8d7c4b14-6e2a-4f91-a3c5-67726f6b6465` | write | `SSID\npassword`. Empty password is an open network. One separator, optional trailing newline |
+| reboot | `8d7c4b15-6e2a-4f91-a3c5-67726f6b6465` | write | `reboot` |
+
+Status is UTF-8, one `key=value` per line, in this order: `name`, `fw` (git short SHA, or `unknown`), `ssid` (associated AP, or `none`), `url` (global companion URL), `token` (`set` or `none`). A rejected write is an ATT error and does not touch NVS. URL, token, and Wi-Fi commits happen before the response. They do not restart the station. `reboot` calls `esp_restart`. The link often drops before that response comes back.
+
+Wi-Fi upsert uses the same eight slots as settings. Updating an SSID replaces the password and keeps that slot's own URL and token. A new SSID follows the global URL. The controller may add its own NVS keys on first boot. That is not an erase, and it does not rewrite `desk`.
+
+```bash
+pip install bleak
+scripts/ble-provision.py scan
+scripts/ble-provision.py status
+scripts/ble-provision.py url
+scripts/ble-provision.py token
+scripts/ble-provision.py wifi
+scripts/ble-provision.py reboot
+```
+
+`url`, `token`, and `wifi` prompt. The password and the bearer are not arguments and not environment variables. `--address AA:BB:CC:DD:EE:FF` picks one desk when more than one is advertising.
+
+Host mbufs are allocated from PSRAM (`CONFIG_BT_NIMBLE_MEM_ALLOC_MODE_EXTERNAL`). The controller's own RAM stays internal. After `nimble_port_init` the log line `largest internal DMA ... after NimBLE` is the block the STA still has. The 20-line stripe is unchanged. If that DMA block is under 29696 bytes, shrink NimBLE (connections, ACL count, `BT_CTRL_BLE_MAX_ACT`). Do not grow the stripe and do not turn on `BT_CTRL_RUN_IN_FLASH_ONLY`: a GATT write commits NVS while the link is up, and controller code in flash glitches across that erase.
+
+An existing `firmware/sdkconfig` does not pick up `sdkconfig.defaults`. Delete that file and reconfigure. Do not erase the device. `idf.py` was not on the machine that added this, so the image has not been built here.
+
+```bash
+python3 -m pytest scripts/test_ble_provision.py
+gcc -Wall -Werror -I firmware/main firmware/host/test_ble_desk.c firmware/main/ble_desk.c firmware/main/wifi_store.c -o /tmp/test_ble_desk
+/tmp/test_ble_desk
 ```
 
 ## Provision Wi-Fi over USB
@@ -133,6 +175,8 @@ gcc -Wall -Werror -I firmware/main firmware/host/test_dma_stripe.c -o /tmp/test_
 /tmp/test_dma_stripe
 gcc -Wall -Werror -I firmware/main firmware/host/test_settings_layout.c -o /tmp/test_settings_layout
 /tmp/test_settings_layout
+gcc -Wall -Werror -I firmware/main firmware/host/test_ble_desk.c firmware/main/ble_desk.c firmware/main/wifi_store.c -o /tmp/test_ble_desk
+/tmp/test_ble_desk
 ```
 
 Open `firmware/simulator/index.html` in a browser. It polls `http://127.0.0.1:8787` unless you pass `?base=http://192.168.1.20:8787`. `?settings=1` opens settings. The settings button does the same, and Done closes it. Wheel or drag scrolls the agent list inside the face. The bar and the dock stay fixed. A needs-you status raises the sheet over the list and the dock. The bar stays. A downward swipe, or a tap, dismisses the card on screen. A second needs-you while that card is up stacks on top. Swipe left and right to move through the stack. `Dismiss all` clears every waiting card. Two rapid posts that exercise it are in [docs/grok-bot-integration.md](../docs/grok-bot-integration.md).

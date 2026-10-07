@@ -57,7 +57,7 @@ If a webhook bearer token is set, add `-H "Authorization: Bearer $GROK_DESK_WEBH
 
 ## Panel URL and token
 
-Wi-Fi networks can be added or removed over USB with `scripts/provision-wifi.py add` and `scripts/provision-wifi.py remove` (see [firmware/README.md](firmware/README.md)). The on-device keyboard still works. The panel keeps every saved network and, at boot, joins the saved SSID that is in range. After the board is joined and a status poll succeeds, the dashboard section **Panel config** (or `PUT /api/panel`) stores a companion URL and bearer token on the companion. The same `GET /api/status` the panel already polls then includes:
+Wi-Fi networks can be added or removed over USB with `scripts/provision-wifi.py add` and `scripts/provision-wifi.py remove` (see [firmware/README.md](firmware/README.md)). The same NVS keys can be written over BLE, before the board has joined anything, with `scripts/ble-provision.py`. The on-device keyboard still works. The panel keeps every saved network and, at boot, joins the saved SSID that is in range. After the board is joined and a status poll succeeds, the dashboard section **Panel config** (or `PUT /api/panel`) stores a companion URL and bearer token on the companion. The same `GET /api/status` the panel already polls then includes:
 
 ```json
 "panel": {"url": "http://192.168.4.30:8787", "token": "desk-secret"}
@@ -78,6 +78,8 @@ cd companion && python3 -m pytest && python3 -m ruff check src tests && python3 
 cd ../web && npm test -- --run && npm run build
 gcc -Wall -Werror -I firmware/main firmware/host/test_desk_view.c firmware/main/desk_view.c -o /tmp/test_desk_view && /tmp/test_desk_view
 gcc -Wall -Werror -I firmware/main firmware/host/test_wifi_store.c firmware/main/wifi_store.c -o /tmp/test_wifi_store && /tmp/test_wifi_store
+gcc -Wall -Werror -I firmware/main firmware/host/test_ble_desk.c firmware/main/ble_desk.c firmware/main/wifi_store.c -o /tmp/test_ble_desk && /tmp/test_ble_desk
+python3 -m pytest scripts/test_ble_provision.py scripts/test_provision_wifi.py
 ```
 
 ## License

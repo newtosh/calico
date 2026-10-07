@@ -224,6 +224,18 @@ void net_link(net_link_t *out) {
     }
 }
 
+void net_joined_ssid(char *out, size_t out_len) {
+    wifi_ap_record_t ap;
+    if (!out || out_len == 0) {
+        return;
+    }
+    out[0] = '\0';
+    if (!s_wifi_up || esp_wifi_sta_get_ap_info(&ap) != ESP_OK || ap.ssid[0] == '\0') {
+        return;
+    }
+    copy_field(out, out_len, (const char *)ap.ssid);
+}
+
 static void wifi_bringup(void) {
     wifi_init_config_t init_cfg = WIFI_INIT_CONFIG_DEFAULT();
     if (s_wifi_up) {
