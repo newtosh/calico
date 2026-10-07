@@ -1,0 +1,8 @@
+# Public BLE GATT UUIDs of the grokbot-buddy desk service, not secrets.
+# The "token" characteristic's UUID trips the generic-api-key rule.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "grokbot-buddy BLE service UUIDs"
+regexes = ['''8d7c4b1[0-7]-6e2a-4f91-a3c5-67726f6b6465''']
