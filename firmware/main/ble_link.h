@@ -16,8 +16,13 @@ typedef void (*ble_link_restart_fn)(void);
  * the host task is an internal DMA stack, and Wi-Fi init has to run
  * while the post-controller block is still intact. */
 void ble_link_start(wifi_store_t *store, ble_link_state_fn on_state, ble_link_restart_fn on_restart);
-/* Starts the host task. Advertising begins on sync. */
+/* Starts the host task. Advertising begins on sync unless Control Center
+ * held it off (NVS "btoff"). */
 void ble_link_host_start(void);
+/* 1 when Control Center wants advertising. Off stops the advertisement
+ * and drops a connection. The controller stays up. */
+int ble_link_enabled(void);
+void ble_link_set_enabled(int on);
 
 /* Serializes NVS desk writes with the BLE apply path. */
 void ble_link_enter(void);

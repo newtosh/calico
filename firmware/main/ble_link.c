@@ -41,6 +41,8 @@ static ble_link_state_fn s_on_state;
 static ble_link_restart_fn s_on_restart;
 static SemaphoreHandle_t s_mu;
 static int s_state;
+/* Control Center off: stop advertising, do not power the controller down. */
+static int s_user_off;
 
 static void note(int state) {
     if (s_state == state) {
@@ -69,6 +71,9 @@ void ble_link_leave(void) {
 static uint8_t s_own_addr_type;
 static int s_gatt_ok;
 static int s_host_up;
+/* NimBLE's none handle. A live connection is anything else. */
+enum { BLE_LINK_NO_CONN = 0xFFFF, BLE_LINK_TERM_USER = 0x13 };
+static uint16_t s_conn = BLE_LINK_NO_CONN;
 static char s_scan_text[BLE_DESK_SCAN_TEXT];
 #define BLE_LINK_PROBE_TEXT 128
 static char s_probe_text[BLE_LINK_PROBE_TEXT];
@@ -123,6 +128,7 @@ static int access(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_ac
                   void *arg);
 static int advertise(void);
 static int gap_event(struct ble_gap_event *event, void *arg);
+static void resume_adv(void);
 
 static const struct ble_gatt_svc_def s_svcs[] = {
     {
@@ -652,35 +658,64 @@ static int advertise(void) {
     return rc;
 }
 
+/* Advertising when Control Center left it on. Does not call the UI
+ * callback from a task that already holds the LVGL lock. */
+static void resume_adv(void) {
+    if (s_user_off) {
+        note(BLE_LINK_OFF);
+        return;
+    }
+    if (advertise() == 0) {
+        note(BLE_LINK_ADV);
+        return;
+    }
+    note(BLE_LINK_OFF);
+}
+
+static void apply_bt_user(void) {
+    if (!s_gatt_ok || !s_host_up) {
+        return;
+    }
+    if (s_user_off) {
+        if (s_conn != BLE_LINK_NO_CONN) {
+            ble_gap_terminate(s_conn, BLE_LINK_TERM_USER);
+        }
+        if (ble_gap_adv_active()) {
+            ble_gap_adv_stop();
+        }
+        return;
+    }
+    if (s_conn != BLE_LINK_NO_CONN) {
+        return;
+    }
+    advertise();
+}
+
 static int gap_event(struct ble_gap_event *event, void *arg) {
     (void)arg;
     switch (event->type) {
     case BLE_GAP_EVENT_CONNECT:
         if (event->connect.status != 0) {
             ESP_LOGW(TAG, "connect failed %d", event->connect.status);
-            if (advertise() == 0) {
-                note(BLE_LINK_ADV);
-            } else {
-                note(BLE_LINK_OFF);
-            }
+            s_conn = BLE_LINK_NO_CONN;
+            resume_adv();
+            return 0;
+        }
+        s_conn = event->connect.conn_handle;
+        if (s_user_off) {
+            ble_gap_terminate(s_conn, BLE_LINK_TERM_USER);
+            note(BLE_LINK_OFF);
             return 0;
         }
         note(BLE_LINK_CONN);
         return 0;
     case BLE_GAP_EVENT_DISCONNECT:
         ESP_LOGI(TAG, "disconnect %d", event->disconnect.reason);
-        if (advertise() == 0) {
-            note(BLE_LINK_ADV);
-        } else {
-            note(BLE_LINK_OFF);
-        }
+        s_conn = BLE_LINK_NO_CONN;
+        resume_adv();
         return 0;
     case BLE_GAP_EVENT_ADV_COMPLETE:
-        if (advertise() == 0) {
-            note(BLE_LINK_ADV);
-        } else {
-            note(BLE_LINK_OFF);
-        }
+        resume_adv();
         return 0;
     case BLE_GAP_EVENT_MTU:
         ESP_LOGI(TAG, "mtu %d", event->mtu.value);
@@ -708,11 +743,7 @@ static void on_sync(void) {
         note(BLE_LINK_OFF);
         return;
     }
-    if (advertise() == 0) {
-        note(BLE_LINK_ADV);
-        return;
-    }
-    note(BLE_LINK_OFF);
+    resume_adv();
 }
 
 static void host_task(void *arg) {
@@ -786,10 +817,25 @@ void ble_link_host_start(void) {
 
 #endif /* CONFIG_BT_NIMBLE_ENABLED */
 
+int ble_link_enabled(void) {
+    return s_user_off ? 0 : 1;
+}
+
+void ble_link_set_enabled(int on) {
+    s_user_off = on ? 0 : 1;
+    net_desk_flag_set(NET_BT_OFF_KEY, s_user_off);
+#if CONFIG_BT_NIMBLE_ENABLED
+    /* Gap events land on the host task, which takes the LVGL lock to paint
+     * the rune. Calling note() here would take that lock on the LVGL task. */
+    apply_bt_user();
+#endif
+}
+
 void ble_link_start(wifi_store_t *store, ble_link_state_fn on_state, ble_link_restart_fn on_restart) {
     s_store = store;
     s_on_state = on_state;
     s_on_restart = on_restart;
+    s_user_off = net_desk_flag(NET_BT_OFF_KEY);
     if (!s_mu) {
         s_mu = xSemaphoreCreateMutex();
     }

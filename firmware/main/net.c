@@ -27,6 +27,9 @@ static int s_wifi_up;
 /* Probe and the cleanup disconnect must not call esp_wifi_connect.
  * The give-up latch survives until the next intentional join. */
 static volatile int s_reconnect_hold;
+/* Control Center off. The driver stays up; reconnect does not. */
+static volatile int s_user_off;
+static int s_user_loaded;
 static volatile int s_probe_wait;
 static volatile int s_probe_result;
 static volatile int s_probe_reason;
@@ -187,6 +190,47 @@ void net_rotlock_save(const char *value) {
     nvs_close(handle);
 }
 
+int net_desk_flag(const char *key) {
+    nvs_handle_t handle;
+    char buf[8];
+    if (!key || !key[0]) {
+        return 0;
+    }
+    if (nvs_open("desk", NVS_READONLY, &handle) != ESP_OK) {
+        return 0;
+    }
+    read_str(handle, key, buf, sizeof(buf));
+    nvs_close(handle);
+    return buf[0] == '1' && buf[1] == '\0';
+}
+
+void net_desk_flag_set(const char *key, int on) {
+    nvs_handle_t handle;
+    if (!key || !key[0]) {
+        return;
+    }
+    ESP_ERROR_CHECK(nvs_open("desk", NVS_READWRITE, &handle));
+    set_or_erase(handle, key, on ? "1" : "", 0);
+    ESP_ERROR_CHECK(nvs_commit(handle));
+    nvs_close(handle);
+}
+
+static void load_sta_pref(void) {
+    if (s_user_loaded) {
+        return;
+    }
+    s_user_loaded = 1;
+    s_user_off = net_desk_flag(NET_STA_OFF_KEY);
+    if (s_user_off) {
+        s_reconnect_hold = 1;
+    }
+}
+
+int net_sta_enabled(void) {
+    load_sta_pref();
+    return s_user_off ? 0 : 1;
+}
+
 static void on_wifi(void *arg, esp_event_base_t base, int32_t id, void *data) {
     (void)arg;
     if (base != WIFI_EVENT) {
@@ -220,7 +264,8 @@ static void on_wifi(void *arg, esp_event_base_t base, int32_t id, void *data) {
         ESP_LOGI(TAG, "probe disconnect %d", reason);
         return;
     }
-    if (s_reconnect_hold) {
+    if (s_user_off || s_reconnect_hold) {
+        s_reconnect_hold = 1;
         return;
     }
     if (s_wifi_retries < 10) {
@@ -292,6 +337,7 @@ void net_joined_ssid(char *out, size_t out_len) {
 static void wifi_bringup(void) {
     wifi_init_config_t init_cfg = WIFI_INIT_CONFIG_DEFAULT();
     size_t dma;
+    load_sta_pref();
     if (s_wifi_up) {
         return;
     }
@@ -341,6 +387,13 @@ static void restore_sta(const wifi_config_t *previous) {
     s_probe_wait = 0;
     esp_wifi_disconnect();
     esp_wifi_set_config(WIFI_IF_STA, &cfg);
+    if (s_user_off) {
+        s_wifi_retries = 0;
+        s_wifi_gave_up = 0;
+        s_wifi_has_ip = 0;
+        s_reconnect_hold = 1;
+        return;
+    }
     if (cfg.sta.ssid[0]) {
         s_wifi_retries = 0;
         s_wifi_gave_up = 0;
@@ -355,9 +408,41 @@ static void restore_sta(const wifi_config_t *previous) {
     s_reconnect_hold = 0;
 }
 
+int net_sta_set_enabled(int on) {
+    wifi_config_t cfg;
+    load_sta_pref();
+    s_user_off = on ? 0 : 1;
+    s_user_loaded = 1;
+    net_desk_flag_set(NET_STA_OFF_KEY, s_user_off);
+    s_wifi_retries = 0;
+    s_wifi_gave_up = 0;
+    if (!s_wifi_up) {
+        s_reconnect_hold = s_user_off ? 1 : 0;
+        return 0;
+    }
+    if (s_user_off) {
+        s_reconnect_hold = 1;
+        s_wifi_has_ip = 0;
+        esp_wifi_disconnect();
+        return 0;
+    }
+    s_reconnect_hold = 0;
+    memset(&cfg, 0, sizeof(cfg));
+    if (esp_wifi_get_config(WIFI_IF_STA, &cfg) == ESP_OK && cfg.sta.ssid[0]) {
+        esp_wifi_connect();
+        return 1;
+    }
+    return 0;
+}
+
 void net_wifi_start(const desk_settings_t *in) {
     wifi_config_t wifi;
     wifi_bringup();
+    if (s_user_off) {
+        s_reconnect_hold = 1;
+        ESP_LOGI(TAG, "sta held off");
+        return;
+    }
     fill_sta(&wifi, in->ssid, in->pass);
     /* A probe that failed, or a previous give-up, must not eat this join. */
     s_reconnect_hold = 0;
@@ -428,6 +513,12 @@ int net_wifi_probe(const char *ssid, const char *pass, int *reason_out) {
         }
         ESP_LOGI(TAG, "probe %s fail %d", ssid, reason);
         return 0;
+    }
+    /* Success leaves this association up. Control Center off would disagree
+     * with the radio, so the tile follows the probe. */
+    if (s_user_off) {
+        s_user_off = 0;
+        net_desk_flag_set(NET_STA_OFF_KEY, 0);
     }
     s_reconnect_hold = 0;
     scan_mu_give();

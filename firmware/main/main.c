@@ -50,10 +50,14 @@ static TaskHandle_t s_scan_task;
 static SemaphoreHandle_t s_scan_go;
 static StackType_t *s_join_stack;
 static StaticTask_t s_join_tcb;
+static TaskHandle_t s_join_task;
+static SemaphoreHandle_t s_join_go;
 static StackType_t *s_poll_stack;
 static StaticTask_t s_poll_tcb;
 static int s_quarter;
 static volatile int s_rot_locked;
+static volatile int s_join_busy;
+static volatile int s_poll_started;
 static lv_indev_read_cb_t s_touch_read;
 
 /* Panel init writes MADCTL 0xA0. bsp_display_rotation_set calls that value
@@ -257,6 +261,7 @@ static void apply_panel_push(const char *body) {
 }
 
 static void publish_link(void);
+static int start_join(void);
 
 static int lamp_key(const net_link_t *link) {
     return (link->has_ip ? 1 : 0) | (link->gave_up ? 2 : 0) | (link->retries > 0 ? 4 : 0);
@@ -273,6 +278,11 @@ static void poll_task(void *arg) {
         int parsed = 0;
         int same;
         int key;
+        if (!net_sta_enabled()) {
+            s_failures = 0;
+            vTaskDelay(pdMS_TO_TICKS(500));
+            continue;
+        }
         s_fetch_gen++;
         fetched = net_fetch_status(&s_active, s_status_body, sizeof(s_status_body)) == 0;
         if (fetched) {
@@ -308,7 +318,10 @@ static void poll_task(void *arg) {
                 if (release) {
                     ui_release_sheet_suppress();
                 }
-                if (!same || key != s_lamp_key || release) {
+                if (!net_sta_enabled()) {
+                    s_failures = 0;
+                    publish_link();
+                } else if (!same || key != s_lamp_key || release) {
                     publish_link();
                     ui_apply(&view, s_failures);
                     s_lamp_key = key;
@@ -330,28 +343,69 @@ static void poll_task(void *arg) {
 /* Off app_main. A stack net_ap_t found[48] in net_wifi_scan overflowed
  * the main task before esp_wifi_scan_start, so abort() ran before any
  * scan. 12288 is PSRAM: an internal create after the NimBLE host does
- * not fit. The task stays blocked so that static stack is not freed. */
+ * not fit. The task stays blocked between scans so Control Center can
+ * ask again without a second create, and without freeing the TCB. */
 static void join_task(void *arg) {
-    int selected;
     (void)arg;
-    ESP_LOGI("desk", "wifi-join");
-    selected = net_wifi_select(&s_store, &s_active);
-    if (selected == 0) {
-        net_wifi_start(&s_active);
-        /* 16384 is also above the ~7680 internal ceiling. */
-        start_psram_task("poll", poll_task, DESK_POLL_STACK, 5, &s_poll_stack, &s_poll_tcb);
-    } else if (lock_lvgl()) {
-        publish_link();
-        if (selected < 0) {
-            ui_show_panel_note("SCAN FAILED", "Could not scan for Wi-Fi.");
-        } else {
-            ui_show_panel_note("NO NETWORK", "No saved network in range");
-        }
-        unlock_lvgl();
-    }
     for (;;) {
-        vTaskDelay(portMAX_DELAY);
+        int selected;
+        if (!s_join_go || xSemaphoreTake(s_join_go, portMAX_DELAY) != pdTRUE) {
+            continue;
+        }
+        ESP_LOGI("desk", "wifi-join");
+        selected = net_wifi_select(&s_store, &s_active);
+        if (selected == 0 && net_sta_enabled()) {
+            net_wifi_start(&s_active);
+            if (!s_poll_started) {
+                /* 16384 is also above the ~7680 internal ceiling. */
+                if (start_psram_task("poll", poll_task, DESK_POLL_STACK, 5, &s_poll_stack, &s_poll_tcb)) {
+                    s_poll_started = 1;
+                }
+            }
+        } else if (selected != 0 && net_sta_enabled() && lock_lvgl()) {
+            publish_link();
+            if (selected < 0) {
+                ui_show_panel_note("SCAN FAILED", "Could not scan for Wi-Fi.");
+            } else {
+                ui_show_panel_note("NO NETWORK", "No saved network in range");
+            }
+            unlock_lvgl();
+        }
+        s_join_busy = 0;
     }
+}
+
+static int ensure_join_task(void) {
+    if (s_join_task) {
+        return 1;
+    }
+    if (!s_join_go) {
+        s_join_go = xSemaphoreCreateBinary();
+    }
+    if (!s_join_go) {
+        ESP_LOGE("desk", "wifi-join signal missing");
+        return 0;
+    }
+    s_join_task = start_psram_task("wifi-join", join_task, DESK_WIFI_STACK, 4, &s_join_stack, &s_join_tcb);
+    return s_join_task != NULL;
+}
+
+/* 1 started, 0 nothing to do, -1 the task did not start.
+ * Safe to call while the LVGL lock is already held. */
+static int start_join(void) {
+    if (s_join_busy || s_poll_started || !net_sta_enabled() || s_store.count == 0) {
+        return 0;
+    }
+    if (!ensure_join_task()) {
+        return -1;
+    }
+    s_join_busy = 1;
+    if (xSemaphoreGive(s_join_go) != pdTRUE) {
+        s_join_busy = 0;
+        ESP_LOGE("desk", "wifi-join not signaled");
+        return -1;
+    }
+    return 1;
 }
 
 static void touch_read(lv_indev_t *indev, lv_indev_data_t *data) {
@@ -386,6 +440,23 @@ static void publish_link(void) {
     net_link_t link;
     net_link(&link);
     ui_set_link(link.has_ip, link.rssi, link.retries, link.gave_up);
+    ui_set_sta(net_sta_enabled());
+}
+
+static void on_sta(int on) {
+    net_sta_set_enabled(on);
+    s_failures = 0;
+    s_lamp_key = -1;
+    if (on && start_join() < 0) {
+        ui_show_panel_note("SCAN FAILED", "Could not scan for Wi-Fi.");
+    }
+    publish_link();
+    ui_set_sta(on);
+}
+
+static void on_bt(int on) {
+    ble_link_set_enabled(on);
+    ui_set_bt(on ? BLE_LINK_ADV : BLE_LINK_OFF);
 }
 
 static void on_rotlock(int locked) {
@@ -528,15 +599,19 @@ void app_main(void) {
      * A board with no saved network still scans from the glass and from BLE.
      * That scan calls esp_wifi_init if this prepare is skipped. */
     net_wifi_prepare();
+    if (lock_lvgl()) {
+        ui_bind_sta(net_sta_enabled(), on_sta);
+        ui_bind_bt(on_bt);
+        ui_set_bt(ble_link_enabled() ? BLE_LINK_ADV : BLE_LINK_OFF);
+        unlock_lvgl();
+    }
     ble_link_host_start();
     if (s_store.count == 0) {
         return;
     }
-    if (!start_psram_task("wifi-join", join_task, DESK_WIFI_STACK, 4, &s_join_stack, &s_join_tcb)) {
-        if (lock_lvgl()) {
-            publish_link();
-            ui_show_panel_note("SCAN FAILED", "Could not scan for Wi-Fi.");
-            unlock_lvgl();
-        }
+    if (start_join() < 0 && lock_lvgl()) {
+        publish_link();
+        ui_show_panel_note("SCAN FAILED", "Could not scan for Wi-Fi.");
+        unlock_lvgl();
     }
 }

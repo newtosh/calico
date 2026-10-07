@@ -36,6 +36,7 @@
         align-items: center;
         justify-content: space-between;
         position: relative;
+        z-index: 7;
         background: #0c0e09;
       }
       #lamp {
@@ -150,15 +151,79 @@
         color: #9bb57a;
         opacity: 1;
       }
-      #rotlock {
-        height: 28px;
-        min-width: 64px;
-        font-size: 16px;
-        padding: 0 8px;
+      #rot {
+        width: 16px;
+        height: 16px;
+        color: #efe7d6;
       }
-      #rotlock[aria-pressed="true"] {
-        border-color: #9bb57a;
+      #rot svg {
+        display: block;
+      }
+      #rot[data-state="auto"] .lock {
+        display: none;
+      }
+      #rot[data-state="lock"] .ring {
+        display: none;
+      }
+      #rot[data-state="lock"] {
+        color: #9bb57a;
+      }
+      #cc-scrim {
+        position: absolute;
+        inset: 0;
+        z-index: 5;
+        background: rgba(0, 0, 0, 0.47);
+      }
+      #cc-scrim[hidden] {
+        display: none;
+      }
+      #cc {
+        position: absolute;
+        z-index: 6;
+        left: 24px;
+        top: 48px;
+        box-sizing: border-box;
+        width: 432px;
+        height: 278px;
+        display: flex;
+        flex-wrap: wrap;
+        align-content: flex-start;
+        gap: 12px;
+        padding: 16px;
+        border: 3px solid #6d6756;
+        border-radius: 28px;
+        outline: 2px solid rgba(109, 103, 86, 0.16);
+        outline-offset: 1px;
+        background: rgba(12, 14, 9, 0.98);
+        transform: translateY(-278px);
+        touch-action: none;
+      }
+      #cc[hidden] {
+        display: none;
+      }
+      #cc button {
+        box-sizing: border-box;
+        width: 191px;
+        height: 72px;
+        margin: 0;
+        padding: 4px;
+        border-width: 2px;
+        border-radius: 16px;
+        background: #2a2d24;
+        font-size: 16px;
+        line-height: 1.1;
+      }
+      #cc button[aria-pressed="true"] {
         background: #3d4f32;
+        border-color: #9bb57a;
+      }
+      #cc button b,
+      #cc button small {
+        display: block;
+        font-weight: 400;
+      }
+      #cc button small {
+        color: #a39b88;
       }
       #face {
         flex: 1;
@@ -529,7 +594,7 @@
       #settings-screen {
         position: absolute;
         inset: 0;
-        z-index: 6;
+        z-index: 8;
         box-sizing: border-box;
         display: flex;
         flex-direction: column;
@@ -918,7 +983,15 @@
               <circle class="dot" cx="16.45" cy="7" r="1.15" fill="currentColor"/>
             </svg>
           </span>
-          <button id="rotlock" type="button" aria-pressed="false">Auto</button>
+          <span id="rot" data-state="auto" title="Rotation on">
+            <svg class="ring" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+              <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2"/>
+            </svg>
+            <svg class="lock" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+              <path d="M5 7 V5.5 a3 3 0 0 1 6 0 V7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <rect x="3.5" y="7" width="9" height="6.5" rx="1.5" fill="currentColor"/>
+            </svg>
+          </span>
         </div>
       </div>
       <div id="face">
@@ -960,6 +1033,14 @@
             </svg>
           </button>
         </div>
+      </div>
+      <div id="cc-scrim" hidden></div>
+      <div id="cc" hidden>
+        <button type="button" data-tile="wifi" aria-pressed="true">Wi-Fi<small>On</small></button>
+        <button type="button" data-tile="bt" aria-pressed="true">Bluetooth<small>On</small></button>
+        <button type="button" data-tile="rot" aria-pressed="false">Rotation<small>Auto</small></button>
+        <button type="button" data-tile="mic" aria-pressed="false">Mic<small>On</small></button>
+        <button type="button" data-tile="spk" aria-pressed="false">Speaker<small>On</small></button>
       </div>
       <div id="settings-screen" hidden>
         <div id="settings-head">
@@ -1004,7 +1085,10 @@
       const lamp = document.getElementById("lamp");
       const toast = document.getElementById("toast");
       const wifi = document.getElementById("wifi");
-      const rotlock = document.getElementById("rotlock");
+      const rot = document.getElementById("rot");
+      const ccScrim = document.getElementById("cc-scrim");
+      const ccSheet = document.getElementById("cc");
+      let staOn = true;
       const neutral = "#a39b88";
       let failures = 0;
       let statusSeen = "IDLE";
@@ -1101,7 +1185,7 @@
         const down = text === "link down" || text === "NO NETWORK" || text === "SCAN FAILED";
         const degraded = !down && (fail > 0 || text === "reconnecting");
         lamp.className = down ? "red" : degraded ? "amber" : "green";
-        wifi.dataset.bars = down ? "0" : degraded ? "1" : "3";
+        wifi.dataset.bars = !staOn || down ? "0" : degraded ? "1" : "3";
         showToast(text);
       }
 
@@ -1308,12 +1392,131 @@
         }
       }
 
-      rotlock.addEventListener("click", (event) => {
-        const locked = rotlock.getAttribute("aria-pressed") !== "true";
+      /* Matches firmware/main/control_center.h. */
+      const CC_GRAB = 48;
+      const CC_OPEN_DY = 64;
+      const CC_FLICK_DY = 28;
+      const CC_FLICK_MS = 320;
+      const CC_SLOP = 10;
+      const CC_PANEL_H = 278;
+      const CC_TRAVEL = CC_PANEL_H;
+      let ccOpen = false;
+      let ccReveal = 0;
+      let ccDrag = null;
+      let ccAte = false;
+      function ccPlace(reveal) {
+        ccReveal = Math.max(0, Math.min(CC_PANEL_H, reveal));
+        const shift = -CC_TRAVEL + (ccReveal * CC_TRAVEL) / CC_PANEL_H;
+        ccSheet.style.transform = "translateY(" + shift + "px)";
+        ccScrim.style.opacity = String(ccReveal / CC_PANEL_H);
+        const show = ccReveal > 0;
+        ccSheet.hidden = !show;
+        ccScrim.hidden = !show;
+      }
+      function ccSnap(open) {
+        ccOpen = open;
+        ccSheet.style.transition = "transform 220ms ease-out";
+        ccPlace(open ? CC_PANEL_H : 0);
+        window.setTimeout(() => {
+          ccSheet.style.transition = "";
+        }, 230);
+      }
+      function paintRot(locked) {
+        rot.dataset.state = locked ? "lock" : "auto";
+        rot.title = locked ? "Rotation locked" : "Rotation on";
+        const tile = ccSheet.querySelector('[data-tile="rot"]');
+        tile.setAttribute("aria-pressed", locked ? "true" : "false");
+        tile.querySelector("small").textContent = locked ? "Lock" : "Auto";
+      }
+      function ccPointerDown(event, kind) {
+        if (!settingsScreen.hidden) return;
+        if (event.button != null && event.button !== 0) return;
+        ccAte = false;
+        ccDrag = {
+          kind: kind,
+          y: event.clientY,
+          t: Date.now(),
+          base: ccReveal,
+          moved: false,
+        };
+        ccSheet.style.transition = "";
+      }
+      function ccPointerMove(event) {
+        if (!ccDrag) return;
+        const dy = event.clientY - ccDrag.y;
+        if (Math.abs(dy) >= CC_SLOP) ccDrag.moved = true;
+        if (ccDrag.kind === "grab" && !ccOpen) ccPlace(dy > 0 ? ccDrag.base + dy : ccDrag.base);
+        if (ccDrag.kind !== "grab" && ccOpen && dy < 0) ccPlace(ccDrag.base + dy);
+      }
+      function ccPointerUp(event) {
+        if (!ccDrag) return;
+        const dy = event.clientY - ccDrag.y;
+        const dt = Date.now() - ccDrag.t;
+        const flick = (dist) => dist >= CC_FLICK_DY && dt > 0 && dt <= CC_FLICK_MS;
+        const drag = ccDrag;
+        ccDrag = null;
+        if (drag.kind === "grab") {
+          if (!ccOpen) ccSnap(dy >= CC_OPEN_DY || flick(dy));
+          return;
+        }
+        if (!ccOpen) return;
+        const up = -dy;
+        if (up >= CC_OPEN_DY || flick(up)) {
+          ccSnap(false);
+          return;
+        }
+        if (drag.kind === "out") {
+          ccSnap(false);
+          return;
+        }
+        ccAte = drag.moved;
+        ccSnap(true);
+      }
+      function ccIgnore(event) {
+        if (!ccAte) return false;
+        ccAte = false;
+        event.preventDefault();
         event.stopPropagation();
-        rotlock.setAttribute("aria-pressed", locked ? "true" : "false");
-        rotlock.textContent = locked ? "Lock" : "Auto";
+        return true;
+      }
+      document.getElementById("bar").addEventListener("pointerdown", (event) => ccPointerDown(event, "grab"));
+      ccSheet.addEventListener("pointerdown", (event) => ccPointerDown(event, "panel"));
+      ccScrim.addEventListener("pointerdown", (event) => ccPointerDown(event, "out"));
+      window.addEventListener("pointermove", ccPointerMove);
+      window.addEventListener("pointerup", ccPointerUp);
+      ccSheet.querySelector('[data-tile="wifi"]').addEventListener("click", (event) => {
+        if (ccIgnore(event)) return;
+        const tile = event.currentTarget;
+        staOn = tile.getAttribute("aria-pressed") !== "true";
+        tile.setAttribute("aria-pressed", staOn ? "true" : "false");
+        tile.querySelector("small").textContent = staOn ? "On" : "Off";
+        paintLink(face, failures);
       });
+      ccSheet.querySelector('[data-tile="bt"]').addEventListener("click", (event) => {
+        if (ccIgnore(event)) return;
+        const tile = event.currentTarget;
+        const bt = document.getElementById("bt");
+        const on = tile.getAttribute("aria-pressed") !== "true";
+        tile.setAttribute("aria-pressed", on ? "true" : "false");
+        tile.querySelector("small").textContent = on ? "On" : "Off";
+        if (bt) {
+          bt.dataset.state = on ? "adv" : "off";
+          bt.title = on ? "Bluetooth advertising" : "Bluetooth off";
+        }
+      });
+      ccSheet.querySelector('[data-tile="rot"]').addEventListener("click", (event) => {
+        if (ccIgnore(event)) return;
+        paintRot(rot.dataset.state !== "lock");
+      });
+      ccSheet.querySelectorAll('[data-tile="mic"], [data-tile="spk"]').forEach((tile) => {
+        tile.addEventListener("click", (event) => {
+          if (ccIgnore(event)) return;
+          const muted = tile.getAttribute("aria-pressed") !== "true";
+          tile.setAttribute("aria-pressed", muted ? "true" : "false");
+          tile.querySelector("small").textContent = muted ? "Muted" : "On";
+        });
+      });
+      if (new URLSearchParams(location.search).get("cc") === "1") ccSnap(true);
       document.getElementById("mic").addEventListener("click", () => {
         message.textContent = "Voice not in this PoC";
       });
@@ -1322,6 +1525,7 @@
       const settingsSelected = document.getElementById("settings-selected");
       const ssidRow = document.getElementById("ssid-row");
       function openSettings() {
+        ccSnap(false);
         settingsScreen.hidden = false;
       }
       function closeSettings() {
@@ -1356,6 +1560,11 @@
         if (bt && Object.prototype.hasOwnProperty.call(btTitle, btState)) {
           bt.dataset.state = btState;
           bt.title = btTitle[btState];
+          if (btState === "off") {
+            const tile = ccSheet.querySelector('[data-tile="bt"]');
+            tile.setAttribute("aria-pressed", "false");
+            tile.querySelector("small").textContent = "Off";
+          }
         }
       }
       title.addEventListener("click", (event) => {

@@ -1,5 +1,6 @@
 #include "ui.h"
 
+#include "control_center.h"
 #include "desk_status.h"
 #include "face_cover.h"
 #include "icons.h"
@@ -132,6 +133,10 @@ _Static_assert(SHEET_INNER_NEAR_OPA > SHEET_INNER_FAR_OPA, "inner highlight is s
 _Static_assert(SHEET_MARK == MARK_PX * 5, "sheet mark is five times the list mark");
 _Static_assert(SHEET_OPA >= 248, "sheet stays opaque enough to hide roster type");
 _Static_assert((int)MESSAGE_Y == (int)FACE_MESSAGE_Y, "sleep origin");
+_Static_assert((int)CC_DOCK_TOP == (int)DOCK_TOP, "control center clears the dock");
+_Static_assert((int)CC_GRAB == (int)EDGE_PX + (int)BAR_H, "grab is the status strip");
+_Static_assert((int)CC_INSET == (int)SHEET_SAFE, "control center uses the case line");
+_Static_assert((int)CC_STROKE == (int)SHEET_BORDER, "control center stroke");
 
 static lv_obj_t *s_title;
 static lv_obj_t *s_message;
@@ -208,13 +213,40 @@ static lv_obj_t *s_zzz;
 static int s_asleep;
 static int s_face_asleep = -1;
 static int s_list_cover;
+static lv_obj_t *s_bar;
 static lv_obj_t *s_lamp;
 static lv_obj_t *s_toast_label;
 static lv_obj_t *s_wifi_bars[3];
 static lv_obj_t *s_bt_icon;
 static int s_bt_state;
-static lv_obj_t *s_lock;
-static lv_obj_t *s_lock_label;
+static lv_obj_t *s_rot_ring;
+static lv_obj_t *s_rot_lock;
+static lv_obj_t *s_cc_scrim;
+static lv_obj_t *s_cc_panel;
+static lv_obj_t *s_cc_grab;
+static lv_obj_t *s_cc_wifi;
+static lv_obj_t *s_cc_bt;
+static lv_obj_t *s_cc_rot;
+static lv_obj_t *s_cc_mic;
+static lv_obj_t *s_cc_spk;
+static lv_obj_t *s_cc_wifi_state;
+static lv_obj_t *s_cc_bt_state;
+static lv_obj_t *s_cc_rot_state;
+static lv_obj_t *s_cc_mic_state;
+static lv_obj_t *s_cc_spk_state;
+static lv_obj_t *s_cc_wifi_bars[3];
+static lv_obj_t *s_cc_bt_icon;
+static lv_obj_t *s_cc_rot_ring;
+static lv_obj_t *s_cc_rot_lock;
+static int s_cc_reveal;
+static int s_cc_press_y;
+static uint32_t s_cc_press_ms;
+static desk_cc_t s_cc;
+static int s_sta_on = 1;
+static int s_mic_mute;
+static int s_spk_mute;
+static ui_toggle_fn s_on_sta;
+static ui_toggle_fn s_on_bt;
 static lv_timer_t *s_toast_timer;
 static desk_toast_t s_toast_state;
 static ui_rotlock_fn s_on_rotlock;
@@ -1032,6 +1064,8 @@ static uint32_t sheet_color(const desk_agent_t *agent) {
     return DESK_MARK_NEUTRAL;
 }
 
+static void cc_front(void);
+
 static void sheet_front(void) {
     int i;
     /* Rings first, then the peeks, so a stack tab is not washed by the top glow. */
@@ -1052,6 +1086,7 @@ static void sheet_front(void) {
     if (s_settings && !lv_obj_has_flag(s_settings, LV_OBJ_FLAG_HIDDEN)) {
         lv_obj_move_foreground(s_settings);
     }
+    cc_front();
 }
 
 static void sheet_rise(void) {
@@ -1684,22 +1719,505 @@ static void build_sleep(lv_obj_t *screen) {
     lv_obj_set_hidden(s_sleep, true);
 }
 
-static void paint_rotlock(void) {
-    if (!s_lock || !s_lock_label) {
+static void paint_tile(lv_obj_t *tile, int on) {
+    lv_color_t bg = lv_color_hex(on ? ROW_ON : FIELD);
+    lv_color_t edge = lv_color_hex(on ? ROW_MARK : FIELD_EDGE);
+    if (!tile) {
         return;
     }
-    lv_label_set_text(s_lock_label, s_rot_locked ? "Lock" : "Auto");
-    lv_obj_set_style_bg_color(s_lock, lv_color_hex(s_rot_locked ? ROW_ON : 0x3a3d32), 0);
-    lv_obj_set_style_border_color(s_lock, lv_color_hex(s_rot_locked ? ROW_MARK : FIELD_EDGE), 0);
+    lv_obj_set_style_bg_color(tile, bg, 0);
+    lv_obj_set_style_bg_color(tile, bg, LV_STATE_PRESSED);
+    lv_obj_set_style_border_color(tile, edge, 0);
+    lv_obj_set_style_border_color(tile, edge, LV_STATE_PRESSED);
 }
 
-static void on_rotlock(lv_event_t *event) {
-    (void)event;
+static lv_obj_t *glyph_frame(lv_obj_t *parent, int w, int h) {
+    lv_obj_t *box = lv_obj_create(parent);
+    lv_obj_set_size(box, w, h);
+    flatten(box);
+    lv_obj_clear_flag(box, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    return box;
+}
+
+static lv_obj_t *ink_rect(lv_obj_t *parent, int w, int h, int radius, int fill) {
+    lv_obj_t *obj = lv_obj_create(parent);
+    lv_obj_set_size(obj, w, h);
+    lv_obj_set_style_radius(obj, radius, 0);
+    lv_obj_set_style_bg_color(obj, lv_color_hex(INK), 0);
+    lv_obj_set_style_bg_opa(obj, fill ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_color(obj, lv_color_hex(INK), 0);
+    lv_obj_set_style_border_width(obj, fill ? 0 : 2, 0);
+    lv_obj_set_style_pad_all(obj, 0, 0);
+    lv_obj_set_style_shadow_width(obj, 0, 0);
+    lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    return obj;
+}
+
+/* Ring while rotation may snap. Padlock while it is held. Not a button. */
+static lv_obj_t *make_rot_symbol(lv_obj_t *parent, int px, lv_obj_t **ring_out, lv_obj_t **lock_out) {
+    lv_obj_t *box = glyph_frame(parent, px, px);
+    lv_obj_t *ring = lv_obj_create(box);
+    lv_obj_t *lock = glyph_frame(box, px, px);
+    lv_obj_t *shackle;
+    lv_obj_t *body;
+    int shackle_w = px / 2;
+    int body_w = px - 4;
+    if (shackle_w < 6) {
+        shackle_w = 6;
+    }
+    if (body_w < 8) {
+        body_w = 8;
+    }
+    lv_obj_set_size(ring, px, px);
+    lv_obj_set_style_radius(ring, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(ring, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(ring, 2, 0);
+    lv_obj_set_style_border_color(ring, lv_color_hex(INK), 0);
+    lv_obj_set_style_pad_all(ring, 0, 0);
+    lv_obj_set_style_shadow_width(ring, 0, 0);
+    lv_obj_clear_flag(ring, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    shackle = lv_obj_create(lock);
+    lv_obj_set_size(shackle, shackle_w, px / 2);
+    lv_obj_align(shackle, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_set_style_radius(shackle, px / 4, 0);
+    lv_obj_set_style_bg_opa(shackle, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(shackle, 2, 0);
+    lv_obj_set_style_border_side(shackle,
+                                LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_LEFT | LV_BORDER_SIDE_RIGHT, 0);
+    lv_obj_set_style_border_color(shackle, lv_color_hex(ROW_MARK), 0);
+    lv_obj_set_style_pad_all(shackle, 0, 0);
+    lv_obj_set_style_shadow_width(shackle, 0, 0);
+    lv_obj_clear_flag(shackle, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    body = ink_rect(lock, body_w, px / 2, 2, 1);
+    lv_obj_set_style_bg_color(body, lv_color_hex(ROW_MARK), 0);
+    lv_obj_align(body, LV_ALIGN_BOTTOM_MID, 0, 0);
+    lv_obj_clear_flag(lock, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    if (ring_out) {
+        *ring_out = ring;
+    }
+    if (lock_out) {
+        *lock_out = lock;
+    }
+    return box;
+}
+
+static void cc_front(void) {
+    if (s_cc_scrim) {
+        lv_obj_move_foreground(s_cc_scrim);
+    }
+    if (s_cc_panel) {
+        lv_obj_move_foreground(s_cc_panel);
+    }
+    if (s_bar) {
+        lv_obj_move_foreground(s_bar);
+    }
+    if (s_cc_grab) {
+        lv_obj_move_foreground(s_cc_grab);
+    }
+    if (s_settings && !lv_obj_has_flag(s_settings, LV_OBJ_FLAG_HIDDEN)) {
+        lv_obj_move_foreground(s_settings);
+        if (s_keyboard && !lv_obj_has_flag(s_keyboard, LV_OBJ_FLAG_HIDDEN)) {
+            lv_obj_move_foreground(s_keyboard);
+        }
+    }
+}
+
+static void cc_place(int reveal) {
+    int y;
+    int was_hidden = 1;
+    if (reveal < 0) {
+        reveal = 0;
+    }
+    if (reveal > CC_PANEL_H) {
+        reveal = CC_PANEL_H;
+    }
+    s_cc_reveal = reveal;
+    y = (CC_OPEN_Y - CC_PANEL_H) + reveal;
+    if (s_cc_panel) {
+        was_hidden = lv_obj_has_flag(s_cc_panel, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_y(s_cc_panel, y);
+    }
+    if (!s_cc_scrim || !s_cc_panel) {
+        return;
+    }
+    if (reveal <= 0) {
+        lv_obj_add_flag(s_cc_scrim, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(s_cc_panel, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    lv_obj_clear_flag(s_cc_scrim, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_clear_flag(s_cc_panel, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_bg_opa(s_cc_scrim, (lv_opa_t)(reveal * 120 / CC_PANEL_H), 0);
+    if (was_hidden) {
+        cc_front();
+    }
+}
+
+static void cc_anim_exec(void *obj, int32_t value) {
+    (void)obj;
+    cc_place((int)value);
+}
+
+static void cc_animate(int to) {
+    lv_anim_t anim;
+    if (!s_cc_panel || s_cc_reveal == to) {
+        cc_place(to);
+        return;
+    }
+    anim_delete(s_cc_panel);
+    lv_anim_init(&anim);
+    lv_anim_set_var(&anim, s_cc_panel);
+    lv_anim_set_exec_cb(&anim, cc_anim_exec);
+    lv_anim_set_values(&anim, s_cc_reveal, to);
+    lv_anim_set_duration(&anim, 220);
+    lv_anim_set_path_cb(&anim, lv_anim_path_ease_out);
+    lv_anim_start(&anim);
+}
+
+static void cc_close_now(void) {
+    desk_cc_init(&s_cc);
+    if (s_cc_panel) {
+        anim_delete(s_cc_panel);
+    }
+    cc_place(0);
+}
+
+static int cc_read_point(lv_point_t *point) {
+    lv_indev_t *indev;
+#if LVGL_VERSION_MAJOR == 9 && LVGL_VERSION_MINOR < 3
+    indev = lv_indev_get_act();
+#else
+    indev = lv_indev_active();
+#endif
+    if (!indev) {
+        return 0;
+    }
+    lv_indev_get_point(indev, point);
+    return 1;
+}
+
+static void on_cc(lv_event_t *event) {
+    lv_point_t point;
+    lv_event_code_t code = lv_event_get_code(event);
+    int kind = (int)(intptr_t)lv_event_get_user_data(event);
+    int pressed;
+    int dy = 0;
+    int dt = 0;
+    int decision;
+    if (code != LV_EVENT_PRESSED && code != LV_EVENT_PRESSING && code != LV_EVENT_RELEASED) {
+        return;
+    }
+    if (ui_settings_is_open()) {
+        return;
+    }
+    if (!cc_read_point(&point)) {
+        return;
+    }
+    pressed = code != LV_EVENT_RELEASED;
+    if (pressed && !s_cc.down) {
+        s_cc_press_y = point.y;
+        s_cc_press_ms = lv_tick_get();
+    }
+    dy = point.y - s_cc_press_y;
+    if (!pressed) {
+        dt = (int)(lv_tick_get() - s_cc_press_ms);
+    }
+    decision = desk_cc_pointer(&s_cc, pressed, kind == 1, kind == 2, kind == 3, dy, dt, s_cc_reveal);
+    if (pressed) {
+        if (s_cc_panel) {
+            anim_delete(s_cc_panel);
+        }
+        cc_place(desk_cc_reveal(&s_cc));
+        return;
+    }
+    if (decision == DESK_CC_NONE && desk_cc_reveal(&s_cc) == s_cc_reveal) {
+        return;
+    }
+    cc_animate(desk_cc_reveal(&s_cc));
+}
+
+static void bind_cc(lv_obj_t *obj, int kind) {
+    void *user = (void *)(intptr_t)kind;
+    lv_obj_add_event_cb(obj, on_cc, LV_EVENT_PRESSED, user);
+    lv_obj_add_event_cb(obj, on_cc, LV_EVENT_PRESSING, user);
+    lv_obj_add_event_cb(obj, on_cc, LV_EVENT_RELEASED, user);
+}
+
+static void paint_cc_sta(void) {
+    int i;
+    if (s_cc_wifi) {
+        paint_tile(s_cc_wifi, s_sta_on);
+    }
+    if (s_cc_wifi_state) {
+        lv_label_set_text(s_cc_wifi_state, s_sta_on ? "On" : "Off");
+    }
+    for (i = 0; i < 3; i++) {
+        if (!s_cc_wifi_bars[i]) {
+            continue;
+        }
+        lv_obj_set_style_bg_opa(s_cc_wifi_bars[i], s_sta_on ? LV_OPA_COVER : LV_OPA_30, 0);
+    }
+}
+
+static void paint_cc_bt(void) {
+    int on = s_bt_state != 0;
+    uint32_t color = INK_DIM;
+    if (s_cc_bt) {
+        paint_tile(s_cc_bt, on);
+    }
+    if (s_bt_state == 2) {
+        color = ROW_MARK;
+    } else if (on) {
+        color = INK;
+    }
+    if (s_cc_bt_icon) {
+        lv_image_set_src(s_cc_bt_icon, on ? &desk_icon_bt_on : &desk_icon_bt);
+        lv_obj_set_style_image_recolor(s_cc_bt_icon, lv_color_hex(color), 0);
+        lv_obj_set_style_image_recolor_opa(s_cc_bt_icon, LV_OPA_COVER, 0);
+        lv_obj_set_style_opa(s_cc_bt_icon, on ? LV_OPA_COVER : LV_OPA_40, 0);
+    }
+    if (s_cc_bt_state) {
+        lv_label_set_text(s_cc_bt_state, on ? "On" : "Off");
+    }
+}
+
+static void paint_cc_mute(void) {
+    if (s_cc_mic) {
+        paint_tile(s_cc_mic, s_mic_mute);
+    }
+    if (s_cc_mic_state) {
+        lv_label_set_text(s_cc_mic_state, s_mic_mute ? "Muted" : "On");
+    }
+    if (s_cc_spk) {
+        paint_tile(s_cc_spk, s_spk_mute);
+    }
+    if (s_cc_spk_state) {
+        lv_label_set_text(s_cc_spk_state, s_spk_mute ? "Muted" : "On");
+    }
+}
+
+static void paint_rotlock(void) {
+    if (s_rot_ring) {
+        lv_obj_set_hidden(s_rot_ring, s_rot_locked ? true : false);
+    }
+    if (s_rot_lock) {
+        lv_obj_set_hidden(s_rot_lock, s_rot_locked ? false : true);
+    }
+    if (s_cc_rot_ring) {
+        lv_obj_set_hidden(s_cc_rot_ring, s_rot_locked ? true : false);
+    }
+    if (s_cc_rot_lock) {
+        lv_obj_set_hidden(s_cc_rot_lock, s_rot_locked ? false : true);
+    }
+    if (s_cc_rot) {
+        paint_tile(s_cc_rot, s_rot_locked);
+    }
+    if (s_cc_rot_state) {
+        lv_label_set_text(s_cc_rot_state, s_rot_locked ? "Lock" : "Auto");
+    }
+}
+
+static void on_cc_sta(lv_event_t *event) {
+    if (lv_event_get_code(event) != LV_EVENT_CLICKED || desk_cc_ate_click(&s_cc)) {
+        return;
+    }
+    s_sta_on = !s_sta_on;
+    paint_cc_sta();
+    if (s_on_sta) {
+        s_on_sta(s_sta_on);
+    }
+}
+
+static void on_cc_bt(lv_event_t *event) {
+    if (lv_event_get_code(event) != LV_EVENT_CLICKED || desk_cc_ate_click(&s_cc)) {
+        return;
+    }
+    if (s_on_bt) {
+        s_on_bt(s_bt_state == 0);
+    }
+}
+
+static void on_cc_rot(lv_event_t *event) {
+    if (lv_event_get_code(event) != LV_EVENT_CLICKED || desk_cc_ate_click(&s_cc)) {
+        return;
+    }
     s_rot_locked = !s_rot_locked;
     paint_rotlock();
     if (s_on_rotlock) {
         s_on_rotlock(s_rot_locked);
     }
+}
+
+static void on_cc_mic(lv_event_t *event) {
+    if (lv_event_get_code(event) != LV_EVENT_CLICKED || desk_cc_ate_click(&s_cc)) {
+        return;
+    }
+    /* TODO: no mic codec on this board. The tile only flips its glass. */
+    s_mic_mute = !s_mic_mute;
+    paint_cc_mute();
+}
+
+static void on_cc_spk(lv_event_t *event) {
+    if (lv_event_get_code(event) != LV_EVENT_CLICKED || desk_cc_ate_click(&s_cc)) {
+        return;
+    }
+    /* TODO: no speaker path on this board. The tile only flips its glass. */
+    s_spk_mute = !s_spk_mute;
+    paint_cc_mute();
+}
+
+static lv_obj_t *cc_row(lv_obj_t *panel) {
+    lv_obj_t *row = lv_obj_create(panel);
+    lv_obj_set_width(row, lv_pct(100));
+    lv_obj_set_height(row, CC_TILE_H);
+    lv_obj_set_flex_flow(row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_pad_column(row, CC_GAP, 0);
+    flatten(row);
+    lv_obj_set_style_pad_column(row, CC_GAP, 0);
+    lv_obj_clear_flag(row, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(row, LV_OBJ_FLAG_EVENT_BUBBLE);
+    return row;
+}
+
+static lv_obj_t *cc_tile(lv_obj_t *row, lv_event_cb_t cb) {
+    lv_obj_t *tile = lv_button_create(row);
+    lv_obj_set_size(tile, CC_TILE_W, CC_TILE_H);
+    lv_obj_set_flex_flow(tile, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(tile, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(tile, 4, 0);
+    lv_obj_set_style_pad_row(tile, 0, 0);
+    lv_obj_set_style_radius(tile, SET_CARD_R, 0);
+    lv_obj_set_style_border_width(tile, 2, 0);
+    lv_obj_set_style_border_side(tile, LV_BORDER_SIDE_FULL, 0);
+    lv_obj_set_style_shadow_width(tile, 0, 0);
+    lv_obj_set_style_bg_opa(tile, LV_OPA_COVER, 0);
+    lv_obj_clear_flag(tile, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(tile, LV_OBJ_FLAG_EVENT_BUBBLE);
+    lv_obj_add_event_cb(tile, cb, LV_EVENT_CLICKED, NULL);
+    paint_tile(tile, 0);
+    return tile;
+}
+
+static void cc_caption(lv_obj_t *tile, const char *name, lv_obj_t **state_out) {
+    lv_obj_t *label = lv_label_create(tile);
+    lv_obj_t *state = lv_label_create(tile);
+    lv_label_set_text(label, name);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(INK), 0);
+    lv_obj_clear_flag(label, LV_OBJ_FLAG_CLICKABLE);
+    lv_label_set_text(state, "Off");
+    lv_obj_set_style_text_font(state, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(state, lv_color_hex(INK_DIM), 0);
+    lv_obj_clear_flag(state, LV_OBJ_FLAG_CLICKABLE);
+    if (state_out) {
+        *state_out = state;
+    }
+}
+
+static void cc_wifi_glyph(lv_obj_t *tile) {
+    lv_obj_t *box = glyph_frame(tile, 16, 14);
+    static const int heights[3] = {6, 10, 14};
+    int i;
+    for (i = 0; i < 3; i++) {
+        s_cc_wifi_bars[i] = ink_rect(box, 4, heights[i], 1, 1);
+        lv_obj_align(s_cc_wifi_bars[i], LV_ALIGN_BOTTOM_LEFT, i * 6, 0);
+    }
+}
+
+static void cc_mic_glyph(lv_obj_t *tile) {
+    lv_obj_t *box = glyph_frame(tile, 22, 18);
+    lv_obj_t *capsule = ink_rect(box, 8, 12, LV_RADIUS_CIRCLE, 0);
+    lv_obj_t *stem = ink_rect(box, 2, 4, 1, 1);
+    lv_obj_t *base = ink_rect(box, 10, 2, 1, 1);
+    lv_obj_align(capsule, LV_ALIGN_TOP_MID, 0, 0);
+    lv_obj_align(stem, LV_ALIGN_BOTTOM_MID, 0, -2);
+    lv_obj_align(base, LV_ALIGN_BOTTOM_MID, 0, 0);
+}
+
+static void cc_spk_glyph(lv_obj_t *tile) {
+    lv_obj_t *box = glyph_frame(tile, 22, 16);
+    lv_obj_t *body = ink_rect(box, 7, 10, 2, 1);
+    lv_obj_t *near = ink_rect(box, 2, 8, 1, 1);
+    lv_obj_t *far = ink_rect(box, 2, 12, 1, 1);
+    lv_obj_align(body, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_align(near, LV_ALIGN_LEFT_MID, 10, 0);
+    lv_obj_align(far, LV_ALIGN_LEFT_MID, 15, 0);
+}
+
+static void build_control_center(lv_obj_t *screen) {
+    lv_obj_t *row;
+    desk_cc_init(&s_cc);
+    s_cc_scrim = lv_obj_create(screen);
+    lv_obj_set_size(s_cc_scrim, SCREEN_PX, SCREEN_PX);
+    lv_obj_set_pos(s_cc_scrim, 0, 0);
+    lv_obj_set_style_bg_color(s_cc_scrim, lv_color_hex(0), 0);
+    lv_obj_set_style_bg_opa(s_cc_scrim, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_cc_scrim, 0, 0);
+    lv_obj_set_style_radius(s_cc_scrim, 0, 0);
+    lv_obj_set_style_pad_all(s_cc_scrim, 0, 0);
+    lv_obj_set_style_shadow_width(s_cc_scrim, 0, 0);
+    lv_obj_clear_flag(s_cc_scrim, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(s_cc_scrim, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_HIDDEN);
+    bind_cc(s_cc_scrim, 3);
+
+    s_cc_panel = lv_obj_create(screen);
+    lv_obj_set_size(s_cc_panel, CC_PANEL_W, CC_PANEL_H);
+    lv_obj_set_x(s_cc_panel, CC_INSET);
+    lv_obj_set_style_bg_color(s_cc_panel, lv_color_hex(DOCK), 0);
+    lv_obj_set_style_bg_opa(s_cc_panel, SHEET_OPA, 0);
+    lv_obj_set_style_border_color(s_cc_panel, lv_color_hex(FIELD_EDGE), 0);
+    lv_obj_set_style_border_width(s_cc_panel, CC_STROKE, 0);
+    lv_obj_set_style_border_side(s_cc_panel, LV_BORDER_SIDE_FULL, 0);
+    lv_obj_set_style_radius(s_cc_panel, CC_RADIUS, 0);
+    lv_obj_set_style_outline_width(s_cc_panel, SET_GLOW, 0);
+    lv_obj_set_style_outline_color(s_cc_panel, lv_color_hex(FIELD_EDGE), 0);
+    lv_obj_set_style_outline_opa(s_cc_panel, 40, 0);
+    lv_obj_set_style_outline_pad(s_cc_panel, SET_OUTLINE_PAD, 0);
+    lv_obj_set_style_shadow_width(s_cc_panel, 0, 0);
+    lv_obj_set_style_pad_all(s_cc_panel, CC_PAD, 0);
+    lv_obj_set_style_pad_row(s_cc_panel, CC_GAP, 0);
+    lv_obj_set_flex_flow(s_cc_panel, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(s_cc_panel, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+    lv_obj_clear_flag(s_cc_panel, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(s_cc_panel, LV_OBJ_FLAG_CLICKABLE);
+    bind_cc(s_cc_panel, 2);
+
+    row = cc_row(s_cc_panel);
+    s_cc_wifi = cc_tile(row, on_cc_sta);
+    cc_wifi_glyph(s_cc_wifi);
+    cc_caption(s_cc_wifi, "Wi-Fi", &s_cc_wifi_state);
+    s_cc_bt = cc_tile(row, on_cc_bt);
+    s_cc_bt_icon = lv_image_create(s_cc_bt);
+    lv_obj_clear_flag(s_cc_bt_icon, LV_OBJ_FLAG_CLICKABLE);
+    cc_caption(s_cc_bt, "Bluetooth", &s_cc_bt_state);
+
+    row = cc_row(s_cc_panel);
+    s_cc_rot = cc_tile(row, on_cc_rot);
+    make_rot_symbol(s_cc_rot, 16, &s_cc_rot_ring, &s_cc_rot_lock);
+    cc_caption(s_cc_rot, "Rotation", &s_cc_rot_state);
+    s_cc_mic = cc_tile(row, on_cc_mic);
+    cc_mic_glyph(s_cc_mic);
+    cc_caption(s_cc_mic, "Mic", &s_cc_mic_state);
+
+    row = cc_row(s_cc_panel);
+    s_cc_spk = cc_tile(row, on_cc_spk);
+    cc_spk_glyph(s_cc_spk);
+    cc_caption(s_cc_spk, "Speaker", &s_cc_spk_state);
+
+    s_cc_grab = lv_obj_create(screen);
+    lv_obj_set_size(s_cc_grab, SCREEN_PX, CC_GRAB);
+    lv_obj_set_pos(s_cc_grab, 0, 0);
+    flatten(s_cc_grab);
+    lv_obj_add_flag(s_cc_grab, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_clear_flag(s_cc_grab, LV_OBJ_FLAG_SCROLLABLE);
+    bind_cc(s_cc_grab, 1);
+
+    paint_cc_sta();
+    paint_cc_bt();
+    paint_cc_mute();
+    paint_rotlock();
+    cc_place(0);
+    cc_front();
 }
 
 static void toast_apply(int opacity, int shift) {
@@ -1758,6 +2276,7 @@ static void paint_bt(void) {
     lv_obj_set_style_image_recolor(s_bt_icon, lv_color_hex(color), 0);
     lv_obj_set_style_image_recolor_opa(s_bt_icon, LV_OPA_COVER, 0);
     lv_obj_set_style_opa(s_bt_icon, on ? LV_OPA_COVER : LV_OPA_40, 0);
+    paint_cc_bt();
 }
 
 static void paint_bars(int bars) {
@@ -1810,6 +2329,7 @@ static void build_status_bar(lv_obj_t *screen) {
     lv_obj_t *bar;
     static const int heights[3] = {6, 10, 14};
     bar = lv_obj_create(screen);
+    s_bar = bar;
     /* Strip meets the glass. Lamp and labels stay inside the 16px bezel. */
     lv_obj_set_size(bar, SCREEN_PX, EDGE_PX + BAR_H);
     lv_obj_align(bar, LV_ALIGN_TOP_MID, 0, 0);
@@ -1872,18 +2392,7 @@ static void build_status_bar(lv_obj_t *screen) {
     lv_obj_clear_flag(s_bt_icon, LV_OBJ_FLAG_CLICKABLE);
     paint_bt();
 
-    s_lock = lv_button_create(cluster);
-    s_lock_label = lv_label_create(s_lock);
-    lv_obj_set_size(s_lock, 64, 28);
-    lv_obj_set_style_bg_opa(s_lock, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(s_lock, 1, 0);
-    lv_obj_set_style_radius(s_lock, 6, 0);
-    lv_obj_set_style_shadow_width(s_lock, 0, 0);
-    lv_obj_set_style_pad_hor(s_lock, 6, 0);
-    lv_obj_set_style_text_font(s_lock_label, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_color(s_lock_label, lv_color_hex(INK), 0);
-    lv_obj_center(s_lock_label);
-    lv_obj_add_event_cb(s_lock, on_rotlock, LV_EVENT_CLICKED, NULL);
+    make_rot_symbol(cluster, 16, &s_rot_ring, &s_rot_lock);
     paint_rotlock();
     paint_bars(0);
 }
@@ -2266,6 +2775,7 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     lv_obj_set_hidden(s_keyboard, true);
     lv_obj_add_event_cb(s_keyboard, on_keyboard, LV_EVENT_READY, NULL);
     lv_obj_add_event_cb(s_keyboard, on_keyboard, LV_EVENT_CANCEL, NULL);
+    build_control_center(screen);
     layout_settings();
     ui_apply(&blank, 0);
 }
@@ -2278,6 +2788,29 @@ void ui_bind_rotlock(int locked, ui_rotlock_fn on_toggle) {
     s_rot_locked = locked ? 1 : 0;
     s_on_rotlock = on_toggle;
     paint_rotlock();
+}
+
+void ui_bind_sta(int on, ui_toggle_fn on_toggle) {
+    s_on_sta = on_toggle;
+    ui_set_sta(on);
+}
+
+void ui_bind_bt(ui_toggle_fn on_toggle) {
+    s_on_bt = on_toggle;
+}
+
+void ui_set_sta(int on) {
+    s_sta_on = on ? 1 : 0;
+    if (!s_sta_on) {
+        s_fail_count = 0;
+        s_wifi_ip = 0;
+        s_wifi_retries = 0;
+        s_wifi_gave_up = 0;
+        if (s_lamp) {
+            present_status(s_phase_text[0] ? s_phase_text : "IDLE", 0);
+        }
+    }
+    paint_cc_sta();
 }
 
 void ui_set_bt(int state) {
@@ -2303,6 +2836,7 @@ int ui_settings_is_open(void) {
 }
 
 void ui_open_settings(void) {
+    cc_close_now();
     sleep_stop();
     lv_obj_set_hidden(s_settings, false);
     lv_obj_move_foreground(s_settings);

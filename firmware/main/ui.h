@@ -6,11 +6,15 @@
 typedef void (*ui_save_fn)(const char *ssid, const char *pass, const char *url, const char *token);
 typedef void (*ui_scan_fn)(void);
 typedef void (*ui_rotlock_fn)(int locked);
+typedef void (*ui_toggle_fn)(int on);
 
 /* agent_id NULL clears every waiting sheet. A name clears that one. */
 void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_scan_fn on_scan);
 void ui_bind_unread(void (*on_clear)(void));
 void ui_bind_rotlock(int locked, ui_rotlock_fn on_toggle);
+void ui_bind_sta(int on, ui_toggle_fn on_toggle);
+void ui_bind_bt(ui_toggle_fn on_toggle);
+void ui_set_sta(int on);
 void ui_set_link(int has_ip, int rssi, int retries, int gave_up);
 /* 0 dim rune, 1 advertising, 2 connected. Live states draw the dotted mark. */
 void ui_set_bt(int state);
