@@ -29,6 +29,9 @@ CONFIG_LV_USE_SNAPSHOT=y
 # not allocate another copy, and the pin is small enough that the STA
 # can still take this pool. Two 50-line stripes left only 29KB. 512 stops
 # ordinary mallocs under 16KB from spending the reserve.
+# ui.c sets this to 0 only while it builds the Control Center sheet and the
+# rotation glyph. Those objects were the bytes missing from 10 RX buffers.
+# The cut is restored before NimBLE and esp_wifi_init.
 CONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=65536
 CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=512
 # Dynamic Wi-Fi buffers are internal. RX stays at the static RX count (10).

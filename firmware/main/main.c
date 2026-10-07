@@ -596,6 +596,8 @@ void app_main(void) {
      * The host task (6144) is the internal stack. wifi-join is PSRAM and
      * starts after the host, so it does not take the STA's RX buffers.
      * Starting an internal stack first is what left the STA with 3 of 10.
+     * 04536e1 did it again: the Control Center sheet is LVGL mallocs on the
+     * 512-byte cut. ui.c builds that sheet in PSRAM. The RX count stays 10.
      * A board with no saved network still scans from the glass and from BLE.
      * That scan calls esp_wifi_init if this prepare is skipped. */
     net_wifi_prepare();

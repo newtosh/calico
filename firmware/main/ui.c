@@ -1753,6 +1753,20 @@ static lv_obj_t *ink_rect(lv_obj_t *parent, int w, int h, int radius, int fill) 
     return obj;
 }
 
+/* 04536e1 built the sheet and this glyph with mallocs at or under 512 bytes,
+ * so they came out of the internal DMA block. esp_wifi_init then logged
+ * "Expected to init 10 rx buffer, actual is 7" and aborted in wifi_bringup
+ * (ESP_ERR_NO_MEM). Limit 0 sends the next objects to PSRAM. psram_objects_end
+ * puts CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL back. NimBLE and the STA still
+ * need that cut. Do not grow the stripe and do not drop the RX count. */
+static void psram_objects_begin(void) {
+    heap_caps_malloc_extmem_enable(0);
+}
+
+static void psram_objects_end(void) {
+    heap_caps_malloc_extmem_enable(CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL);
+}
+
 /* Ring while rotation may snap. Padlock while it is held. Not a button. */
 static lv_obj_t *make_rot_symbol(lv_obj_t *parent, int px, lv_obj_t **ring_out, lv_obj_t **lock_out) {
     lv_obj_t *box = glyph_frame(parent, px, px);
@@ -2392,7 +2406,9 @@ static void build_status_bar(lv_obj_t *screen) {
     lv_obj_clear_flag(s_bt_icon, LV_OBJ_FLAG_CLICKABLE);
     paint_bt();
 
+    psram_objects_begin();
     make_rot_symbol(cluster, 16, &s_rot_ring, &s_rot_lock);
+    psram_objects_end();
     paint_rotlock();
     paint_bars(0);
 }
@@ -2775,7 +2791,9 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     lv_obj_set_hidden(s_keyboard, true);
     lv_obj_add_event_cb(s_keyboard, on_keyboard, LV_EVENT_READY, NULL);
     lv_obj_add_event_cb(s_keyboard, on_keyboard, LV_EVENT_CANCEL, NULL);
+    psram_objects_begin();
     build_control_center(screen);
+    psram_objects_end();
     layout_settings();
     ui_apply(&blank, 0);
 }
