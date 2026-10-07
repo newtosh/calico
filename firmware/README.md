@@ -31,7 +31,9 @@ idf.py -p /dev/ttyACM0 app-flash
 
 `app-flash` writes the application only. It does not erase flash and it does not rewrite the NVS partition. Do not erase.
 
-On first boot no network is saved, so the settings screen is up and scans for networks. Tap a row to select an SSID (Scan repeats the scan). Password, a companion URL for that network, and a bearer token for that network are labeled fields under the list. Type SSID is only for a hidden network. Saving adds that network to the known list (up to 8) and restarts. It does not erase the others. The default companion URL is `http://192.168.4.30:8787`. A network with no URL of its own uses the global URL, then that default.
+On first boot no network is saved, so the settings screen is up and scans for networks. Tap a row to select an SSID (Scan repeats the scan). Password sits under that list. The companion URL and bearer token for that network are in the Companion card. Type SSID is only for a hidden network. Saving adds that network to the known list (up to 8) and restarts. It does not erase the others. The default companion URL is `http://192.168.4.30:8787`. A network with no URL of its own uses the global URL, then that default.
+
+The settings page is the dock glass, `#0c0e09`. Copy sits 24px in from the panel, the same case line as the dock (16px bezel plus 8px), with another 3px so the card outline lands on that line. Wi-Fi and Companion are separate cards on `#14160f`. Each card has a 3px `#6d6756` stroke on every side and a 2px outline at 40/255. There is no bottom rim. The title is Montserrat 28. Fields, network rows, and buttons are 48px tall with Montserrat 20. Section labels, the scan status, and field labels are Montserrat 16. The status sits on the Wi-Fi row. Done stays in the header. Scan sits beside Type SSID under the list. A selected network is `#3d4f32` with a 2px `#9bb57a` stroke on every side. The scan list is two rows until the keyboard is up, then one row, so the password and the field being edited stay in reach. More networks scroll inside the list. The keyboard is inset 24px. The settings glass stays full-screen behind it.
 
 At boot the panel scans and joins whichever saved SSID is actually in range. If more than one is in range, it uses the strongest RSSI. A saved SSID that does not show up in the broadcast scan is probed once, so a hidden network typed by hand can still be joined. If none of the saved networks are in range, the panel shows `NO NETWORK` / `No saved network in range` and does not keep retrying one missing SSID. Association of the network it did pick still stops after 10 disconnects.
 
@@ -129,9 +131,11 @@ gcc -Wall -Werror -I firmware/main firmware/host/test_face_cover.c firmware/main
 /tmp/test_face_cover
 gcc -Wall -Werror -I firmware/main firmware/host/test_dma_stripe.c -o /tmp/test_dma_stripe
 /tmp/test_dma_stripe
+gcc -Wall -Werror -I firmware/main firmware/host/test_settings_layout.c -o /tmp/test_settings_layout
+/tmp/test_settings_layout
 ```
 
-Open `firmware/simulator/index.html` in a browser. It polls `http://127.0.0.1:8787` unless you pass `?base=http://192.168.1.20:8787`. Wheel or drag scrolls the agent list inside the face. The bar and the dock stay fixed. A needs-you status raises the sheet over the list and the dock. The bar stays. A downward swipe, or a tap, dismisses the card on screen. A second needs-you while that card is up stacks on top. Swipe left and right to move through the stack. `Dismiss all` clears every waiting card. Two rapid posts that exercise it are in [docs/grok-bot-integration.md](../docs/grok-bot-integration.md).
+Open `firmware/simulator/index.html` in a browser. It polls `http://127.0.0.1:8787` unless you pass `?base=http://192.168.1.20:8787`. `?settings=1` opens settings. The settings button does the same, and Done closes it. Wheel or drag scrolls the agent list inside the face. The bar and the dock stay fixed. A needs-you status raises the sheet over the list and the dock. The bar stays. A downward swipe, or a tap, dismisses the card on screen. A second needs-you while that card is up stacks on top. Swipe left and right to move through the stack. `Dismiss all` clears every waiting card. Two rapid posts that exercise it are in [docs/grok-bot-integration.md](../docs/grok-bot-integration.md).
 
 ## If `idf.py` is missing
 

@@ -510,6 +510,159 @@
         padding: 8px 14px;
         font: inherit;
       }
+      #settings-screen {
+        position: absolute;
+        inset: 0;
+        z-index: 6;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 24px;
+        background: #0c0e09;
+        color: #efe7d6;
+        font-family: Montserrat, ui-sans-serif, system-ui, sans-serif;
+      }
+      #settings-screen[hidden] {
+        display: none;
+      }
+      #settings-screen button {
+        box-sizing: border-box;
+        padding: 0 12px;
+      }
+      #settings-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 56px;
+        flex: none;
+        padding: 0 3px;
+      }
+      #settings-head h2 {
+        margin: 0;
+        font-size: 28px;
+        font-weight: 400;
+        line-height: 1;
+      }
+      #settings-done {
+        width: 104px;
+        height: 48px;
+        border-radius: 999px;
+        background: #3a3d32;
+        border: 1px solid #6d6756;
+        font-size: 20px;
+      }
+      #settings-body {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 0 3px;
+      }
+      #settings-screen .section-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      #settings-status {
+        margin: 0;
+        min-width: 0;
+        font-size: 16px;
+        line-height: 1.2;
+        color: #a39b88;
+        text-align: right;
+      }
+      #settings-selected {
+        margin: 0;
+        font-size: 20px;
+        line-height: 1.2;
+        color: #efe7d6;
+      }
+      #settings-screen h3 {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 400;
+        color: #a39b88;
+      }
+      #settings-screen .card {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 8px;
+        background: #14160f;
+        border: 3px solid #6d6756;
+        border-radius: 16px;
+        outline: 2px solid rgba(109, 103, 86, 0.16);
+        outline-offset: 1px;
+      }
+      #settings-screen .nets {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        height: 102px;
+        overflow: auto;
+      }
+      #settings-screen .nets button {
+        width: 100%;
+        height: 48px;
+        padding: 0 12px;
+        text-align: left;
+        font-size: 20px;
+        border-radius: 12px;
+        background: #2a2d24;
+        border: 2px solid transparent;
+      }
+      #settings-screen .nets button.on {
+        background: #3d4f32;
+        border-color: #9bb57a;
+      }
+      #settings-screen label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 16px;
+        color: #a39b88;
+      }
+      #settings-screen input {
+        height: 48px;
+        box-sizing: border-box;
+        padding: 8px 12px;
+        border-radius: 12px;
+        border: 1px solid #6d6756;
+        background: #2a2d24;
+        color: #efe7d6;
+        font-size: 20px;
+      }
+      #settings-screen .pair {
+        display: flex;
+        gap: 8px;
+      }
+      #settings-screen .pair button {
+        flex: 1;
+        height: 48px;
+        font-size: 20px;
+        border-radius: 12px;
+        background: #3a3d32;
+        border: 1px solid #6d6756;
+      }
+      #settings-save {
+        height: 48px;
+        flex: none;
+        border-radius: 999px;
+        background: #527044;
+        border: 3px solid #9bb57a;
+        color: #efe7d6;
+        font-size: 20px;
+      }
+      #ssid-row[hidden] {
+        display: none;
+      }
       .peek {
         position: absolute;
         z-index: 3;
@@ -784,6 +937,38 @@
               <circle cx="12" cy="12" r="3" />
             </svg>
           </button>
+        </div>
+      </div>
+      <div id="settings-screen" hidden>
+        <div id="settings-head">
+          <h2>Settings</h2>
+          <button id="settings-done" type="button">Done</button>
+        </div>
+        <div id="settings-body">
+          <div class="section-head">
+            <h3>Wi-Fi</h3>
+            <p id="settings-status">3 networks</p>
+          </div>
+          <div class="card">
+            <ul class="nets">
+              <li><button type="button" class="on">Home   -42</button></li>
+              <li><button type="button">Lab   -61</button></li>
+              <li><button type="button">Guest   -74</button></li>
+            </ul>
+            <p id="settings-selected">Selected: Home</p>
+            <label>Password<input type="password" placeholder="Wi-Fi password" autocomplete="off" /></label>
+            <div class="pair">
+              <button id="settings-scan" type="button">Scan</button>
+              <button id="settings-manual" type="button">Type SSID</button>
+            </div>
+            <label id="ssid-row" hidden>SSID<input id="settings-ssid" placeholder="Network name" autocomplete="off" /></label>
+          </div>
+          <h3>Companion</h3>
+          <div class="card">
+            <label>URL for this network<input value="http://192.168.4.30:8787" autocomplete="off" /></label>
+            <label>Token for this network<input placeholder="optional" autocomplete="off" /></label>
+          </div>
+          <button id="settings-save" type="button">Save</button>
         </div>
       </div>
     </div>
@@ -1110,6 +1295,38 @@
       document.getElementById("mic").addEventListener("click", () => {
         message.textContent = "Voice not in this PoC";
       });
+      const settingsScreen = document.getElementById("settings-screen");
+      const settingsStatus = document.getElementById("settings-status");
+      const settingsSelected = document.getElementById("settings-selected");
+      const ssidRow = document.getElementById("ssid-row");
+      function openSettings() {
+        settingsScreen.hidden = false;
+      }
+      function closeSettings() {
+        settingsScreen.hidden = true;
+      }
+      document.getElementById("settings").addEventListener("click", openSettings);
+      document.getElementById("settings-done").addEventListener("click", closeSettings);
+      document.getElementById("settings-manual").addEventListener("click", () => {
+        ssidRow.hidden = false;
+        document.getElementById("settings-ssid").focus();
+      });
+      document.getElementById("settings-scan").addEventListener("click", () => {
+        settingsStatus.textContent = "Scanning...";
+        window.setTimeout(() => {
+          if (!settingsScreen.hidden) settingsStatus.textContent = "3 networks";
+        }, 600);
+      });
+      document.querySelectorAll("#settings-screen .nets button").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll("#settings-screen .nets button").forEach((row) => {
+            row.classList.toggle("on", row === btn);
+          });
+          const name = btn.textContent.trim().split(/\s+/)[0];
+          settingsSelected.textContent = "Selected: " + name;
+        });
+      });
+      if (new URLSearchParams(location.search).get("settings") === "1") openSettings();
       title.addEventListener("click", (event) => {
         event.stopPropagation();
         if (!title.classList.contains("badge")) return;

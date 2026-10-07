@@ -4,6 +4,7 @@
 #include "face_cover.h"
 #include "icons.h"
 #include "lvgl.h"
+#include "settings_layout.h"
 
 #include "esp_heap_caps.h"
 
@@ -16,8 +17,6 @@ enum {
     /* Bezel covers the rounded corners of the 480 panel. 16px clears them. */
     EDGE_PX = 16,
     KEYBOARD_PX = 200,
-    HEADER_PX = 48,
-    PAD_PX = EDGE_PX,
     /* 32px status bar under the 16px bezel. Face gaps start just under it. */
     BAR_H = 32,
     TITLE_Y = 50,
@@ -121,6 +120,14 @@ _Static_assert(SHEET_RING_OUT2 == SHEET_RING_W, "inner ring starts at the stroke
 _Static_assert(SHEET_RING_OPA0 < SHEET_RING_OPA1 && SHEET_RING_OPA1 < SHEET_RING_OPA2,
                "glow fades as it leaves the card");
 _Static_assert(SHEET_BORDER == 3, "stroke weight stays even on every side");
+_Static_assert((int)SET_SCREEN == (int)SCREEN_PX, "settings screen");
+_Static_assert((int)SET_EDGE == (int)EDGE_PX, "settings bezel");
+_Static_assert((int)SET_DOCK_INSET == (int)DOCK_INSET, "settings lip");
+_Static_assert((int)SET_INSET == (int)SHEET_SAFE, "settings uses the dock case line");
+_Static_assert((int)SET_STROKE == (int)SHEET_BORDER, "settings card stroke matches the sheet");
+_Static_assert(SET_CONTROL == 48, "settings finger target");
+_Static_assert(SET_HEADER >= SET_CONTROL, "header holds Done");
+_Static_assert(SET_LIST_H == 102, "scan list is two rows");
 _Static_assert(SHEET_INNER_NEAR_OPA > SHEET_INNER_FAR_OPA, "inner highlight is stronger at the stroke");
 _Static_assert(SHEET_MARK == MARK_PX * 5, "sheet mark is five times the list mark");
 _Static_assert(SHEET_OPA >= 248, "sheet stays opaque enough to hide roster type");
@@ -657,11 +664,15 @@ static void build_agent_rows(lv_obj_t *screen) {
 }
 
 static void layout_settings(void) {
-    int h = lv_obj_get_height(s_settings) - HEADER_PX - (PAD_PX * 2) - 6;
+    int open = s_keyboard && !lv_obj_has_flag(s_keyboard, LV_OBJ_FLAG_HIDDEN);
+    int h = SCREEN_PX - (SET_INSET * 2) - SET_HEADER - SET_GAP - (open ? KEYBOARD_PX : 0);
     if (h < 40) {
         h = 40;
     }
     lv_obj_set_height(s_body, h);
+    if (s_list) {
+        lv_obj_set_height(s_list, open ? SET_LIST_KB : SET_LIST_H);
+    }
 }
 
 static void set_selected_label(const char *ssid) {
@@ -680,7 +691,6 @@ static void hide_keyboard(int reset_indev) {
     s_hiding = 1;
     ta = lv_keyboard_get_textarea(s_keyboard);
     lv_obj_set_hidden(s_keyboard, true);
-    lv_obj_set_height(s_settings, SCREEN_PX);
     layout_settings();
     if (ta) {
         lv_keyboard_set_textarea(s_keyboard, NULL);
@@ -695,11 +705,10 @@ static void hide_keyboard(int reset_indev) {
 static void show_keyboard(lv_obj_t *ta) {
     lv_obj_t *box;
     lv_keyboard_set_textarea(s_keyboard, ta);
-    lv_obj_set_size(s_keyboard, SCREEN_PX - (EDGE_PX * 2), KEYBOARD_PX);
-    lv_obj_align(s_keyboard, LV_ALIGN_BOTTOM_MID, 0, -EDGE_PX);
+    lv_obj_set_size(s_keyboard, SCREEN_PX - (SET_INSET * 2), KEYBOARD_PX);
+    lv_obj_align(s_keyboard, LV_ALIGN_BOTTOM_MID, 0, -SET_INSET);
     lv_obj_set_hidden(s_keyboard, false);
     lv_obj_move_foreground(s_keyboard);
-    lv_obj_set_height(s_settings, SCREEN_PX - KEYBOARD_PX - EDGE_PX);
     layout_settings();
     box = lv_obj_get_parent(ta);
     if (box) {
@@ -751,10 +760,10 @@ static void on_body_clicked(lv_event_t *event) {
 }
 
 static void style_row(lv_obj_t *btn, int on) {
-    lv_obj_set_style_bg_color(btn, lv_color_hex(on ? ROW_ON : ROW), 0);
-    lv_obj_set_style_border_color(btn, lv_color_hex(on ? ROW_MARK : ROW), 0);
-    lv_obj_set_style_border_width(btn, on ? 3 : 0, 0);
-    lv_obj_set_style_border_side(btn, LV_BORDER_SIDE_LEFT, 0);
+    lv_obj_set_style_bg_color(btn, lv_color_hex(on ? ROW_ON : FIELD), 0);
+    lv_obj_set_style_border_color(btn, lv_color_hex(ROW_MARK), 0);
+    lv_obj_set_style_border_width(btn, on ? SET_ROW_STROKE : 0, 0);
+    lv_obj_set_style_border_side(btn, LV_BORDER_SIDE_FULL, 0);
 }
 
 static void on_pick(lv_event_t *event) {
@@ -777,16 +786,17 @@ static lv_obj_t *add_row(int index) {
     lv_obj_t *btn = lv_button_create(s_list);
     lv_obj_t *label = lv_label_create(btn);
     lv_obj_set_width(btn, lv_pct(100));
-    lv_obj_set_height(btn, 40);
+    lv_obj_set_height(btn, SET_CONTROL);
     lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(btn, 6, 0);
-    lv_obj_set_style_pad_hor(btn, 8, 0);
+    lv_obj_set_style_radius(btn, 12, 0);
+    lv_obj_set_style_pad_hor(btn, 12, 0);
     lv_obj_set_style_shadow_width(btn, 0, 0);
     style_row(btn, 0);
     lv_label_set_text_fmt(label, "%s   %d", s_aps[index].ssid, (int)s_aps[index].rssi);
     lv_obj_set_width(label, lv_pct(100));
     lv_label_set_long_mode(label, LV_LABEL_LONG_DOT);
     style_text(label);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
     lv_obj_align(label, LV_ALIGN_LEFT_MID, 0, 0);
     lv_obj_add_event_cb(btn, on_pick, LV_EVENT_CLICKED, (void *)(intptr_t)index);
     return btn;
@@ -1400,20 +1410,24 @@ static lv_obj_t *make_field(lv_obj_t *parent, const char *name, const char *plac
     lv_obj_set_style_pad_row(box, 4, 0);
     lv_label_set_text(label, name);
     style_text(label);
+    lv_obj_set_style_text_color(label, lv_color_hex(INK_DIM), 0);
     lv_textarea_set_one_line(ta, true);
     lv_textarea_set_placeholder_text(ta, placeholder);
     if (secret) {
         lv_textarea_set_password_mode(ta, true);
     }
     lv_obj_set_width(ta, lv_pct(100));
-    lv_obj_set_height(ta, 42);
+    lv_obj_set_height(ta, SET_CONTROL);
     lv_obj_set_style_bg_color(ta, lv_color_hex(FIELD), 0);
     lv_obj_set_style_bg_opa(ta, LV_OPA_COVER, 0);
     lv_obj_set_style_text_color(ta, lv_color_hex(INK), 0);
-    lv_obj_set_style_text_font(ta, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_font(ta, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_pad_hor(ta, 12, 0);
+    lv_obj_set_style_pad_ver(ta, 8, 0);
     lv_obj_set_style_border_color(ta, lv_color_hex(FIELD_EDGE), 0);
     lv_obj_set_style_border_width(ta, 1, 0);
-    lv_obj_set_style_radius(ta, 6, 0);
+    lv_obj_set_style_border_side(ta, LV_BORDER_SIDE_FULL, 0);
+    lv_obj_set_style_radius(ta, 12, 0);
     lv_obj_set_style_text_color(ta, lv_color_hex(INK_DIM), LV_PART_TEXTAREA_PLACEHOLDER);
     lv_obj_set_style_border_color(ta, lv_color_hex(INK), LV_PART_CURSOR | LV_STATE_FOCUSED);
     lv_obj_add_event_cb(ta, on_field, LV_EVENT_ALL, NULL);
@@ -1446,19 +1460,62 @@ static lv_obj_t *icon_button(lv_obj_t *parent, const lv_image_dsc_t *icon, lv_ev
 static lv_obj_t *action_button(lv_obj_t *parent, const char *text, lv_event_cb_t cb) {
     lv_obj_t *btn = lv_button_create(parent);
     lv_obj_t *label = lv_label_create(btn);
-    lv_obj_set_height(btn, 36);
+    lv_obj_set_height(btn, SET_CONTROL);
     lv_obj_set_style_bg_color(btn, lv_color_hex(0x3a3d32), 0);
     lv_obj_set_style_bg_opa(btn, LV_OPA_COVER, 0);
     lv_obj_set_style_border_color(btn, lv_color_hex(FIELD_EDGE), 0);
     lv_obj_set_style_border_width(btn, 1, 0);
-    lv_obj_set_style_radius(btn, 6, 0);
+    lv_obj_set_style_border_side(btn, LV_BORDER_SIDE_FULL, 0);
+    lv_obj_set_style_radius(btn, 12, 0);
     lv_obj_set_style_shadow_width(btn, 0, 0);
-    lv_obj_set_style_pad_hor(btn, 10, 0);
+    lv_obj_set_style_pad_hor(btn, 12, 0);
     lv_label_set_text(label, text);
     style_text(label);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_20, 0);
     lv_obj_center(label);
+    lv_obj_clear_flag(label, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(btn, cb, LV_EVENT_CLICKED, NULL);
     return btn;
+}
+
+static lv_obj_t *section_label(lv_obj_t *parent, const char *text) {
+    lv_obj_t *label = lv_label_create(parent);
+    lv_label_set_text(label, text);
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(label, lv_color_hex(INK_DIM), 0);
+    return label;
+}
+
+static void on_card_clicked(lv_event_t *event) {
+    if (lv_event_get_target(event) != lv_event_get_current_target(event)) {
+        return;
+    }
+    hide_keyboard(1);
+}
+
+/* Form card. Even stroke, same weight as the sheet, plus a faint outline.
+ * No bottom rim and no sheet rings. */
+static lv_obj_t *settings_card(lv_obj_t *parent) {
+    lv_obj_t *card = lv_obj_create(parent);
+    lv_obj_set_width(card, lv_pct(100));
+    lv_obj_set_height(card, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(card, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_style_pad_all(card, SET_CARD_PAD, 0);
+    lv_obj_set_style_pad_row(card, SET_GAP, 0);
+    lv_obj_set_style_bg_color(card, lv_color_hex(BG), 0);
+    lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_color(card, lv_color_hex(FIELD_EDGE), 0);
+    lv_obj_set_style_border_width(card, SET_STROKE, 0);
+    lv_obj_set_style_border_side(card, LV_BORDER_SIDE_FULL, 0);
+    lv_obj_set_style_radius(card, SET_CARD_R, 0);
+    lv_obj_set_style_outline_width(card, SET_GLOW, 0);
+    lv_obj_set_style_outline_color(card, lv_color_hex(FIELD_EDGE), 0);
+    lv_obj_set_style_outline_opa(card, 40, 0);
+    lv_obj_set_style_outline_pad(card, SET_OUTLINE_PAD, 0);
+    lv_obj_set_style_shadow_width(card, 0, 0);
+    lv_obj_set_scrollable(card, false);
+    lv_obj_add_event_cb(card, on_card_clicked, LV_EVENT_CLICKED, NULL);
+    return card;
 }
 
 static void anim_delete(void *var) {
@@ -1924,6 +1981,11 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     lv_obj_t *heading;
     lv_obj_t *manual;
     lv_obj_t *save;
+    lv_obj_t *done;
+    lv_obj_t *scan;
+    lv_obj_t *wifi_card;
+    lv_obj_t *companion;
+    lv_obj_t *actions;
     s_on_save = on_save;
     s_on_dismiss = on_dismiss;
     s_on_scan = on_scan;
@@ -2094,11 +2156,11 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     s_settings = lv_obj_create(screen);
     lv_obj_set_size(s_settings, SCREEN_PX, SCREEN_PX);
     lv_obj_set_flex_flow(s_settings, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_bg_color(s_settings, lv_color_hex(BG), 0);
+    lv_obj_set_style_bg_color(s_settings, lv_color_hex(DOCK), 0);
     lv_obj_set_style_bg_opa(s_settings, LV_OPA_COVER, 0);
     lv_obj_set_style_text_color(s_settings, lv_color_hex(INK), 0);
-    lv_obj_set_style_pad_all(s_settings, PAD_PX, 0);
-    lv_obj_set_style_pad_row(s_settings, 6, 0);
+    lv_obj_set_style_pad_all(s_settings, SET_INSET, 0);
+    lv_obj_set_style_pad_row(s_settings, SET_GAP, 0);
     lv_obj_set_style_border_width(s_settings, 0, 0);
     lv_obj_set_style_radius(s_settings, 0, 0);
     lv_obj_set_scrollable(s_settings, false);
@@ -2106,17 +2168,19 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
 
     s_header = lv_obj_create(s_settings);
     lv_obj_set_width(s_header, lv_pct(100));
-    lv_obj_set_height(s_header, HEADER_PX);
+    lv_obj_set_height(s_header, SET_HEADER);
     lv_obj_set_flex_flow(s_header, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(s_header, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_scrollable(s_header, false);
     flatten(s_header);
+    lv_obj_set_style_pad_hor(s_header, SET_GLOW + SET_OUTLINE_PAD, 0);
     heading = lv_label_create(s_header);
     lv_label_set_text(heading, "Settings");
     lv_obj_set_style_text_color(heading, lv_color_hex(INK), 0);
-    lv_obj_set_style_text_font(heading, &lv_font_montserrat_20, 0);
-    action_button(s_header, "Done", on_done);
-    action_button(s_header, "Scan", on_scan_clicked);
+    lv_obj_set_style_text_font(heading, &lv_font_montserrat_28, 0);
+    done = action_button(s_header, "Done", on_done);
+    lv_obj_set_width(done, 104);
+    lv_obj_set_style_radius(done, LV_RADIUS_CIRCLE, 0);
 
     s_body = lv_obj_create(s_settings);
     lv_obj_set_width(s_body, lv_pct(100));
@@ -2124,47 +2188,82 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     lv_obj_set_scrollbar_mode(s_body, LV_SCROLLBAR_MODE_AUTO);
     lv_obj_add_event_cb(s_body, on_body_clicked, LV_EVENT_CLICKED, NULL);
     flatten(s_body);
-    lv_obj_set_style_pad_row(s_body, 8, 0);
+    lv_obj_set_style_pad_hor(s_body, SET_GLOW + SET_OUTLINE_PAD, 0);
+    lv_obj_set_style_pad_row(s_body, SET_GAP, 0);
 
-    s_status = lv_label_create(s_body);
-    lv_obj_set_width(s_status, lv_pct(100));
-    lv_label_set_long_mode(s_status, LV_LABEL_LONG_WRAP);
-    lv_label_set_text(s_status, "Scan to add a network. Others stay saved.");
-    style_text(s_status);
+    {
+        lv_obj_t *wifi_head = lv_obj_create(s_body);
+        lv_obj_set_width(wifi_head, lv_pct(100));
+        lv_obj_set_height(wifi_head, LV_SIZE_CONTENT);
+        lv_obj_set_flex_flow(wifi_head, LV_FLEX_FLOW_ROW);
+        lv_obj_set_flex_align(wifi_head, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER,
+                              LV_FLEX_ALIGN_CENTER);
+        lv_obj_set_scrollable(wifi_head, false);
+        flatten(wifi_head);
+        section_label(wifi_head, "Wi-Fi");
+        s_status = lv_label_create(wifi_head);
+        lv_label_set_long_mode(s_status, LV_LABEL_LONG_DOT);
+        lv_obj_set_flex_grow(s_status, 1);
+        lv_obj_set_style_min_width(s_status, 0, 0);
+        lv_obj_set_style_text_align(s_status, LV_TEXT_ALIGN_RIGHT, 0);
+        lv_label_set_text(s_status, "Scan to add a network. Others stay saved.");
+        style_text(s_status);
+        lv_obj_set_style_text_color(s_status, lv_color_hex(INK_DIM), 0);
+    }
+    wifi_card = settings_card(s_body);
 
-    s_list = lv_obj_create(s_body);
+    s_list = lv_obj_create(wifi_card);
     lv_obj_set_width(s_list, lv_pct(100));
-    lv_obj_set_height(s_list, 132);
+    lv_obj_set_height(s_list, SET_LIST_H);
     lv_obj_set_flex_flow(s_list, LV_FLEX_FLOW_COLUMN);
-    lv_obj_set_style_pad_all(s_list, 4, 0);
-    lv_obj_set_style_pad_row(s_list, 4, 0);
-    lv_obj_set_style_bg_color(s_list, lv_color_hex(0x1c1e17), 0);
-    lv_obj_set_style_bg_opa(s_list, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(s_list, lv_color_hex(FIELD_EDGE), 0);
-    lv_obj_set_style_border_width(s_list, 1, 0);
-    lv_obj_set_style_radius(s_list, 8, 0);
+    lv_obj_set_style_pad_all(s_list, 0, 0);
+    lv_obj_set_style_pad_row(s_list, SET_LIST_GAP, 0);
+    lv_obj_set_style_bg_opa(s_list, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(s_list, 0, 0);
+    lv_obj_set_style_radius(s_list, 0, 0);
     lv_obj_set_scrollbar_mode(s_list, LV_SCROLLBAR_MODE_AUTO);
 
-    s_selected = lv_label_create(s_body);
+    s_selected = lv_label_create(wifi_card);
     lv_obj_set_width(s_selected, lv_pct(100));
-    lv_label_set_long_mode(s_selected, LV_LABEL_LONG_WRAP);
+    lv_label_set_long_mode(s_selected, LV_LABEL_LONG_DOT);
     lv_label_set_text(s_selected, "Selected: none");
     style_text(s_selected);
+    lv_obj_set_style_text_font(s_selected, &lv_font_montserrat_20, 0);
 
-    s_pass = make_field(s_body, "Password", "Wi-Fi password", 1, NULL);
-    s_url = make_field(s_body, "URL for this network", "http://192.168.4.30:8787", 0, NULL);
-    s_token = make_field(s_body, "Token for this network", "optional", 0, NULL);
-    manual = action_button(s_body, "Type SSID", on_manual);
-    lv_obj_set_width(manual, lv_pct(100));
-    s_ssid = make_field(s_body, "SSID", "Network name", 0, &s_ssid_box);
+    s_pass = make_field(wifi_card, "Password", "Wi-Fi password", 1, NULL);
+    actions = lv_obj_create(wifi_card);
+    lv_obj_set_width(actions, lv_pct(100));
+    lv_obj_set_height(actions, SET_CONTROL);
+    lv_obj_set_flex_flow(actions, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(actions, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_scrollable(actions, false);
+    flatten(actions);
+    lv_obj_set_style_pad_column(actions, SET_GAP, 0);
+    scan = action_button(actions, "Scan", on_scan_clicked);
+    manual = action_button(actions, "Type SSID", on_manual);
+    lv_obj_set_flex_grow(scan, 1);
+    lv_obj_set_flex_grow(manual, 1);
+    lv_obj_set_height(scan, SET_CONTROL);
+    lv_obj_set_height(manual, SET_CONTROL);
+    s_ssid = make_field(wifi_card, "SSID", "Network name", 0, &s_ssid_box);
     lv_obj_set_hidden(s_ssid_box, true);
+
+    section_label(s_body, "Companion");
+    companion = settings_card(s_body);
+    s_url = make_field(companion, "URL for this network", "http://192.168.4.30:8787", 0, NULL);
+    s_token = make_field(companion, "Token for this network", "optional", 0, NULL);
+
     save = action_button(s_body, "Save", on_save_clicked);
     lv_obj_set_width(save, lv_pct(100));
-    lv_obj_set_height(save, 44);
+    lv_obj_set_style_bg_color(save, lv_color_hex(ROW_HOT), 0);
+    lv_obj_set_style_border_color(save, lv_color_hex(ROW_MARK), 0);
+    lv_obj_set_style_border_width(save, SET_STROKE, 0);
+    lv_obj_set_style_border_side(save, LV_BORDER_SIDE_FULL, 0);
+    lv_obj_set_style_radius(save, LV_RADIUS_CIRCLE, 0);
 
     s_keyboard = lv_keyboard_create(screen);
-    lv_obj_set_size(s_keyboard, SCREEN_PX - (EDGE_PX * 2), KEYBOARD_PX);
-    lv_obj_align(s_keyboard, LV_ALIGN_BOTTOM_MID, 0, -EDGE_PX);
+    lv_obj_set_size(s_keyboard, SCREEN_PX - (SET_INSET * 2), KEYBOARD_PX);
+    lv_obj_align(s_keyboard, LV_ALIGN_BOTTOM_MID, 0, -SET_INSET);
     lv_obj_set_hidden(s_keyboard, true);
     lv_obj_add_event_cb(s_keyboard, on_keyboard, LV_EVENT_READY, NULL);
     lv_obj_add_event_cb(s_keyboard, on_keyboard, LV_EVENT_CANCEL, NULL);
