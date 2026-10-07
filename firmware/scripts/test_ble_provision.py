@@ -142,14 +142,20 @@ def _c_fn(src: str, signature: str) -> str:
 
 
 def test_scan_write_does_not_allocate_a_task():
-    """5151902 created the 12KB task inside the GATT write. That alloc failed
-    on the NimBLE host and the desk answered ATT 0x0E Unlikely Error."""
+    """5151902 created the 12KB task inside the GATT write (ATT 0x0E).
+    3b2db6d moved that create to host start, then logged
+    "ble-scan not started, largest internal 7680". The stack is PSRAM."""
     link = LINK.read_text(encoding="utf-8")
+    defaults = (LINK.parent.parent / "sdkconfig.defaults").read_text(encoding="utf-8")
     write = _c_fn(link, "static int write_scan(")
     start = _c_fn(link, "static void start_scan_task(")
     assert "xTaskCreate" not in write
     assert "xSemaphoreGive" in write
-    assert "xTaskCreate" in start
+    assert "xTaskCreate(" not in start
+    assert "xTaskCreateStatic" in start
+    assert "MALLOC_CAP_SPIRAM" in start
+    assert "7680" in link
+    assert "CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM=y" in defaults
     assert "nimble_port_freertos_init" in _c_fn(link, "void ble_link_host_start(")
 
 

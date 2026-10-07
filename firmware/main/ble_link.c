@@ -73,6 +73,8 @@ static char s_scan_text[BLE_DESK_SCAN_TEXT];
 static int s_scan_busy;
 static TaskHandle_t s_scan_task;
 static SemaphoreHandle_t s_scan_go;
+static StackType_t *s_scan_stack;
+static StaticTask_t s_scan_tcb;
 
 /* Little-endian UUID bytes. The 13th byte is the time_low LSB:
  * 0x10 service, 0x11 status, 0x12 url, 0x13 token, 0x14 wifi, 0x15 reboot, 0x16 scan.
@@ -265,18 +267,16 @@ static void publish_scan(int state, const ble_desk_ap_t *aps, int count) {
 
 _Static_assert(BLE_DESK_SCAN_MAX == NET_SCAN_MAX, "scan cap");
 
-/* The 48-record gather in net_wifi_scan is on the heap. This stack only
- * has to survive esp_wifi_scan_start's wait. 12288 matches the glass scan.
- * 8192 is the floor if the larger block is no longer contiguous. */
+/* 12288 matches the glass scan. The 48-record gather is on the heap.
+ * 3b2db6d logged "ble-scan not started, largest internal 7680" after the
+ * host task, with DMA still 45056 before Wi-Fi. 12288 and 8192 are both
+ * bigger than 7680, so this stack is PSRAM, same pool as the NimBLE mbufs.
+ * It is not taken from the STA's DMA block. */
 #define BLE_SCAN_STACK 12288
-#define BLE_SCAN_STACK_FLOOR 8192
 
 /* Off the NimBLE host. esp_wifi_scan_start blocks for the air time, and the
  * host has to keep answering the link. The task is created once, after
- * esp_wifi_init, so its stack does not take the STA's DMA block. A write
- * must not call xTaskCreate: on 5151902 that ran on the host task, the
- * 12KB internal alloc failed, and the callback returned BLE_ATT_ERR_UNLIKELY
- * (ATT 0x0E) before any scan started. */
+ * esp_wifi_init. A write must not allocate it. */
 static void scan_worker(void *arg) {
     (void)arg;
     for (;;) {
@@ -305,7 +305,6 @@ static void scan_worker(void *arg) {
 }
 
 static void start_scan_task(void) {
-    uint32_t stack = BLE_SCAN_STACK;
     if (s_scan_task) {
         return;
     }
@@ -316,18 +315,19 @@ static void start_scan_task(void) {
         ESP_LOGE(TAG, "scan signal missing");
         return;
     }
-    if (xTaskCreate(scan_worker, "ble-scan", stack, NULL, 4, &s_scan_task) == pdPASS) {
+    s_scan_stack = heap_caps_aligned_alloc(16, BLE_SCAN_STACK, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!s_scan_stack) {
+        ESP_LOGE(TAG, "ble-scan PSRAM stack missing");
         return;
     }
-    s_scan_task = NULL;
-    stack = BLE_SCAN_STACK_FLOOR;
-    if (xTaskCreate(scan_worker, "ble-scan", stack, NULL, 4, &s_scan_task) == pdPASS) {
-        ESP_LOGW(TAG, "ble-scan stack %u", (unsigned)stack);
+    s_scan_task = xTaskCreateStatic(scan_worker, "ble-scan", BLE_SCAN_STACK, NULL, 4, s_scan_stack,
+                                    &s_scan_tcb);
+    if (s_scan_task) {
         return;
     }
-    s_scan_task = NULL;
-    ESP_LOGE(TAG, "ble-scan not started, largest internal %u",
-             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+    heap_caps_free(s_scan_stack);
+    s_scan_stack = NULL;
+    ESP_LOGE(TAG, "ble-scan not started, PSRAM stack needs CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM");
 }
 
 static int read_scan(struct os_mbuf *om) {
@@ -592,8 +592,8 @@ void ble_link_host_start(void) {
         return;
     }
     s_host_up = 1;
-    /* Host stack first (6144). The scan task is the next internal alloc,
-     * still after esp_wifi_init. A write only gives s_scan_go. */
+    /* Host stack first (6144, internal). The scan stack is PSRAM after that.
+     * A write only gives s_scan_go. */
     nimble_port_freertos_init(host_task);
     start_scan_task();
 }
