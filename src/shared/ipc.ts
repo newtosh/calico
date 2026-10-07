@@ -1,6 +1,63 @@
-// Filled in Task 12.
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface CalicoApi {}
+export interface Candidate {
+  id: string;
+  name: string;
+}
+
+export interface ServerErrorInfo {
+  first: number;
+  last: number;
+  holders: string[];
+}
+
+export interface CalicoInfo {
+  /** http://127.0.0.1:<port>, null if the server could not bind. */
+  serverUrl: string | null;
+  /** Bound port. */
+  port: number | null;
+  /** Saved port the panel was told. */
+  expectedPort: number;
+  lanUrls: string[];
+  /** Epoch ms of the last non-loopback GET /api/status. */
+  lastPanelPoll: number | null;
+  webhookToken: string;
+  serverError: ServerErrorInfo | null;
+  autostart: { enabled: boolean; available: boolean };
+}
+
+export type FirewallKind = "ufw" | "firewalld" | "nftables" | "none";
+
+export interface FirewallInfo {
+  kind: FirewallKind;
+  command: string | null;
+}
+
+export interface SerialAccess {
+  denied: string[];
+  group: string;
+  command: string;
+}
+
+export interface FixResult {
+  ok: boolean;
+  output: string;
+}
+
+export interface CalicoApi {
+  info(): Promise<CalicoInfo>;
+  onBleCandidates(cb: (list: Candidate[]) => void): () => void;
+  /** "" cancels. */
+  chooseBle(id: string): void;
+  onSerialCandidates(cb: (list: Candidate[]) => void): () => void;
+  /** "" cancels. */
+  chooseSerial(id: string): void;
+  firewall(): Promise<FirewallInfo>;
+  serialAccess(): Promise<SerialAccess>;
+  runFix(fix: "firewall" | "serial"): Promise<FixResult>;
+  portHolders(port: number): Promise<string[]>;
+  /** Save the bound port after the panel was re-pointed. */
+  adoptPort(): Promise<void>;
+  setAutostart(on: boolean): Promise<boolean>;
+}
 
 declare global {
   interface Window {
