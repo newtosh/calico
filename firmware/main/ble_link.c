@@ -291,7 +291,8 @@ static void publish_scan(int state, const ble_desk_ap_t *aps, int count) {
 
 _Static_assert(BLE_DESK_SCAN_MAX == NET_SCAN_MAX, "scan cap");
 
-/* 12288 matches the glass scan. The 48-record gather is on the heap.
+/* 12288 matches the glass wifi-scan, which is PSRAM too.
+ * The 48-record gather is on the heap.
  * 3b2db6d logged "ble-scan not started, largest internal 7680" after the
  * host task, with DMA still 45056 before Wi-Fi. 12288 and 8192 are both
  * bigger than 7680, so this stack is PSRAM, same pool as the NimBLE mbufs.

@@ -45,8 +45,12 @@ CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=8
 CONFIG_SPIRAM_USE_MALLOC=y
 # 3b2db6d: "ble-scan not started, largest internal 7680" after the host
 # task. 12288 and 8192 do not fit. The scan worker stack is in PSRAM.
-# xTaskCreateStatic rejects that buffer unless this is set. xTaskCreate
-# itself still uses internal stacks. Do not move ble-scan back to internal.
+# aeeb737: wifi-join (12288) failed the same way. The glass showed
+# SCAN FAILED and desk-net never logged a scan. wifi-join, the glass
+# wifi-scan, and the 16384 poll stack use this flag too.
+# xTaskCreateStatic rejects an external buffer unless this is set.
+# xTaskCreate itself still uses internal stacks. Do not move these
+# stacks back to internal RAM.
 CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM=y
 CONFIG_BT_ENABLED=y
 CONFIG_BT_NIMBLE_ENABLED=y

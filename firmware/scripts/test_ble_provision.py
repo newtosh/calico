@@ -159,6 +159,29 @@ def test_scan_write_does_not_allocate_a_task():
     assert "nimble_port_freertos_init" in _c_fn(link, "void ble_link_host_start(")
 
 
+def test_wifi_join_and_glass_scan_use_psram_stacks():
+    """aeeb737: xTaskCreate(wifi-join, 12288) failed after the NimBLE host
+    (largest internal ~7680) and the glass showed SCAN FAILED with no
+    desk-net line. The Settings wifi-scan task was the same internal 12288.
+    Wi-Fi init stays before the host task. The 20-line stripe stays."""
+    main = (LINK.parent / "main.c").read_text(encoding="utf-8")
+    dma = (LINK.parent / "dma_stripe.h").read_text(encoding="utf-8")
+    defaults = (LINK.parent.parent / "sdkconfig.defaults").read_text(encoding="utf-8")
+    app = _c_fn(main, "void app_main(")
+    assert "xTaskCreate(scan_task" not in main
+    assert "xTaskCreate(join_task" not in main
+    assert "xTaskCreate(poll_task" not in main
+    assert "xTaskCreateStatic" in main
+    assert "MALLOC_CAP_SPIRAM" in main
+    assert "CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM" in main
+    prepare = app.find("net_wifi_prepare()")
+    host = app.find("ble_link_host_start()")
+    join = app.find('"wifi-join"')
+    assert 0 <= prepare < host < join
+    assert "DESK_DMA_LINES = 20" in dma
+    assert "CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM=y" in defaults
+
+
 def test_probe_gates_the_nvs_write():
     tool = load_tool()
     assert "verify" in tool.UUIDS

@@ -13,6 +13,7 @@
 #include "esp_system.h"
 #include "qmi8658.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
 
@@ -33,6 +34,24 @@ static char s_status_body[16384];
 static volatile int s_fetch_gen;
 static volatile int s_dismiss_gen;
 static volatile int s_scan_busy;
+/* aeeb737: after the NimBLE host, largest internal was ~7680. xTaskCreate
+ * of wifi-join (12288) failed, so join_task never ran and the glass showed
+ * SCAN FAILED with no desk-net line. Same ceiling as ble-scan on 3b2db6d.
+ * These stacks are PSRAM. xTaskCreate still draws internal RAM. The flag is
+ * CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM, already in sdkconfig.defaults.
+ * A board flashed after that reconfigure already has it in sdkconfig.
+ * Do not grow the DMA stripe. An internal stack before esp_wifi_init is
+ * what left the STA short of RX buffers. */
+#define DESK_WIFI_STACK 12288
+#define DESK_POLL_STACK 16384
+static StackType_t *s_scan_stack;
+static StaticTask_t s_scan_tcb;
+static TaskHandle_t s_scan_task;
+static SemaphoreHandle_t s_scan_go;
+static StackType_t *s_join_stack;
+static StaticTask_t s_join_tcb;
+static StackType_t *s_poll_stack;
+static StaticTask_t s_poll_tcb;
 static int s_quarter;
 static volatile int s_rot_locked;
 static lv_indev_read_cb_t s_touch_read;
@@ -112,17 +131,65 @@ static void unlock_lvgl(void) {
     esp_lv_adapter_unlock();
 }
 
-static void scan_task(void *arg) {
-    net_ap_t aps[NET_SCAN_MAX];
-    int count;
-    (void)arg;
-    count = net_wifi_scan(aps, NET_SCAN_MAX);
-    if (lock_lvgl()) {
-        ui_show_networks(count < 0 ? NULL : aps, count);
-        unlock_lvgl();
+static TaskHandle_t start_psram_task(const char *name, TaskFunction_t fn, uint32_t stack_bytes,
+                                     UBaseType_t prio, StackType_t **stack_out, StaticTask_t *tcb) {
+    StackType_t *stack;
+    TaskHandle_t task;
+    unsigned internal;
+    stack = heap_caps_aligned_alloc(16, stack_bytes, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!stack) {
+        internal = (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
+        ESP_LOGE("desk", "%s PSRAM stack missing, largest internal %u", name, internal);
+        return NULL;
     }
-    s_scan_busy = 0;
-    vTaskDelete(NULL);
+    task = xTaskCreateStatic(fn, name, stack_bytes, NULL, prio, stack, tcb);
+    if (!task) {
+        heap_caps_free(stack);
+        internal = (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL);
+        ESP_LOGE("desk",
+                 "%s not started, largest internal %u, PSRAM stack needs "
+                 "CONFIG_FREERTOS_TASK_CREATE_ALLOW_EXT_MEM",
+                 name, internal);
+        return NULL;
+    }
+    *stack_out = stack;
+    return task;
+}
+
+/* Stays up. A one-shot xTaskCreateStatic plus vTaskDelete would reuse this
+ * TCB on the next Scan while the idle task still owns it. The 12KB stack
+ * is the same PSRAM pool as ble-scan, not the 7680 internal ceiling. */
+static void scan_task(void *arg) {
+    (void)arg;
+    for (;;) {
+        net_ap_t aps[NET_SCAN_MAX];
+        int count;
+        if (!s_scan_go || xSemaphoreTake(s_scan_go, portMAX_DELAY) != pdTRUE) {
+            continue;
+        }
+        count = net_wifi_scan(aps, NET_SCAN_MAX);
+        if (lock_lvgl()) {
+            ui_show_networks(count < 0 ? NULL : aps, count);
+            unlock_lvgl();
+        }
+        s_scan_busy = 0;
+    }
+}
+
+static int ensure_scan_task(void) {
+    if (s_scan_task) {
+        return 1;
+    }
+    if (!s_scan_go) {
+        s_scan_go = xSemaphoreCreateBinary();
+    }
+    if (!s_scan_go) {
+        ESP_LOGE("desk", "wifi-scan signal missing");
+        return 0;
+    }
+    s_scan_task = start_psram_task("wifi-scan", scan_task, DESK_WIFI_STACK, 4, &s_scan_stack,
+                                   &s_scan_tcb);
+    return s_scan_task != NULL;
 }
 
 static void request_scan(void) {
@@ -131,7 +198,13 @@ static void request_scan(void) {
     }
     s_scan_busy = 1;
     ui_show_scanning();
-    if (xTaskCreate(scan_task, "wifi-scan", 12288, NULL, 4, NULL) != pdPASS) {
+    if (!ensure_scan_task()) {
+        s_scan_busy = 0;
+        ui_show_networks(NULL, -1);
+        return;
+    }
+    if (xSemaphoreGive(s_scan_go) != pdTRUE) {
+        ESP_LOGE("desk", "wifi-scan not signaled");
         s_scan_busy = 0;
         ui_show_networks(NULL, -1);
     }
@@ -256,14 +329,17 @@ static void poll_task(void *arg) {
 
 /* Off app_main. A stack net_ap_t found[48] in net_wifi_scan overflowed
  * the main task before esp_wifi_scan_start, so abort() ran before any
- * scan. Same 12KB stack as wifi-scan. */
+ * scan. 12288 is PSRAM: an internal create after the NimBLE host does
+ * not fit. The task stays blocked so that static stack is not freed. */
 static void join_task(void *arg) {
     int selected;
     (void)arg;
+    ESP_LOGI("desk", "wifi-join");
     selected = net_wifi_select(&s_store, &s_active);
     if (selected == 0) {
         net_wifi_start(&s_active);
-        xTaskCreate(poll_task, "poll", 16384, NULL, 5, NULL);
+        /* 16384 is also above the ~7680 internal ceiling. */
+        start_psram_task("poll", poll_task, DESK_POLL_STACK, 5, &s_poll_stack, &s_poll_tcb);
     } else if (lock_lvgl()) {
         publish_link();
         if (selected < 0) {
@@ -273,7 +349,9 @@ static void join_task(void *arg) {
         }
         unlock_lvgl();
     }
-    vTaskDelete(NULL);
+    for (;;) {
+        vTaskDelay(portMAX_DELAY);
+    }
 }
 
 static void touch_read(lv_indev_t *indev, lv_indev_data_t *data) {
@@ -444,8 +522,9 @@ void app_main(void) {
     }
     ble_link_start(&s_store, on_ble_state, on_ble_restart);
     /* esp_wifi_init wants the DMA block logged after nimble_port_init.
-     * The host task (6144) and wifi-join (12288) are internal stacks.
-     * Starting either one first is what left the STA with 3 of 10 RX buffers.
+     * The host task (6144) is the internal stack. wifi-join is PSRAM and
+     * starts after the host, so it does not take the STA's RX buffers.
+     * Starting an internal stack first is what left the STA with 3 of 10.
      * A board with no saved network still scans from the glass and from BLE.
      * That scan calls esp_wifi_init if this prepare is skipped. */
     net_wifi_prepare();
@@ -453,7 +532,7 @@ void app_main(void) {
     if (s_store.count == 0) {
         return;
     }
-    if (xTaskCreate(join_task, "wifi-join", 12288, NULL, 4, NULL) != pdPASS) {
+    if (!start_psram_task("wifi-join", join_task, DESK_WIFI_STACK, 4, &s_join_stack, &s_join_tcb)) {
         if (lock_lvgl()) {
             publish_link();
             ui_show_panel_note("SCAN FAILED", "Could not scan for Wi-Fi.");
