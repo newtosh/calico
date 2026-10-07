@@ -1,0 +1,1486 @@
+{
+  "source": "grokbot-buddy@73f9792",
+  "steps": [
+    {
+      "step": {
+        "method": "GET",
+        "path": "/api/status"
+      },
+      "status": 200,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "phase": "idle",
+        "needs_you": false,
+        "unread": 0,
+        "capture": false,
+        "agents": [],
+        "last_event": null,
+        "events": []
+      }
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/webhook/grok-bot",
+        "json": {
+          "type": "agent.launched",
+          "agent_id": "a1"
+        }
+      },
+      "status": 401,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "error": "unauthorized"
+      }
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/webhook/grok-bot",
+        "headers": {
+          "Authorization": "Bearer nope"
+        },
+        "json": {
+          "type": "agent.launched",
+          "agent_id": "a1"
+        }
+      },
+      "status": 401,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "error": "unauthorized"
+      }
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/webhook/grok-bot",
+        "auth": true,
+        "json": {
+          "type": "agent.launched",
+          "agent_id": "a1",
+          "title": "Scaffold",
+          "color": "#9bb57a",
+          "shape": " Diamond ",
+          "icon": "https://example.com/i.png"
+        }
+      },
+      "status": 201,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "id": "ffd5d0f3-dc0e-45de-98ee-25a042b51712",
+        "type": "agent.launched",
+        "agent_id": "a1",
+        "title": "Scaffold",
+        "message": "",
+        "source": "grok-bot",
+        "at": "2026-10-07T21:13:55Z",
+        "color": "#9bb57a",
+        "shape": "diamond",
+        "icon": "https://example.com/i.png"
+      }
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/webhook/grok-bot",
+        "auth": true,
+        "json": {
+          "type": "nope",
+          "agent_id": "a1"
+        }
+      },
+      "status": 400,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "error": "bad event"
+      }
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/webhook/grok-bot",
+        "auth": true,
+        "json": {
+          "type": "agent.needs_you",
+          "agent_id": "a1",
+          "title": "Question?",
+          "message": "Pick one"
+        }
+      },
+      "status": 201,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "id": "c52bed38-7ad6-4647-9767-5dcb2cbf1c9e",
+        "type": "agent.needs_you",
+        "agent_id": "a1",
+        "title": "Question?",
+        "message": "Pick one",
+        "source": "grok-bot",
+        "at": "2026-10-07T21:13:55Z",
+        "color": "",
+        "shape": "",
+        "icon": ""
+      }
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/webhook/grok-bot",
+        "auth": true,
+        "json": {
+          "type": "agent.launched",
+          "agent_id": "b2",
+          "title": "Builder",
+          "message": "Compiling"
+        }
+      },
+      "status": 201,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "id": "0f4147f0-6013-488b-b725-986f69e593f2",
+        "type": "agent.launched",
+        "agent_id": "b2",
+        "title": "Builder",
+        "message": "Compiling",
+        "source": "grok-bot",
+        "at": "2026-10-07T21:13:55Z",
+        "color": "",
+        "shape": "",
+        "icon": ""
+      }
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/webhook/grok-bot",
+        "auth": true,
+        "json": {
+          "type": "note",
+          "message": "Deploy done"
+        }
+      },
+      "status": 201,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "id": "3268a433-e493-442b-abc1-bf332104b265",
+        "type": "note",
+        "agent_id": "",
+        "title": "",
+        "message": "Deploy done",
+        "source": "grok-bot",
+        "at": "2026-10-07T21:13:55Z",
+        "color": "",
+        "shape": "",
+        "icon": ""
+      }
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/webhook/grok-bot",
+        "auth": true,
+        "json": {
+          "type": "agent.launched",
+          "agent_id": "c3",
+          "title": "Café ✓ 🙂"
+        }
+      },
+      "status": 201,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "id": "8122ecfb-32f7-4e83-87e3-a6db6f3b2096",
+        "type": "agent.launched",
+        "agent_id": "c3",
+        "title": "Café ✓ 🙂",
+        "message": "",
+        "source": "grok-bot",
+        "at": "2026-10-07T21:13:55Z",
+        "color": "",
+        "shape": "",
+        "icon": ""
+      }
+    },
+    {
+      "step": {
+        "method": "GET",
+        "path": "/api/status"
+      },
+      "status": 200,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "phase": "needs_you",
+        "needs_you": true,
+        "unread": 1,
+        "capture": false,
+        "agents": [
+          {
+            "id": "a1",
+            "title": "Scaffold",
+            "status": "needs_you",
+            "attention": true,
+            "message": "Pick one",
+            "updated_at": "2026-10-07T21:13:55Z",
+            "color": "#9bb57a",
+            "shape": "diamond",
+            "icon": "https://example.com/i.png"
+          },
+          {
+            "id": "b2",
+            "title": "Builder",
+            "status": "running",
+            "attention": false,
+            "message": "Compiling",
+            "updated_at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "c3",
+            "title": "Café ✓ 🙂",
+            "status": "running",
+            "attention": false,
+            "message": "",
+            "updated_at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          }
+        ],
+        "last_event": {
+          "id": "8122ecfb-32f7-4e83-87e3-a6db6f3b2096",
+          "type": "agent.launched",
+          "agent_id": "a1",
+          "title": "Scaffold",
+          "message": "Pick one",
+          "source": "grok-bot",
+          "at": "2026-10-07T21:13:55Z",
+          "color": "",
+          "shape": "",
+          "icon": ""
+        },
+        "events": [
+          {
+            "id": "8122ecfb-32f7-4e83-87e3-a6db6f3b2096",
+            "type": "agent.launched",
+            "agent_id": "c3",
+            "title": "Café ✓ 🙂",
+            "message": "",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "3268a433-e493-442b-abc1-bf332104b265",
+            "type": "note",
+            "agent_id": "",
+            "title": "",
+            "message": "Deploy done",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "0f4147f0-6013-488b-b725-986f69e593f2",
+            "type": "agent.launched",
+            "agent_id": "b2",
+            "title": "Builder",
+            "message": "Compiling",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "c52bed38-7ad6-4647-9767-5dcb2cbf1c9e",
+            "type": "agent.needs_you",
+            "agent_id": "a1",
+            "title": "Question?",
+            "message": "Pick one",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "ffd5d0f3-dc0e-45de-98ee-25a042b51712",
+            "type": "agent.launched",
+            "agent_id": "a1",
+            "title": "Scaffold",
+            "message": "",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "#9bb57a",
+            "shape": "diamond",
+            "icon": "https://example.com/i.png"
+          }
+        ]
+      }
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/unread/dismiss",
+        "auth": true
+      },
+      "status": 204,
+      "content_type": "text/plain",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ]
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/dismiss",
+        "auth": true,
+        "json": {
+          "agent_id": "zz"
+        }
+      },
+      "status": 204,
+      "content_type": "text/plain",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ]
+    },
+    {
+      "step": {
+        "method": "GET",
+        "path": "/api/status"
+      },
+      "status": 200,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "phase": "needs_you",
+        "needs_you": true,
+        "unread": 1,
+        "capture": false,
+        "agents": [
+          {
+            "id": "a1",
+            "title": "Scaffold",
+            "status": "needs_you",
+            "attention": true,
+            "message": "Pick one",
+            "updated_at": "2026-10-07T21:13:55Z",
+            "color": "#9bb57a",
+            "shape": "diamond",
+            "icon": "https://example.com/i.png"
+          },
+          {
+            "id": "b2",
+            "title": "Builder",
+            "status": "running",
+            "attention": false,
+            "message": "Compiling",
+            "updated_at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "c3",
+            "title": "Café ✓ 🙂",
+            "status": "running",
+            "attention": false,
+            "message": "",
+            "updated_at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          }
+        ],
+        "last_event": {
+          "id": "8122ecfb-32f7-4e83-87e3-a6db6f3b2096",
+          "type": "agent.launched",
+          "agent_id": "a1",
+          "title": "Scaffold",
+          "message": "Pick one",
+          "source": "grok-bot",
+          "at": "2026-10-07T21:13:55Z",
+          "color": "",
+          "shape": "",
+          "icon": ""
+        },
+        "events": [
+          {
+            "id": "8122ecfb-32f7-4e83-87e3-a6db6f3b2096",
+            "type": "agent.launched",
+            "agent_id": "c3",
+            "title": "Café ✓ 🙂",
+            "message": "",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "3268a433-e493-442b-abc1-bf332104b265",
+            "type": "note",
+            "agent_id": "",
+            "title": "",
+            "message": "Deploy done",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "0f4147f0-6013-488b-b725-986f69e593f2",
+            "type": "agent.launched",
+            "agent_id": "b2",
+            "title": "Builder",
+            "message": "Compiling",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "c52bed38-7ad6-4647-9767-5dcb2cbf1c9e",
+            "type": "agent.needs_you",
+            "agent_id": "a1",
+            "title": "Question?",
+            "message": "Pick one",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "ffd5d0f3-dc0e-45de-98ee-25a042b51712",
+            "type": "agent.launched",
+            "agent_id": "a1",
+            "title": "Scaffold",
+            "message": "",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "#9bb57a",
+            "shape": "diamond",
+            "icon": "https://example.com/i.png"
+          }
+        ]
+      }
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/dismiss",
+        "auth": true,
+        "json": {
+          "agent_id": "a1"
+        }
+      },
+      "status": 204,
+      "content_type": "text/plain",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ]
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/webhook/grok-bot",
+        "auth": true,
+        "json": {
+          "type": "agent.finished",
+          "agent_id": "b2"
+        }
+      },
+      "status": 201,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "id": "4b7098b3-a8da-426a-8b2d-60066b90f678",
+        "type": "agent.finished",
+        "agent_id": "b2",
+        "title": "",
+        "message": "",
+        "source": "grok-bot",
+        "at": "2026-10-07T21:13:55Z",
+        "color": "",
+        "shape": "",
+        "icon": ""
+      }
+    },
+    {
+      "step": {
+        "method": "GET",
+        "path": "/api/status"
+      },
+      "status": 200,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "phase": "running",
+        "needs_you": false,
+        "unread": 0,
+        "capture": false,
+        "agents": [
+          {
+            "id": "a1",
+            "title": "Scaffold",
+            "status": "running",
+            "attention": false,
+            "message": "",
+            "updated_at": "2026-10-07T21:13:55Z",
+            "color": "#9bb57a",
+            "shape": "diamond",
+            "icon": "https://example.com/i.png"
+          },
+          {
+            "id": "b2",
+            "title": "Builder",
+            "status": "idle",
+            "attention": false,
+            "message": "",
+            "updated_at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "c3",
+            "title": "Café ✓ 🙂",
+            "status": "running",
+            "attention": false,
+            "message": "",
+            "updated_at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          }
+        ],
+        "last_event": {
+          "id": "4b7098b3-a8da-426a-8b2d-60066b90f678",
+          "type": "agent.finished",
+          "agent_id": "b2",
+          "title": "",
+          "message": "",
+          "source": "grok-bot",
+          "at": "2026-10-07T21:13:55Z",
+          "color": "",
+          "shape": "",
+          "icon": ""
+        },
+        "events": [
+          {
+            "id": "4b7098b3-a8da-426a-8b2d-60066b90f678",
+            "type": "agent.finished",
+            "agent_id": "b2",
+            "title": "",
+            "message": "",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "94b4d160-fec0-421f-99d9-85db11bf03c0",
+            "type": "note",
+            "agent_id": "",
+            "title": "",
+            "message": "",
+            "source": "manual",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "8122ecfb-32f7-4e83-87e3-a6db6f3b2096",
+            "type": "agent.launched",
+            "agent_id": "c3",
+            "title": "Café ✓ 🙂",
+            "message": "",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "3268a433-e493-442b-abc1-bf332104b265",
+            "type": "note",
+            "agent_id": "",
+            "title": "",
+            "message": "Deploy done",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "0f4147f0-6013-488b-b725-986f69e593f2",
+            "type": "agent.launched",
+            "agent_id": "b2",
+            "title": "Builder",
+            "message": "Compiling",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "c52bed38-7ad6-4647-9767-5dcb2cbf1c9e",
+            "type": "agent.needs_you",
+            "agent_id": "a1",
+            "title": "Question?",
+            "message": "Pick one",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "ffd5d0f3-dc0e-45de-98ee-25a042b51712",
+            "type": "agent.launched",
+            "agent_id": "a1",
+            "title": "Scaffold",
+            "message": "",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "#9bb57a",
+            "shape": "diamond",
+            "icon": "https://example.com/i.png"
+          }
+        ]
+      }
+    },
+    {
+      "step": {
+        "method": "PUT",
+        "path": "/api/panel",
+        "auth": true,
+        "json": {
+          "ssid": "home"
+        }
+      },
+      "status": 400,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "error": "bad panel"
+      }
+    },
+    {
+      "step": {
+        "method": "PUT",
+        "path": "/api/panel",
+        "auth": true,
+        "json": {
+          "token": "t"
+        }
+      },
+      "status": 400,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "error": "bad panel"
+      }
+    },
+    {
+      "step": {
+        "method": "PUT",
+        "path": "/api/panel",
+        "auth": true,
+        "json": {
+          "url": "http://192.168.4.30:8787/",
+          "token": "desk-secret"
+        }
+      },
+      "status": 200,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "url": "http://192.168.4.30:8787",
+        "token_set": true
+      }
+    },
+    {
+      "step": {
+        "method": "GET",
+        "path": "/api/status"
+      },
+      "status": 200,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "panel": {
+          "url": "http://192.168.4.30:8787",
+          "token": "desk-secret"
+        },
+        "phase": "running",
+        "needs_you": false,
+        "unread": 0,
+        "capture": false,
+        "agents": [
+          {
+            "id": "a1",
+            "title": "Scaffold",
+            "status": "running",
+            "attention": false,
+            "message": "",
+            "updated_at": "2026-10-07T21:13:55Z",
+            "color": "#9bb57a",
+            "shape": "diamond",
+            "icon": "https://example.com/i.png"
+          },
+          {
+            "id": "b2",
+            "title": "Builder",
+            "status": "idle",
+            "attention": false,
+            "message": "",
+            "updated_at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "c3",
+            "title": "Café ✓ 🙂",
+            "status": "running",
+            "attention": false,
+            "message": "",
+            "updated_at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          }
+        ],
+        "last_event": {
+          "id": "4b7098b3-a8da-426a-8b2d-60066b90f678",
+          "type": "agent.finished",
+          "agent_id": "b2",
+          "title": "",
+          "message": "",
+          "source": "grok-bot",
+          "at": "2026-10-07T21:13:55Z",
+          "color": "",
+          "shape": "",
+          "icon": ""
+        },
+        "events": [
+          {
+            "id": "4b7098b3-a8da-426a-8b2d-60066b90f678",
+            "type": "agent.finished",
+            "agent_id": "b2",
+            "title": "",
+            "message": "",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "94b4d160-fec0-421f-99d9-85db11bf03c0",
+            "type": "note",
+            "agent_id": "",
+            "title": "",
+            "message": "",
+            "source": "manual",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "8122ecfb-32f7-4e83-87e3-a6db6f3b2096",
+            "type": "agent.launched",
+            "agent_id": "c3",
+            "title": "Café ✓ 🙂",
+            "message": "",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "3268a433-e493-442b-abc1-bf332104b265",
+            "type": "note",
+            "agent_id": "",
+            "title": "",
+            "message": "Deploy done",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "0f4147f0-6013-488b-b725-986f69e593f2",
+            "type": "agent.launched",
+            "agent_id": "b2",
+            "title": "Builder",
+            "message": "Compiling",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "c52bed38-7ad6-4647-9767-5dcb2cbf1c9e",
+            "type": "agent.needs_you",
+            "agent_id": "a1",
+            "title": "Question?",
+            "message": "Pick one",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "ffd5d0f3-dc0e-45de-98ee-25a042b51712",
+            "type": "agent.launched",
+            "agent_id": "a1",
+            "title": "Scaffold",
+            "message": "",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "#9bb57a",
+            "shape": "diamond",
+            "icon": "https://example.com/i.png"
+          }
+        ]
+      }
+    },
+    {
+      "step": {
+        "method": "GET",
+        "path": "/api/panel"
+      },
+      "status": 200,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "url": "http://192.168.4.30:8787",
+        "token_set": true
+      }
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/frame/request",
+        "auth": true
+      },
+      "status": 204,
+      "content_type": "text/plain",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ]
+    },
+    {
+      "step": {
+        "method": "GET",
+        "path": "/api/status"
+      },
+      "status": 200,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "panel": {
+          "url": "http://192.168.4.30:8787",
+          "token": "desk-secret"
+        },
+        "phase": "running",
+        "needs_you": false,
+        "unread": 0,
+        "capture": true,
+        "agents": [
+          {
+            "id": "a1",
+            "title": "Scaffold",
+            "status": "running",
+            "attention": false,
+            "message": "",
+            "updated_at": "2026-10-07T21:13:55Z",
+            "color": "#9bb57a",
+            "shape": "diamond",
+            "icon": "https://example.com/i.png"
+          },
+          {
+            "id": "b2",
+            "title": "Builder",
+            "status": "idle",
+            "attention": false,
+            "message": "",
+            "updated_at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "c3",
+            "title": "Café ✓ 🙂",
+            "status": "running",
+            "attention": false,
+            "message": "",
+            "updated_at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          }
+        ],
+        "last_event": {
+          "id": "4b7098b3-a8da-426a-8b2d-60066b90f678",
+          "type": "agent.finished",
+          "agent_id": "b2",
+          "title": "",
+          "message": "",
+          "source": "grok-bot",
+          "at": "2026-10-07T21:13:55Z",
+          "color": "",
+          "shape": "",
+          "icon": ""
+        },
+        "events": [
+          {
+            "id": "4b7098b3-a8da-426a-8b2d-60066b90f678",
+            "type": "agent.finished",
+            "agent_id": "b2",
+            "title": "",
+            "message": "",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "94b4d160-fec0-421f-99d9-85db11bf03c0",
+            "type": "note",
+            "agent_id": "",
+            "title": "",
+            "message": "",
+            "source": "manual",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "8122ecfb-32f7-4e83-87e3-a6db6f3b2096",
+            "type": "agent.launched",
+            "agent_id": "c3",
+            "title": "Café ✓ 🙂",
+            "message": "",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "3268a433-e493-442b-abc1-bf332104b265",
+            "type": "note",
+            "agent_id": "",
+            "title": "",
+            "message": "Deploy done",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "0f4147f0-6013-488b-b725-986f69e593f2",
+            "type": "agent.launched",
+            "agent_id": "b2",
+            "title": "Builder",
+            "message": "Compiling",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "c52bed38-7ad6-4647-9767-5dcb2cbf1c9e",
+            "type": "agent.needs_you",
+            "agent_id": "a1",
+            "title": "Question?",
+            "message": "Pick one",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "ffd5d0f3-dc0e-45de-98ee-25a042b51712",
+            "type": "agent.launched",
+            "agent_id": "a1",
+            "title": "Scaffold",
+            "message": "",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "#9bb57a",
+            "shape": "diamond",
+            "icon": "https://example.com/i.png"
+          }
+        ]
+      }
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/frame",
+        "auth": true,
+        "headers": {
+          "Content-Type": "image/bmp"
+        },
+        "body_b64": "Qk0AAQID"
+      },
+      "status": 204,
+      "content_type": "text/plain",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ]
+    },
+    {
+      "step": {
+        "method": "GET",
+        "path": "/api/frame"
+      },
+      "status": 200,
+      "content_type": "image/bmp",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "body_b64": "Qk0AAQID"
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/frame",
+        "auth": true,
+        "headers": {
+          "Content-Type": "text/plain"
+        },
+        "body_b64": "Qk0AAQID"
+      },
+      "status": 415,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "error": "bmp required"
+      }
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/frame",
+        "auth": true,
+        "headers": {
+          "Content-Type": "image/bmp"
+        },
+        "body_b64": "WFhYWA=="
+      },
+      "status": 400,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "error": "bad bmp"
+      }
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/webhook/grok-bot",
+        "auth": true,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body_b64": "bm90IGpzb24="
+      },
+      "status": 400,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "error": "bad json"
+      }
+    },
+    {
+      "step": {
+        "method": "PUT",
+        "path": "/api/panel",
+        "auth": true,
+        "json": {
+          "clear": true
+        }
+      },
+      "status": 200,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "url": "",
+        "token_set": false
+      }
+    },
+    {
+      "step": {
+        "method": "GET",
+        "path": "/api/status"
+      },
+      "status": 200,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "phase": "running",
+        "needs_you": false,
+        "unread": 0,
+        "capture": false,
+        "agents": [
+          {
+            "id": "a1",
+            "title": "Scaffold",
+            "status": "running",
+            "attention": false,
+            "message": "",
+            "updated_at": "2026-10-07T21:13:55Z",
+            "color": "#9bb57a",
+            "shape": "diamond",
+            "icon": "https://example.com/i.png"
+          },
+          {
+            "id": "b2",
+            "title": "Builder",
+            "status": "idle",
+            "attention": false,
+            "message": "",
+            "updated_at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "c3",
+            "title": "Café ✓ 🙂",
+            "status": "running",
+            "attention": false,
+            "message": "",
+            "updated_at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          }
+        ],
+        "last_event": {
+          "id": "4b7098b3-a8da-426a-8b2d-60066b90f678",
+          "type": "agent.finished",
+          "agent_id": "b2",
+          "title": "",
+          "message": "",
+          "source": "grok-bot",
+          "at": "2026-10-07T21:13:55Z",
+          "color": "",
+          "shape": "",
+          "icon": ""
+        },
+        "events": [
+          {
+            "id": "4b7098b3-a8da-426a-8b2d-60066b90f678",
+            "type": "agent.finished",
+            "agent_id": "b2",
+            "title": "",
+            "message": "",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "94b4d160-fec0-421f-99d9-85db11bf03c0",
+            "type": "note",
+            "agent_id": "",
+            "title": "",
+            "message": "",
+            "source": "manual",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "8122ecfb-32f7-4e83-87e3-a6db6f3b2096",
+            "type": "agent.launched",
+            "agent_id": "c3",
+            "title": "Café ✓ 🙂",
+            "message": "",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "3268a433-e493-442b-abc1-bf332104b265",
+            "type": "note",
+            "agent_id": "",
+            "title": "",
+            "message": "Deploy done",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "0f4147f0-6013-488b-b725-986f69e593f2",
+            "type": "agent.launched",
+            "agent_id": "b2",
+            "title": "Builder",
+            "message": "Compiling",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "c52bed38-7ad6-4647-9767-5dcb2cbf1c9e",
+            "type": "agent.needs_you",
+            "agent_id": "a1",
+            "title": "Question?",
+            "message": "Pick one",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "",
+            "shape": "",
+            "icon": ""
+          },
+          {
+            "id": "ffd5d0f3-dc0e-45de-98ee-25a042b51712",
+            "type": "agent.launched",
+            "agent_id": "a1",
+            "title": "Scaffold",
+            "message": "",
+            "source": "grok-bot",
+            "at": "2026-10-07T21:13:55Z",
+            "color": "#9bb57a",
+            "shape": "diamond",
+            "icon": "https://example.com/i.png"
+          }
+        ]
+      }
+    },
+    {
+      "step": {
+        "method": "GET",
+        "path": "/api/nope"
+      },
+      "status": 404,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "error": "not found"
+      }
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/nope",
+        "auth": true
+      },
+      "status": 404,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "error": "not found"
+      }
+    },
+    {
+      "step": {
+        "method": "OPTIONS",
+        "path": "/api/status"
+      },
+      "status": 204,
+      "content_type": "text/plain",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ]
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/needs-auth-check",
+        "json": {}
+      },
+      "status": 404,
+      "content_type": "application/json",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ],
+      "json": {
+        "error": "not found"
+      }
+    },
+    {
+      "step": {
+        "method": "POST",
+        "path": "/api/dismiss",
+        "auth": true
+      },
+      "status": 204,
+      "content_type": "text/plain",
+      "cors": [
+        "*",
+        "GET, POST, PUT, OPTIONS",
+        "Content-Type, Authorization"
+      ]
+    }
+  ]
+}
