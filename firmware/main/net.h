@@ -36,6 +36,8 @@ void net_link(net_link_t *out);
 void net_joined_ssid(char *out, size_t out_len);
 /* A status poll completed. The STA give-up latch is stale. */
 void net_mark_reachable(void);
+/* esp_wifi_init only. Call before the NimBLE host task and wifi-join. */
+void net_wifi_prepare(void);
 void net_wifi_start(const desk_settings_t *in);
 int net_wifi_scan(net_ap_t *out, int max_out);
 /* 0 and fills chosen, 1 if no saved network is in range, -1 if the scan failed. */

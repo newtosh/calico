@@ -4,6 +4,7 @@
 
 #include "esp_check.h"
 #include "esp_event.h"
+#include "esp_heap_caps.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
 #include "esp_netif.h"
@@ -238,9 +239,12 @@ void net_joined_ssid(char *out, size_t out_len) {
 
 static void wifi_bringup(void) {
     wifi_init_config_t init_cfg = WIFI_INIT_CONFIG_DEFAULT();
+    size_t dma;
     if (s_wifi_up) {
         return;
     }
+    dma = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
+    ESP_LOGI(TAG, "largest internal DMA %u before Wi-Fi", (unsigned)dma);
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     ESP_ERROR_CHECK(esp_event_handler_instance_register(
@@ -254,6 +258,10 @@ static void wifi_bringup(void) {
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_start());
     s_wifi_up = 1;
+}
+
+void net_wifi_prepare(void) {
+    wifi_bringup();
 }
 
 void net_wifi_start(const desk_settings_t *in) {

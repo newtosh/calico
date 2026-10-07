@@ -441,6 +441,13 @@ void app_main(void) {
         unlock_lvgl();
     }
     ble_link_start(&s_store, on_ble_state, on_ble_restart);
+    /* esp_wifi_init wants the DMA block logged after nimble_port_init.
+     * The host task (6144) and wifi-join (12288) are internal stacks.
+     * Starting either one first is what left the STA with 3 of 10 RX buffers. */
+    if (s_store.count > 0) {
+        net_wifi_prepare();
+    }
+    ble_link_host_start();
     if (s_store.count == 0) {
         return;
     }

@@ -38,6 +38,8 @@ CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=8
 # in the internal DMA pool the 20-line stripe and the STA share.
 # The controller itself stays internal. Do not enable
 # BT_CTRL_RUN_IN_FLASH_ONLY: a GATT write commits NVS while the link is up.
+# Cutting MSYS/ACL counts does not grow that DMA block: those pools are
+# the PSRAM allocator. The STA init runs before the NimBLE host task.
 # An existing firmware/sdkconfig ignores this file until it is deleted
 # and the project is reconfigured. That does not erase the device NVS.
 CONFIG_SPIRAM_USE_MALLOC=y
@@ -63,7 +65,11 @@ CONFIG_BT_NIMBLE_TRANSPORT_EVT_COUNT=8
 CONFIG_BT_NIMBLE_TRANSPORT_EVT_DISCARD_COUNT=1
 CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=6144
 CONFIG_BT_NIMBLE_SVC_GAP_DEVICE_NAME="grokbot-buddy"
-CONFIG_BT_CTRL_BLE_MAX_ACT=3
+# One advertiser plus one connection. A third activity is 828 bytes of
+# internal DMA the STA does not get back. Scan is off, so the extended
+# duplicate filter is unused; the minimum legal length is 1.
+CONFIG_BT_CTRL_BLE_MAX_ACT=2
+CONFIG_BT_CTRL_ADV_DUP_FILT_MAX=1
 # CONFIG_BT_CTRL_BLE_SCAN is not set
 # CONFIG_BT_CTRL_BLE_SECURITY_ENABLE is not set
 # CONFIG_BT_CTRL_DTM_ENABLE is not set

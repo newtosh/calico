@@ -67,6 +67,7 @@ void ble_link_leave(void) {
 
 static uint8_t s_own_addr_type;
 static int s_gatt_ok;
+static int s_host_up;
 
 /* Little-endian UUID bytes. The 13th byte is the time_low LSB:
  * 0x10 service, 0x11 status, 0x12 url, 0x13 token, 0x14 wifi, 0x15 reboot.
@@ -400,11 +401,14 @@ static void host_task(void *arg) {
 static void log_dma(void) {
     size_t dma = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
     ESP_LOGI(TAG, "largest internal DMA %u after NimBLE", (unsigned)dma);
-    if (dma < DESK_DMA_LEFT_AFTER_PAIR) {
+    /* 29696 is where the STA died after the 2x50-line pin. 48000 is the
+     * region left free when the 20-line stripe is the only pin. Wi-Fi init
+     * runs before the host task, so this number is the block it sees. */
+    if (dma < DESK_DMA_KEPT_FOR_STA) {
         ESP_LOGW(TAG,
-                 "internal DMA block %u is under %u; the STA failed to join at that size before. "
-                 "Shrink NimBLE, do not grow the DMA stripe",
-                 (unsigned)dma, DESK_DMA_LEFT_AFTER_PAIR);
+                 "internal DMA block %u is under %u. The STA joined from that larger block; "
+                 "%u was not enough. Shrink the controller, do not grow the DMA stripe",
+                 (unsigned)dma, DESK_DMA_KEPT_FOR_STA, DESK_DMA_LEFT_AFTER_PAIR);
     }
 }
 
@@ -443,6 +447,13 @@ static void start_radio(void) {
         return;
     }
     s_gatt_ok = 1;
+}
+
+void ble_link_host_start(void) {
+    if (!s_gatt_ok || s_host_up) {
+        return;
+    }
+    s_host_up = 1;
     nimble_port_freertos_init(host_task);
 }
 
@@ -465,3 +476,7 @@ void ble_link_start(wifi_store_t *store, ble_link_state_fn on_state, ble_link_re
     note(BLE_LINK_OFF);
 #endif
 }
+
+#if !CONFIG_BT_NIMBLE_ENABLED
+void ble_link_host_start(void) {}
+#endif
