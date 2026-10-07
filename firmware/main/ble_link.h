@@ -2,7 +2,7 @@
 
 #include "wifi_store.h"
 
-/* 0 struck through, 1 advertising, 2 connected. Matches ui_set_bt. */
+/* 0 dim rune, 1 advertising, 2 connected. Matches ui_set_bt. */
 enum {
     BLE_LINK_OFF = 0,
     BLE_LINK_ADV = 1,

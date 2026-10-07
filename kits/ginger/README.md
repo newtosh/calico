@@ -57,7 +57,7 @@ If a webhook bearer token is set, add `-H "Authorization: Bearer $GROK_DESK_WEBH
 
 ## Panel URL and token
 
-Wi-Fi networks can be added or removed over USB with `scripts/provision-wifi.py add` and `scripts/provision-wifi.py remove` (see [firmware/README.md](firmware/README.md)). The same NVS keys can be written over BLE, before the board has joined anything, with `scripts/ble-provision.py`. The on-device keyboard still works. The panel keeps every saved network and, at boot, joins the saved SSID that is in range. After the board is joined and a status poll succeeds, the dashboard section **Panel config** (or `PUT /api/panel`) stores a companion URL and bearer token on the companion. The same `GET /api/status` the panel already polls then includes:
+Wi-Fi networks can be added or removed over USB with `scripts/provision-wifi.py add` and `scripts/provision-wifi.py remove` (see [firmware/README.md](firmware/README.md)). The same NVS keys can be written over BLE, before the board has joined anything, with `scripts/ble-provision.py` (a menu; the subcommands stay for scripts). The on-device keyboard still works. The panel keeps every saved network and, at boot, joins the saved SSID that is in range. After the board is joined and a status poll succeeds, the dashboard section **Panel config** (or `PUT /api/panel`) stores a companion URL and bearer token on the companion. The same `GET /api/status` the panel already polls then includes:
 
 ```json
 "panel": {"url": "http://192.168.4.30:8787", "token": "desk-secret"}

@@ -128,23 +128,27 @@
         opacity: 1;
       }
       #bt {
-        font-size: 14px;
-        line-height: 1;
+        width: 20px;
+        height: 14px;
+        color: #efe7d6;
+      }
+      #bt svg {
+        display: block;
       }
       #bt[data-state="off"] {
         color: #a39b88;
-        opacity: 0.45;
-        text-decoration: line-through;
+        opacity: 0.4;
+      }
+      #bt[data-state="off"] .dot {
+        display: none;
       }
       #bt[data-state="adv"] {
         color: #efe7d6;
         opacity: 1;
-        text-decoration: none;
       }
       #bt[data-state="conn"] {
         color: #9bb57a;
         opacity: 1;
-        text-decoration: none;
       }
       #rotlock {
         height: 28px;
@@ -907,7 +911,13 @@
         <div id="toast"></div>
         <div id="glance">
           <span id="wifi" data-bars="0" title="Wi-Fi"><i></i><i></i><i></i></span>
-          <span id="bt" data-state="adv" title="Bluetooth advertising">BT</span>
+          <span id="bt" data-state="adv" title="Bluetooth advertising">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 14" width="20" height="14" aria-hidden="true">
+              <path d="M7 4 L13 10 L10 13 L10 1 L13 4 L7 10" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle class="dot" cx="3.55" cy="7" r="1.15" fill="currentColor"/>
+              <circle class="dot" cx="16.45" cy="7" r="1.15" fill="currentColor"/>
+            </svg>
+          </span>
           <button id="rotlock" type="button" aria-pressed="false">Auto</button>
         </div>
       </div>
@@ -1339,6 +1349,15 @@
         });
       });
       if (new URLSearchParams(location.search).get("settings") === "1") openSettings();
+      {
+        const btState = new URLSearchParams(location.search).get("bt");
+        const bt = document.getElementById("bt");
+        const btTitle = { off: "Bluetooth off", adv: "Bluetooth advertising", conn: "Bluetooth connected" };
+        if (bt && Object.prototype.hasOwnProperty.call(btTitle, btState)) {
+          bt.dataset.state = btState;
+          bt.title = btTitle[btState];
+        }
+      }
       title.addEventListener("click", (event) => {
         event.stopPropagation();
         if (!title.classList.contains("badge")) return;

@@ -11,6 +11,8 @@
 #include "esp_wifi.h"
 #include "nvs.h"
 #include "nvs_flash.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,6 +23,26 @@ static volatile int s_wifi_retries;
 static volatile int s_wifi_has_ip;
 static volatile int s_wifi_gave_up;
 static int s_wifi_up;
+/* ponytail: one scan at a time. The glass, the hidden-SSID probe, and BLE share it.
+ * A second caller waits. Split this if those scans must overlap. */
+static SemaphoreHandle_t s_scan_mu;
+
+static int scan_mu_take(void) {
+    if (!s_scan_mu) {
+        return 0;
+    }
+    if (xSemaphoreTake(s_scan_mu, pdMS_TO_TICKS(30000)) != pdTRUE) {
+        ESP_LOGW(TAG, "scan busy");
+        return -1;
+    }
+    return 0;
+}
+
+static void scan_mu_give(void) {
+    if (s_scan_mu) {
+        xSemaphoreGive(s_scan_mu);
+    }
+}
 
 typedef struct {
     char *body;
@@ -243,6 +265,9 @@ static void wifi_bringup(void) {
     if (s_wifi_up) {
         return;
     }
+    if (!s_scan_mu) {
+        s_scan_mu = xSemaphoreCreateMutex();
+    }
     dma = heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
     ESP_LOGI(TAG, "largest internal DMA %u before Wi-Fi", (unsigned)dma);
     ESP_ERROR_CHECK(esp_netif_init());
@@ -274,7 +299,7 @@ void net_wifi_start(const desk_settings_t *in) {
     ESP_LOGI(TAG, "joining %s", in->ssid);
 }
 
-int net_wifi_scan(net_ap_t *out, int max_out) {
+static int scan_aps(net_ap_t *out, int max_out) {
     wifi_scan_config_t scan = {
         .show_hidden = true,
     };
@@ -292,7 +317,6 @@ int net_wifi_scan(net_ap_t *out, int max_out) {
     if (max_out > NET_SCAN_MAX) {
         max_out = NET_SCAN_MAX;
     }
-    wifi_bringup();
     if (esp_wifi_scan_start(&scan, true) != ESP_OK) {
         return -1;
     }
@@ -362,7 +386,21 @@ int net_wifi_scan(net_ap_t *out, int max_out) {
     return n;
 }
 
-static int scan_one(const char *ssid, int *rssi_out) {
+int net_wifi_scan(net_ap_t *out, int max_out) {
+    int n;
+    if (!out || max_out <= 0) {
+        return -1;
+    }
+    wifi_bringup();
+    if (scan_mu_take() != 0) {
+        return -1;
+    }
+    n = scan_aps(out, max_out);
+    scan_mu_give();
+    return n;
+}
+
+static int scan_one_unlocked(const char *ssid, int *rssi_out) {
     wifi_scan_config_t scan = {0};
     wifi_ap_record_t *recs;
     uint8_t ssid_buf[33];
@@ -395,6 +433,16 @@ static int scan_one(const char *ssid, int *rssi_out) {
     if (found && rssi_out) {
         *rssi_out = rssi;
     }
+    return found;
+}
+
+static int scan_one(const char *ssid, int *rssi_out) {
+    int found;
+    if (scan_mu_take() != 0) {
+        return 0;
+    }
+    found = scan_one_unlocked(ssid, rssi_out);
+    scan_mu_give();
     return found;
 }
 

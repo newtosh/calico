@@ -9,6 +9,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
+#include "freertos/task.h"
 #include "sdkconfig.h"
 
 #include <stdint.h>
@@ -68,9 +69,11 @@ void ble_link_leave(void) {
 static uint8_t s_own_addr_type;
 static int s_gatt_ok;
 static int s_host_up;
+static char s_scan_text[BLE_DESK_SCAN_TEXT];
+static int s_scan_busy;
 
 /* Little-endian UUID bytes. The 13th byte is the time_low LSB:
- * 0x10 service, 0x11 status, 0x12 url, 0x13 token, 0x14 wifi, 0x15 reboot.
+ * 0x10 service, 0x11 status, 0x12 url, 0x13 token, 0x14 wifi, 0x15 reboot, 0x16 scan.
  * scripts/test_ble_provision.py checks these against the strings in ble_desk.h. */
 static const ble_uuid128_t s_uuid_svc =
     BLE_UUID128_INIT(0x65, 0x64, 0x6b, 0x6f, 0x72, 0x67, 0xc5, 0xa3, 0x91, 0x4f, 0x2a, 0x6e, 0x10,
@@ -89,6 +92,9 @@ static const ble_uuid128_t s_uuid_wifi =
                      0x4b, 0x7c, 0x8d);
 static const ble_uuid128_t s_uuid_reboot =
     BLE_UUID128_INIT(0x65, 0x64, 0x6b, 0x6f, 0x72, 0x67, 0xc5, 0xa3, 0x91, 0x4f, 0x2a, 0x6e, 0x15,
+                     0x4b, 0x7c, 0x8d);
+static const ble_uuid128_t s_uuid_scan =
+    BLE_UUID128_INIT(0x65, 0x64, 0x6b, 0x6f, 0x72, 0x67, 0xc5, 0xa3, 0x91, 0x4f, 0x2a, 0x6e, 0x16,
                      0x4b, 0x7c, 0x8d);
 
 static int access(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt *ctxt,
@@ -131,6 +137,12 @@ static const struct ble_gatt_svc_def s_svcs[] = {
                     .access_cb = access,
                     .arg = (void *)(uintptr_t)BLE_DESK_OP_REBOOT,
                     .flags = BLE_GATT_CHR_F_WRITE,
+                },
+                {
+                    .uuid = &s_uuid_scan.u,
+                    .access_cb = access,
+                    .arg = (void *)(uintptr_t)BLE_DESK_OP_SCAN,
+                    .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE,
                 },
                 {
                     0,
@@ -236,6 +248,85 @@ static int write_token(const uint8_t *buf, uint16_t len) {
     return 0;
 }
 
+static void publish_scan(int state, const ble_desk_ap_t *aps, int count) {
+    char body[BLE_DESK_SCAN_TEXT];
+    size_t n;
+    if (ble_desk_format_scan(body, sizeof(body), state, aps, count) < 0) {
+        ble_desk_format_scan(body, sizeof(body), BLE_DESK_SCAN_FAIL, NULL, 0);
+    }
+    n = strlen(body) + 1;
+    ble_link_enter();
+    memcpy(s_scan_text, body, n);
+    s_scan_busy = 0;
+    ble_link_leave();
+}
+
+_Static_assert(BLE_DESK_SCAN_MAX == NET_SCAN_MAX, "scan cap");
+
+/* Off the NimBLE host. esp_wifi_scan_start blocks for the air time, and the
+ * host has to keep answering the link. Same 12KB stack as the glass scan.
+ * Created only after esp_wifi_init, so it does not take the STA's DMA block. */
+static void scan_worker(void *arg) {
+    net_ap_t found[NET_SCAN_MAX];
+    ble_desk_ap_t aps[BLE_DESK_SCAN_MAX];
+    int n;
+    int i;
+    int count;
+    (void)arg;
+    n = net_wifi_scan(found, NET_SCAN_MAX);
+    if (n < 0) {
+        publish_scan(BLE_DESK_SCAN_FAIL, NULL, 0);
+    } else {
+        count = n;
+        memset(aps, 0, sizeof(aps));
+        for (i = 0; i < count; i++) {
+            memcpy(aps[i].ssid, found[i].ssid, sizeof(aps[i].ssid));
+            aps[i].ssid[sizeof(aps[i].ssid) - 1] = '\0';
+            aps[i].rssi = found[i].rssi;
+        }
+        publish_scan(BLE_DESK_SCAN_READY, aps, count);
+    }
+    vTaskDelete(NULL);
+}
+
+static int read_scan(struct os_mbuf *om) {
+    char body[BLE_DESK_SCAN_TEXT];
+    ble_link_enter();
+    if (!s_scan_text[0]) {
+        ble_desk_format_scan(s_scan_text, sizeof(s_scan_text), BLE_DESK_SCAN_IDLE, NULL, 0);
+    }
+    memcpy(body, s_scan_text, sizeof(body));
+    ble_link_leave();
+    return append_text(om, body, (int)strlen(body));
+}
+
+static int write_scan(const uint8_t *buf, uint16_t len) {
+    if (ble_desk_parse_scan(buf, len) != 0) {
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+    ble_link_enter();
+    if (s_scan_busy) {
+        ble_link_leave();
+        return 0;
+    }
+    s_scan_busy = 1;
+    if (ble_desk_format_scan(s_scan_text, sizeof(s_scan_text), BLE_DESK_SCAN_BUSY, NULL, 0) < 0) {
+        s_scan_busy = 0;
+        ble_link_leave();
+        return BLE_ATT_ERR_INSUFFICIENT_RES;
+    }
+    /* The worker does not take s_mu until the scan returns. */
+    if (xTaskCreate(scan_worker, "ble-scan", 12288, NULL, 4, NULL) != pdPASS) {
+        s_scan_busy = 0;
+        ble_desk_format_scan(s_scan_text, sizeof(s_scan_text), BLE_DESK_SCAN_FAIL, NULL, 0);
+        ble_link_leave();
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+    ble_link_leave();
+    ESP_LOGI(TAG, "wifi scan");
+    return 0;
+}
+
 static int write_wifi(const uint8_t *buf, uint16_t len) {
     char ssid[33];
     char pass[65];
@@ -271,6 +362,9 @@ static int access(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_ac
         if (op == BLE_DESK_OP_URL) {
             return read_url(ctxt->om);
         }
+        if (op == BLE_DESK_OP_SCAN) {
+            return read_scan(ctxt->om);
+        }
         return BLE_ATT_ERR_READ_NOT_PERMITTED;
     }
     if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) {
@@ -288,6 +382,9 @@ static int access(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_ac
     }
     if (op == BLE_DESK_OP_WIFI) {
         return write_wifi(buf, len);
+    }
+    if (op == BLE_DESK_OP_SCAN) {
+        return write_scan(buf, len);
     }
     if (op == BLE_DESK_OP_REBOOT) {
         if (ble_desk_parse_reboot(buf, len) != 0 || !s_on_restart) {

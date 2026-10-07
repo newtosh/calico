@@ -7,6 +7,9 @@ _Static_assert(sizeof(((wifi_store_t *)0)->nets[0].ssid) == BLE_DESK_SSID_MAX + 
 _Static_assert(sizeof(((wifi_store_t *)0)->nets[0].pass) == BLE_DESK_PASS_MAX + 1, "pass field");
 _Static_assert(sizeof(((wifi_store_t *)0)->url) == BLE_DESK_URL_MAX + 1, "url field");
 _Static_assert(sizeof(((wifi_store_t *)0)->token) == BLE_DESK_TOKEN_MAX + 1, "token field");
+_Static_assert(BLE_DESK_SCAN_TEXT >= (sizeof("state=ready\n") - 1) +
+                       BLE_DESK_SCAN_MAX * ((sizeof("-128") - 1) + 1 + BLE_DESK_SSID_MAX + 1) + 1,
+               "scan text");
 
 static void copy_field(char *dest, size_t dest_len, const char *src) {
     size_t i;
@@ -191,6 +194,61 @@ int ble_desk_parse_reboot(const uint8_t *in, size_t len) {
         return -1;
     }
     return 0;
+}
+
+int ble_desk_parse_scan(const uint8_t *in, size_t len) {
+    size_t n;
+    if (strip_tail(in, len, &n) != 0 || n != 4 || memcmp(in, "scan", 4) != 0) {
+        return -1;
+    }
+    return 0;
+}
+
+static int scan_ssid_ok(const char *ssid) {
+    if (!ssid || !ssid[0]) {
+        return 0;
+    }
+    return strpbrk(ssid, "\n\r\t") == NULL;
+}
+
+int ble_desk_format_scan(char *out, size_t cap, int state, const ble_desk_ap_t *aps, int count) {
+    const char *label = "idle";
+    size_t used;
+    int n;
+    int i;
+    int kept = 0;
+    if (!out || cap == 0) {
+        return -1;
+    }
+    if (state == BLE_DESK_SCAN_BUSY) {
+        label = "busy";
+    } else if (state == BLE_DESK_SCAN_READY) {
+        label = "ready";
+    } else if (state == BLE_DESK_SCAN_FAIL) {
+        label = "fail";
+    }
+    n = snprintf(out, cap, "state=%s\n", label);
+    if (n < 0 || (size_t)n >= cap) {
+        out[0] = '\0';
+        return -1;
+    }
+    used = (size_t)n;
+    if (state != BLE_DESK_SCAN_READY || !aps || count <= 0) {
+        return (int)used;
+    }
+    for (i = 0; i < count && kept < BLE_DESK_SCAN_MAX; i++) {
+        if (!scan_ssid_ok(aps[i].ssid)) {
+            continue;
+        }
+        n = snprintf(out + used, cap - used, "%d\t%s\n", (int)aps[i].rssi, aps[i].ssid);
+        if (n < 0 || (size_t)n >= cap - used) {
+            out[0] = '\0';
+            return -1;
+        }
+        used += (size_t)n;
+        kept++;
+    }
+    return (int)used;
 }
 
 int ble_desk_set_url(wifi_store_t *store, const char *url) {

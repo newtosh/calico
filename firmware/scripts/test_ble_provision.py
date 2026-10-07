@@ -94,3 +94,33 @@ def test_token_encode_ignores_environment(monkeypatch):
     assert tool.encode_token("typed") == b"typed"
     assert tool.encode_wifi("home", "password1") == b"home\npassword1"
     assert os.environ["TOKEN"] == "from-env"
+
+
+def test_scan_text_round_trip():
+    tool = load_tool()
+    assert tool.encode_scan() == b"scan"
+    assert "scan" in tool.UUIDS
+    state, aps = tool.parse_scan("state=ready\n-45\tCafe WiFi\n-70\thome\n")
+    assert state == "ready"
+    assert aps == [(-45, "Cafe WiFi"), (-70, "home")]
+    assert tool.parse_scan("state=busy\n") == ("busy", [])
+    assert tool.parse_scan("state=fail\n") == ("fail", [])
+    assert tool.parse_scan("state=idle\n") == ("idle", [])
+    assert tool.parse_scan("state=ready\n") == ("ready", [])
+    assert tool.parse_scan("state=ready\nnope\n-1\tonly\n") == ("ready", [(-1, "only")])
+    assert tool.parse_scan("state=ready\n-40\thome=net\n") == ("ready", [(-40, "home=net")])
+    assert tool.scan_poll_done("busy") is False
+    assert tool.scan_poll_done("idle") is False
+    assert tool.scan_poll_done("ready") is True
+    assert tool.scan_poll_done("fail") is True
+
+
+def test_menus_cover_provisioning():
+    tool = load_tool()
+    assert {key for key, _label in tool.MAIN_MENU} >= {"status", "url", "token", "wifi", "reboot"}
+    assert {key for key, _label in tool.WIFI_MENU} >= {"wifi-scan", "type"}
+    args = tool.build_parser().parse_args([])
+    assert args.command == "tui"
+    assert tool.build_parser().parse_args(["status"]).command == "status"
+    assert tool.build_parser().parse_args(["wifi-scan"]).command == "wifi-scan"
+    assert tool.build_parser().parse_args(["wifi"]).command == "wifi"

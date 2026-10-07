@@ -117,6 +117,56 @@ int main(void) {
     check(store.nets[1].url[0] == '\0' && store.nets[1].token[0] == '\0', "new slot follows global");
     check(strcmp(store.url, "http://10.0.0.8:8787") == 0, "global url kept");
 
+    check(ble_desk_parse_scan((const uint8_t *)"scan", 4) == 0, "scan");
+    check(ble_desk_parse_scan((const uint8_t *)"scan\n", 5) == 0, "scan nl");
+    check(ble_desk_parse_scan((const uint8_t *)"scan\r\n", 6) == 0, "scan crlf");
+    check(ble_desk_parse_scan((const uint8_t *)"scan-now", 8) != 0, "scan extra");
+    check(ble_desk_parse_scan((const uint8_t *)"sca", 3) != 0, "scan short");
+
+    n = ble_desk_format_scan(body, sizeof(body), BLE_DESK_SCAN_IDLE, NULL, 0);
+    check(n > 0 && strcmp(body, "state=idle\n") == 0, "scan idle");
+    n = ble_desk_format_scan(body, sizeof(body), BLE_DESK_SCAN_BUSY, NULL, 1);
+    check(n > 0 && strcmp(body, "state=busy\n") == 0, "scan busy ignores rows");
+    n = ble_desk_format_scan(body, sizeof(body), BLE_DESK_SCAN_FAIL, NULL, 0);
+    check(n > 0 && strcmp(body, "state=fail\n") == 0, "scan fail");
+    {
+        ble_desk_ap_t aps[3];
+        memset(aps, 0, sizeof(aps));
+        memcpy(aps[0].ssid, "Cafe WiFi", 10);
+        aps[0].rssi = -45;
+        memcpy(aps[1].ssid, "a\tb", 4);
+        aps[1].rssi = -50;
+        memcpy(aps[2].ssid, "home", 5);
+        aps[2].rssi = -70;
+        n = ble_desk_format_scan(body, sizeof(body), BLE_DESK_SCAN_READY, aps, 3);
+        check(n > 0, "scan ready length");
+        check(strcmp(body, "state=ready\n-45\tCafe WiFi\n-70\thome\n") == 0, "scan skips tab ssid");
+        check(strstr(body, "a\tb") == NULL, "tab ssid not written back");
+    }
+    n = ble_desk_format_scan(body, sizeof(body), BLE_DESK_SCAN_READY, NULL, 0);
+    check(n > 0 && strcmp(body, "state=ready\n") == 0, "scan ready empty");
+    {
+        ble_desk_ap_t many[BLE_DESK_SCAN_MAX + 2];
+        int i;
+        memset(many, 0, sizeof(many));
+        for (i = 0; i < BLE_DESK_SCAN_MAX + 2; i++) {
+            snprintf(many[i].ssid, sizeof(many[i].ssid), "net-%02d", i);
+            many[i].rssi = (int8_t)(-10 - i);
+        }
+        n = ble_desk_format_scan(body, sizeof(body), BLE_DESK_SCAN_READY, many, BLE_DESK_SCAN_MAX + 2);
+        check(n > 0, "scan cap length");
+        check(strstr(body, "net-00") != NULL, "first ap kept");
+        check(strstr(body, "net-15") != NULL, "sixteenth ap kept");
+        check(strstr(body, "net-16") == NULL, "past cap dropped");
+    }
+    {
+        ble_desk_ap_t one;
+        memset(&one, 0, sizeof(one));
+        memcpy(one.ssid, "home", 5);
+        one.rssi = -40;
+        check(ble_desk_format_scan(body, 8, BLE_DESK_SCAN_READY, &one, 1) < 0, "scan short buffer");
+    }
+
     if (g_failed) {
         return 1;
     }

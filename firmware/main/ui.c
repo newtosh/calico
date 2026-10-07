@@ -211,8 +211,7 @@ static int s_list_cover;
 static lv_obj_t *s_lamp;
 static lv_obj_t *s_toast_label;
 static lv_obj_t *s_wifi_bars[3];
-static lv_obj_t *s_bt_label;
-static lv_obj_t *s_bt_strike;
+static lv_obj_t *s_bt_icon;
 static int s_bt_state;
 static lv_obj_t *s_lock;
 static lv_obj_t *s_lock_label;
@@ -1747,7 +1746,7 @@ static void toast_kick(void) {
 static void paint_bt(void) {
     int on = s_bt_state != 0;
     uint32_t color = INK_DIM;
-    if (!s_bt_label) {
+    if (!s_bt_icon) {
         return;
     }
     if (s_bt_state == 2) {
@@ -1755,11 +1754,10 @@ static void paint_bt(void) {
     } else if (on) {
         color = INK;
     }
-    lv_obj_set_style_text_color(s_bt_label, lv_color_hex(color), 0);
-    lv_obj_set_style_opa(s_bt_label, on ? LV_OPA_COVER : LV_OPA_40, 0);
-    if (s_bt_strike) {
-        lv_obj_set_hidden(s_bt_strike, on);
-    }
+    lv_image_set_src(s_bt_icon, on ? &desk_icon_bt_on : &desk_icon_bt);
+    lv_obj_set_style_image_recolor(s_bt_icon, lv_color_hex(color), 0);
+    lv_obj_set_style_image_recolor_opa(s_bt_icon, LV_OPA_COVER, 0);
+    lv_obj_set_style_opa(s_bt_icon, on ? LV_OPA_COVER : LV_OPA_40, 0);
 }
 
 static void paint_bars(int bars) {
@@ -1804,11 +1802,10 @@ static int present_status(const char *phase, int failures) {
     return glance.lamp;
 }
 
-/* BT starts struck through. ui_set_bt clears the strike once advertising. */
+/* BT starts as the dim rune. ui_set_bt swaps in the dotted mark once the radio is up. */
 static void build_status_bar(lv_obj_t *screen) {
     lv_obj_t *cluster;
     lv_obj_t *wifi;
-    lv_obj_t *bt;
     int i;
     lv_obj_t *bar;
     static const int heights[3] = {6, 10, 14};
@@ -1871,24 +1868,8 @@ static void build_status_bar(lv_obj_t *screen) {
         lv_obj_clear_flag(s_wifi_bars[i], LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     }
 
-    bt = lv_obj_create(cluster);
-    lv_obj_set_size(bt, 28, 18);
-    flatten(bt);
-    lv_obj_clear_flag(bt, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    s_bt_label = lv_label_create(bt);
-    lv_label_set_text(s_bt_label, "BT");
-    lv_obj_set_style_text_font(s_bt_label, &lv_font_montserrat_16, 0);
-    lv_obj_center(s_bt_label);
-    lv_obj_clear_flag(s_bt_label, LV_OBJ_FLAG_CLICKABLE);
-    s_bt_strike = lv_obj_create(bt);
-    lv_obj_set_size(s_bt_strike, 22, 1);
-    lv_obj_set_style_bg_color(s_bt_strike, lv_color_hex(INK_DIM), 0);
-    lv_obj_set_style_bg_opa(s_bt_strike, LV_OPA_50, 0);
-    lv_obj_set_style_border_width(s_bt_strike, 0, 0);
-    lv_obj_set_style_radius(s_bt_strike, 0, 0);
-    lv_obj_set_style_pad_all(s_bt_strike, 0, 0);
-    lv_obj_align(s_bt_strike, LV_ALIGN_CENTER, 0, 1);
-    lv_obj_clear_flag(s_bt_strike, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    s_bt_icon = lv_image_create(cluster);
+    lv_obj_clear_flag(s_bt_icon, LV_OBJ_FLAG_CLICKABLE);
     paint_bt();
 
     s_lock = lv_button_create(cluster);

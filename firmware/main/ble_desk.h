@@ -16,7 +16,13 @@
  *   token   ...13  write
  *   wifi    ...14  write
  *   reboot  ...15  write
+ *   scan    ...16  read, write
  * The node bytes 67726f6b6465 are "grokde".
+ *
+ * Scan write is the four bytes "scan". The read is one record per line:
+ * "state=idle|busy|ready|fail", then "rssi<TAB>ssid" while ready. An SSID
+ * that contains a tab or a newline is left out, because the central writes
+ * that text back as the network name. At most BLE_DESK_SCAN_MAX rows.
  */
 
 #define BLE_DESK_NAME "grokbot-buddy"
@@ -27,20 +33,37 @@
 #define BLE_DESK_UUID_TOKEN "8d7c4b13-6e2a-4f91-a3c5-67726f6b6465"
 #define BLE_DESK_UUID_WIFI "8d7c4b14-6e2a-4f91-a3c5-67726f6b6465"
 #define BLE_DESK_UUID_REBOOT "8d7c4b15-6e2a-4f91-a3c5-67726f6b6465"
+#define BLE_DESK_UUID_SCAN "8d7c4b16-6e2a-4f91-a3c5-67726f6b6465"
 
 /* Field sizes match wifi_store_t and the USB provisioner. */
 #define BLE_DESK_SSID_MAX 32
 #define BLE_DESK_PASS_MAX 64
 #define BLE_DESK_URL_MAX 127
 #define BLE_DESK_TOKEN_MAX 127
+/* Same cap as net_wifi_scan. 16 rows of "-128\t" + 32-byte SSID fit in the text buffer. */
+#define BLE_DESK_SCAN_MAX 16
+#define BLE_DESK_SCAN_TEXT (12 + BLE_DESK_SCAN_MAX * (4 + 1 + BLE_DESK_SSID_MAX + 1) + 1)
 
 enum {
     BLE_DESK_OP_STATUS = 1,
     BLE_DESK_OP_URL = 2,
     BLE_DESK_OP_TOKEN = 3,
     BLE_DESK_OP_WIFI = 4,
-    BLE_DESK_OP_REBOOT = 5
+    BLE_DESK_OP_REBOOT = 5,
+    BLE_DESK_OP_SCAN = 6
 };
+
+enum {
+    BLE_DESK_SCAN_IDLE = 0,
+    BLE_DESK_SCAN_BUSY = 1,
+    BLE_DESK_SCAN_READY = 2,
+    BLE_DESK_SCAN_FAIL = 3
+};
+
+typedef struct {
+    char ssid[BLE_DESK_SSID_MAX + 1];
+    int8_t rssi;
+} ble_desk_ap_t;
 
 /* NUL-terminated body. Returns the length without the NUL, or -1 if it
  * does not fit. ssid or url empty is written as "none". token_set is
@@ -55,6 +78,13 @@ int ble_desk_parse_token(const uint8_t *in, size_t len, char *out, size_t cap);
 int ble_desk_parse_wifi(const uint8_t *in, size_t len, char *ssid, size_t ssid_cap, char *pass,
                         size_t pass_cap);
 int ble_desk_parse_reboot(const uint8_t *in, size_t len);
+/* 0 when the write is "scan". One trailing CR/LF run is ignored. */
+int ble_desk_parse_scan(const uint8_t *in, size_t len);
+
+/* NUL-terminated body. Returns the length without the NUL, or -1 if it
+ * does not fit (out is then empty). Rows are kept in the order given.
+ * state other than ready writes only the state line. */
+int ble_desk_format_scan(char *out, size_t cap, int state, const ble_desk_ap_t *aps, int count);
 
 int ble_desk_set_url(wifi_store_t *store, const char *url);
 int ble_desk_set_token(wifi_store_t *store, const char *token);

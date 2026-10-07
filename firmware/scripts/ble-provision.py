@@ -3,10 +3,15 @@
 
 The board advertises as ``grokbot-buddy``. Writes land in NVS namespace
 ``desk`` and take effect on the next boot. ``reboot`` soft-resets the board.
+The link is GATT. The OS pairing dialog does not connect.
+
+With no command this opens a menu: pick a desk, read status, set the URL,
+set or clear the token, add Wi-Fi from the desk's scan or by typing the
+SSID, and reboot. The named commands stay for scripts.
 
 Protocol, UUIDs, and the open-link posture: firmware/README.md.
 
-Needs ``bleak`` on the machine with the radio (``pip install bleak``).
+Needs ``bleak`` and ``prompt_toolkit`` on the machine with the radio.
 The password and the bearer are read from hidden prompts, not argv or
 the environment.
 """
@@ -17,6 +22,7 @@ import argparse
 import asyncio
 import os
 import sys
+import time
 from getpass import getpass
 
 NAME = "grokbot-buddy"
@@ -28,6 +34,7 @@ UUID_URL = "8d7c4b12-6e2a-4f91-a3c5-67726f6b6465"
 UUID_TOKEN = "8d7c4b13-6e2a-4f91-a3c5-67726f6b6465"
 UUID_WIFI = "8d7c4b14-6e2a-4f91-a3c5-67726f6b6465"
 UUID_REBOOT = "8d7c4b15-6e2a-4f91-a3c5-67726f6b6465"
+UUID_SCAN = "8d7c4b16-6e2a-4f91-a3c5-67726f6b6465"
 
 UUIDS = {
     "svc": UUID_SVC,
@@ -36,6 +43,7 @@ UUIDS = {
     "token": UUID_TOKEN,
     "wifi": UUID_WIFI,
     "reboot": UUID_REBOOT,
+    "scan": UUID_SCAN,
 }
 
 SSID_MAX = 32
@@ -44,6 +52,24 @@ URL_MAX = 127
 TOKEN_MAX = 127
 # Preferred ATT MTU is 256. A max URL or token needs payload room for 127 bytes.
 MIN_WRITE_MTU = 130
+# Active scan plus coexistence. The desk returns state=busy until it finishes.
+SCAN_WAIT_S = 25.0
+
+MAIN_MENU = (
+    ("status", "Refresh status"),
+    ("url", "Set companion URL"),
+    ("token", "Set or clear bearer token"),
+    ("wifi", "Add Wi-Fi"),
+    ("reboot", "Reboot"),
+    ("desk", "Pick a different desk"),
+    ("quit", "Quit"),
+)
+
+WIFI_MENU = (
+    ("wifi-scan", "Scan nearby networks"),
+    ("type", "Type an SSID"),
+    ("back", "Back"),
+)
 
 IGNORED_ENV = (
     "SSID",
@@ -58,7 +84,7 @@ IGNORED_ENV = (
     "COMPANION_URL",
 )
 
-COMMANDS = ("scan", "status", "url", "token", "wifi", "reboot")
+COMMANDS = ("scan", "status", "url", "token", "wifi", "wifi-scan", "reboot", "tui")
 
 
 class FieldError(ValueError):
@@ -131,6 +157,33 @@ def encode_reboot() -> bytes:
     return b"reboot"
 
 
+def encode_scan() -> bytes:
+    return b"scan"
+
+
+def parse_scan(body: str) -> tuple[str, list[tuple[int, str]]]:
+    state = parse_status(body).get("state", "")
+    aps: list[tuple[int, str]] = []
+    for line in body.splitlines():
+        if line.startswith("state="):
+            continue
+        if "\t" not in line:
+            continue
+        rssi_s, ssid = line.split("\t", 1)
+        try:
+            rssi = int(rssi_s)
+        except ValueError:
+            continue
+        if ssid == "":
+            continue
+        aps.append((rssi, ssid))
+    return state, aps
+
+
+def scan_poll_done(state: str) -> bool:
+    return state in {"ready", "fail"}
+
+
 def parse_status(body: str) -> dict[str, str]:
     fields: dict[str, str] = {}
     for line in body.splitlines():
@@ -201,13 +254,15 @@ def prompt_token() -> str:
             print(exc, file=sys.stderr)
 
 
-def prompt_wifi() -> tuple[str, str]:
+def prompt_ssid() -> str:
     while True:
         try:
-            ssid = validate_ssid(_ask("Wi-Fi SSID: "))
-            break
+            return validate_ssid(_ask("Wi-Fi SSID: "))
         except FieldError as exc:
             print(exc, file=sys.stderr)
+
+
+def prompt_password() -> str:
     while True:
         password = _ask_secret("Wi-Fi password (empty for an open network, not echoed): ")
         again = _ask_secret("Wi-Fi password again: ")
@@ -215,9 +270,23 @@ def prompt_wifi() -> tuple[str, str]:
             print("passwords did not match", file=sys.stderr)
             continue
         try:
-            return ssid, validate_pass(password)
+            return validate_pass(password)
         except FieldError as exc:
             print(exc, file=sys.stderr)
+
+
+def prompt_wifi() -> tuple[str, str]:
+    return prompt_ssid(), prompt_password()
+
+
+def confirm_wifi(ssid: str, password: str) -> bytes | None:
+    kind = "open network" if password == "" else "WPA password"
+    print(f"Save Wi-Fi {ssid} ({kind}). Other saved networks stay.")
+    print("The station joins it on reboot, not on this write.")
+    if not _confirm("Proceed? [y/N] "):
+        print("aborted")
+        return None
+    return encode_wifi(ssid, password)
 
 
 def _bleak():
@@ -233,6 +302,16 @@ def _bleak():
 def _desk_name(device, adv) -> str:
     local = getattr(adv, "local_name", None) if adv is not None else None
     return local or getattr(device, "name", None) or ""
+
+
+def _desk_line(device, name: str) -> str:
+    rssi = getattr(device, "rssi", None)
+    extra = f"  {rssi} dBm" if rssi is not None else ""
+    return f"{device.address}  {name}{extra}"
+
+
+def print_text(text: str) -> None:
+    print(text, end="" if text.endswith("\n") else "\n")
 
 
 async def scan_desks(timeout: float = 5.0):
@@ -261,7 +340,7 @@ async def resolve_address(address: str) -> str:
     if len(found) == 1:
         return found[0][0].address
     if not found:
-        raise SystemExit(f"no {NAME} advertisement. Is the BT mark plain, not struck through?")
+        raise SystemExit(f"no {NAME} advertisement. Is the Bluetooth mark lit, with a dot on each side?")
     lines = "\n".join(f"  {device.address}  {name}" for device, name in found)
     raise SystemExit(f"more than one {NAME}. Pass --address.\n{lines}")
 
@@ -275,9 +354,31 @@ def _check_mtu(client, payload: bytes) -> None:
         )
 
 
-async def read_status(client) -> str:
-    raw = await client.read_gatt_char(UUID_STATUS)
+async def read_text(client, uuid: str) -> str:
+    raw = await client.read_gatt_char(uuid)
     return bytes(raw).decode("utf-8", errors="replace")
+
+
+async def read_status(client) -> str:
+    return await read_text(client, UUID_STATUS)
+
+
+async def read_scan(client) -> str:
+    return await read_text(client, UUID_SCAN)
+
+
+async def request_wifi_scan(client, timeout: float = SCAN_WAIT_S) -> str:
+    await write_char(client, UUID_SCAN, encode_scan())
+    deadline = time.monotonic() + timeout
+    last = ""
+    while True:
+        last = await read_scan(client)
+        state, _aps = parse_scan(last)
+        if scan_poll_done(state):
+            return last
+        if time.monotonic() >= deadline:
+            raise TimeoutError(last or "wifi scan timed out")
+        await asyncio.sleep(0.5)
 
 
 async def write_char(client, uuid: str, payload: bytes) -> None:
@@ -285,7 +386,7 @@ async def write_char(client, uuid: str, payload: bytes) -> None:
     await client.write_gatt_char(uuid, payload, response=True)
 
 
-async def run_command(command: str, address: str, payload: bytes | None) -> int:
+async def run_command(command: str, address: str, payload: bytes | None) -> tuple[int, str]:
     bleak = _bleak()
     target = await resolve_address(address)
     print(f"{NAME} {target}")
@@ -293,12 +394,12 @@ async def run_command(command: str, address: str, payload: bytes | None) -> int:
         async with bleak.BleakClient(target) as client:
             if command == "status":
                 text = await read_status(client)
-                print(text, end="" if text.endswith("\n") else "\n")
-                return 0
+                print_text(text)
+                return 0, text
             if command == "reboot":
                 await write_char(client, UUID_REBOOT, payload or encode_reboot())
                 print("reboot sent. The link may drop before the response.")
-                return 0
+                return 0, ""
             uuid = {
                 "url": UUID_URL,
                 "token": UUID_TOKEN,
@@ -306,15 +407,47 @@ async def run_command(command: str, address: str, payload: bytes | None) -> int:
             }[command]
             await write_char(client, uuid, payload or b"")
             text = await read_status(client)
-            print(text, end="" if text.endswith("\n") else "\n")
-            return 0
+            print_text(text)
+            return 0, text
     except Exception as exc:
         # A reboot often disconnects before the ATT response. The other
         # commands should still be connected, so this stays a failure.
         print(f"{command} failed: {exc}", file=sys.stderr)
         if command == "reboot":
             print("If the board reset, scan again for the advertisement.", file=sys.stderr)
+        return 1, ""
+
+
+async def fetch_status(address: str) -> str:
+    bleak = _bleak()
+    async with bleak.BleakClient(address) as client:
+        return await read_status(client)
+
+
+async def fetch_wifi_scan(address: str) -> str:
+    bleak = _bleak()
+    async with bleak.BleakClient(address) as client:
+        return await request_wifi_scan(client)
+
+
+async def run_wifi_scan(address: str) -> int:
+    target = await resolve_address(address)
+    print(f"{NAME} {target}")
+    try:
+        body = await fetch_wifi_scan(target)
+    except Exception as exc:
+        print(f"wifi-scan failed: {exc}", file=sys.stderr)
         return 1
+    state, aps = parse_scan(body)
+    if state != "ready":
+        print_text(body)
+        return 1
+    if not aps:
+        print("no networks")
+        return 0
+    for rssi, ssid in aps:
+        print(f"{rssi}\t{ssid}")
+    return 0
 
 
 def _prepare_write(command: str) -> bytes | None:
@@ -339,13 +472,7 @@ def _prepare_write(command: str) -> bytes | None:
         return encode_token(token)
     if command == "wifi":
         ssid, password = prompt_wifi()
-        kind = "open network" if password == "" else "WPA password"
-        print(f"Save Wi-Fi {ssid} ({kind}). Other saved networks stay.")
-        print("The station joins it on reboot, not on this write.")
-        if not _confirm("Proceed? [y/N] "):
-            print("aborted")
-            return None
-        return encode_wifi(ssid, password)
+        return confirm_wifi(ssid, password)
     if command == "reboot":
         print("Soft-reset the desk.")
         if not _confirm("Proceed? [y/N] "):
@@ -355,27 +482,168 @@ def _prepare_write(command: str) -> bytes | None:
     return None
 
 
-def provision(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="scripts/ble-provision.py")
-    parser.add_argument("command", choices=COMMANDS)
+    parser.add_argument(
+        "command",
+        nargs="?",
+        default="tui",
+        choices=COMMANDS,
+        help="Default opens the menu. The other commands stay for scripts.",
+    )
     parser.add_argument("--address", default="", help="BLE address. Default: the one grokbot-buddy found.")
-    args = parser.parse_args(argv)
+    return parser
+
+
+def _menu():
+    try:
+        from prompt_toolkit.shortcuts import choice
+    except ImportError as exc:
+        raise SystemExit(
+            "prompt_toolkit is not installed. On the machine with the radio:\n"
+            "  .venv-ble/bin/pip install bleak prompt_toolkit"
+        ) from exc
+    return choice
+
+
+def choose(title: str, text: str, values):
+    """Arrow keys move. Enter returns the highlighted value."""
+    dialog = _menu()
+    shown = text.strip() or " "
+    return dialog(
+        message=f"{title}\n\n{shown}",
+        options=list(values),
+        bottom_toolbar="arrows, enter",
+    )
+
+
+def pick_desk() -> str:
+    found = asyncio.run(scan_desks())
+    if not found:
+        print(f"no {NAME} advertisement. Is the Bluetooth mark lit, with a dot on each side?")
+        return ""
+    if len(found) == 1:
+        device, name = found[0]
+        print(_desk_line(device, name))
+        return device.address
+    values = [(device.address, _desk_line(device, name)) for device, name in found]
+    picked = choose("Pick a desk", f"{len(found)} advertising as {NAME}", values)
+    return picked or ""
+
+
+def pick_scanned_ssid(address: str) -> str | None:
+    print("Scanning…")
+    try:
+        body = asyncio.run(fetch_wifi_scan(address))
+    except Exception as exc:
+        print(f"wifi scan failed: {exc}", file=sys.stderr)
+        return None
+    state, aps = parse_scan(body)
+    if state != "ready":
+        print("The desk could not scan.")
+        print_text(body)
+        return None
+    values = [(("ssid", ssid), f"{rssi:4d} dBm  {ssid}") for rssi, ssid in aps]
+    values.append((("type", ""), "Type an SSID"))
+    values.append((("back", ""), "Back"))
+    note = "None in range." if not aps else f"{len(aps)} networks, strongest first"
+    picked = choose("Nearby networks", note, values)
+    if not picked or picked[0] == "back":
+        return None
+    if picked[0] == "type":
+        return prompt_ssid()
+    return picked[1]
+
+
+def tui_wifi(address: str) -> str | None:
+    """Status text after a write. None when the user backed out."""
+    while True:
+        choice = choose(
+            "Add Wi-Fi",
+            "Other saved networks stay. The desk joins on reboot.",
+            WIFI_MENU,
+        )
+        if choice in (None, "back"):
+            return None
+        if choice == "type":
+            ssid, password = prompt_wifi()
+        elif choice == "wifi-scan":
+            ssid = pick_scanned_ssid(address)
+            if ssid is None:
+                continue
+            password = prompt_password()
+        else:
+            continue
+        payload = confirm_wifi(ssid, password)
+        if payload is None:
+            continue
+        _code, text = asyncio.run(run_command("wifi", address, payload))
+        return text
+
+
+def run_tui(address: str) -> int:
+    _disable_input_history()
+    _require_tty()
+    warn_ignored_env()
+    current = address
+    status = ""
+    if current:
+        print(f"{NAME} {current}")
+    while True:
+        if not current:
+            current = pick_desk()
+            status = ""
+            if not current:
+                return 1
+        if not status:
+            try:
+                status = asyncio.run(fetch_status(current))
+            except Exception as exc:
+                status = f"status failed: {exc}"
+                print(status, file=sys.stderr)
+        choice = choose(NAME, f"{current}\n\n{status}", MAIN_MENU)
+        if choice in (None, "quit"):
+            return 0
+        if choice == "desk":
+            current = ""
+            status = ""
+            continue
+        if choice == "status":
+            status = ""
+            continue
+        if choice == "wifi":
+            written = tui_wifi(current)
+            if written is not None:
+                status = written
+            continue
+        payload = _prepare_write(choice)
+        if payload is None:
+            continue
+        code, text = asyncio.run(run_command(choice, current, payload))
+        status = text if choice != "reboot" and code == 0 and text else ""
+
+
+def provision(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    if args.command == "tui":
+        return run_tui(args.address)
     if args.command == "scan":
         found = asyncio.run(scan_desks())
         if not found:
             print(f"no {NAME} advertisement")
             return 1
         for device, name in found:
-            rssi = getattr(device, "rssi", None)
-            extra = f"  {rssi} dBm" if rssi is not None else ""
-            print(f"{device.address}  {name}{extra}")
+            print(_desk_line(device, name))
         return 0
+    if args.command == "wifi-scan":
+        return asyncio.run(run_wifi_scan(args.address))
     payload = None
     if args.command != "status":
         payload = _prepare_write(args.command)
         if payload is None:
             return 1
-    return asyncio.run(run_command(args.command, args.address, payload))
+    code, _text = asyncio.run(run_command(args.command, args.address, payload))
+    return code
 
 
 def main() -> None:

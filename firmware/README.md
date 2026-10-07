@@ -53,7 +53,7 @@ A stale STA give-up does not override a poll that just succeeded while the stati
 
 `NEEDS YOU` is green. The companion answered. The sheet covers the list and the dock and leaves the bar visible, so the lamp, toast, and Wi-Fi stay readable. A short toast slides into the center of the bar when that status text changes (`IDLE` → `RUNNING`, `reconnecting`, `link down`, and the panel notes). One line is on screen and one can wait. A newer one replaces the waiter.
 
-Wi-Fi is three bars from the associated AP's RSSI (`esp_wifi_sta_get_ap_info`): 3 at -60 dBm and up, 2 at -75 dBm and up, 1 if associated but weaker, none if there is no IP. Bluetooth is the same `BT` letters. Dim and struck through means the controller is not up. Plain cream means it is advertising. Sage `#9bb57a` means a central is connected. The mark is not a button.
+Wi-Fi is three bars from the associated AP's RSSI (`esp_wifi_sta_get_ap_info`): 3 at -60 dBm and up, 2 at -75 dBm and up, 1 if associated but weaker, none if there is no IP. Bluetooth is a 20×14 rune beside those bars, the same alpha-bitmap treatment as the dock icons. Dim, with no side dots, means the controller is not up. Cream `#efe7d6` with a dot on each side means it is advertising. Sage `#9bb57a` with the same dots means a central is connected. The mark is not a button.
 
 `Auto` / `Lock` toggles the QMI8658 snap. Locked writes NVS namespace `desk` key `rotlock` as `0`, `1`, `2`, or `3` (the quarter on screen) and ignores the IMU until unlock, including across reboot. Unlock erases that key. It does not use `ssid`, `pass`, `url`, `token`, or `n{i}*`.
 
@@ -95,24 +95,31 @@ Service `8d7c4b10-6e2a-4f91-a3c5-67726f6b6465`:
 | token | `8d7c4b13-6e2a-4f91-a3c5-67726f6b6465` | write | bearer, or empty to clear. Optional trailing newline |
 | wifi | `8d7c4b14-6e2a-4f91-a3c5-67726f6b6465` | write | `SSID\npassword`. Empty password is an open network. One separator, optional trailing newline |
 | reboot | `8d7c4b15-6e2a-4f91-a3c5-67726f6b6465` | write | `reboot` |
+| scan | `8d7c4b16-6e2a-4f91-a3c5-67726f6b6465` | read, write | write `scan`. Read the result |
 
 Status is UTF-8, one `key=value` per line, in this order: `name`, `fw` (git short SHA, or `unknown`), `ssid` (associated AP, or `none`), `url` (global companion URL), `token` (`set` or `none`). A rejected write is an ATT error and does not touch NVS. URL, token, and Wi-Fi commits happen before the response. They do not restart the station. `reboot` calls `esp_restart`. The link often drops before that response comes back.
 
+A scan write queues `net_wifi_scan` on its own task and returns while `state=busy`. The NimBLE host is not blocked on the air time, so the link stays up. Read the same characteristic until `state=ready` or `state=fail`. Ready is `rssi`, a tab, and the SSID, strongest first, at most 16. That body can be longer than one packet. BlueZ returns the rest, the same as status. An SSID with a tab or a newline is omitted. A second write while busy does not start another scan. The glass scan, the hidden-SSID probe, and this one share a lock. Wi-Fi is started before the NimBLE host task even when no network is saved, because a scan is `esp_wifi_init` if that step was skipped. This is a Wi-Fi scan. The controller still does not scan, and `BT_CTRL_BLE_MAX_ACT` stays 2.
+
 Wi-Fi upsert uses the same eight slots as settings. Updating an SSID replaces the password and keeps that slot's own URL and token. A new SSID follows the global URL. The controller may add its own NVS keys on first boot. That is not an erase, and it does not rewrite `desk`.
 
+With no command the script opens a menu. It scans for `grokbot-buddy`, shows status, and steps through the URL, the token, Wi-Fi, and reboot. Add Wi-Fi can take an SSID from the desk's scan or from the keyboard. The OS Bluetooth pairing dialog does not connect. The link is GATT, and the client is bleak.
+
 ```bash
-pip install bleak
+.venv-ble/bin/pip install bleak prompt_toolkit
+.venv-ble/bin/python scripts/ble-provision.py
 scripts/ble-provision.py scan
 scripts/ble-provision.py status
 scripts/ble-provision.py url
 scripts/ble-provision.py token
+scripts/ble-provision.py wifi-scan
 scripts/ble-provision.py wifi
 scripts/ble-provision.py reboot
 ```
 
-`url`, `token`, and `wifi` prompt. The password and the bearer are not arguments and not environment variables. `--address AA:BB:CC:DD:EE:FF` picks one desk when more than one is advertising.
+`url`, `token`, and `wifi` prompt. The password and the bearer are not arguments and not environment variables. `--address AA:BB:CC:DD:EE:FF` picks one desk when more than one is advertising. `wifi-scan` prints `rssi`, a tab, and the SSID. The named commands stay for scripts.
 
-Host mbufs are allocated from PSRAM (`CONFIG_BT_NIMBLE_MEM_ALLOC_MODE_EXTERNAL`). The controller itself stays internal. Shrinking MSYS or ACL counts does not return DMA to the STA. `esp_wifi_init` runs after `nimble_port_init` and before the NimBLE host task, so `largest internal DMA ... after NimBLE` is the block the static RX buffers (10 × ~1.6KB) are taken from. A second line, `largest internal DMA ... before Wi-Fi`, is that same moment. The 20-line stripe is unchanged. The STA joined when that block was 48000 bytes and died at 29696. `BT_CTRL_BLE_MAX_ACT` is 2 (one advertiser, one connection). The extended duplicate-scan filter is 1 because the desk does not scan. Do not grow the stripe and do not turn on `BT_CTRL_RUN_IN_FLASH_ONLY`: a GATT write commits NVS while the link is up, and controller code in flash glitches across that erase.
+Host mbufs are allocated from PSRAM (`CONFIG_BT_NIMBLE_MEM_ALLOC_MODE_EXTERNAL`). The controller itself stays internal. Shrinking MSYS or ACL counts does not return DMA to the STA. `esp_wifi_init` runs after `nimble_port_init` and before the NimBLE host task, whether or not a network is saved, so `largest internal DMA ... after NimBLE` is the block the static RX buffers (10 × ~1.6KB) are taken from. A second line, `largest internal DMA ... before Wi-Fi`, is that same moment. The 20-line stripe is unchanged. The STA joined when that block was 48000 bytes and died at 29696. `BT_CTRL_BLE_MAX_ACT` is 2 (one advertiser, one connection). The extended duplicate-scan filter is 1 because the controller does not scan. Do not grow the stripe and do not turn on `BT_CTRL_RUN_IN_FLASH_ONLY`: a GATT write commits NVS while the link is up, and controller code in flash glitches across that erase.
 
 An existing `firmware/sdkconfig` does not pick up `sdkconfig.defaults`. Delete that file and reconfigure. Do not erase the device. `idf.py` was not on the machine that added this, so the image has not been built here.
 
@@ -179,7 +186,7 @@ gcc -Wall -Werror -I firmware/main firmware/host/test_ble_desk.c firmware/main/b
 /tmp/test_ble_desk
 ```
 
-Open `firmware/simulator/index.html` in a browser. It polls `http://127.0.0.1:8787` unless you pass `?base=http://192.168.1.20:8787`. `?settings=1` opens settings. The settings button does the same, and Done closes it. Wheel or drag scrolls the agent list inside the face. The bar and the dock stay fixed. A needs-you status raises the sheet over the list and the dock. The bar stays. A downward swipe, or a tap, dismisses the card on screen. A second needs-you while that card is up stacks on top. Swipe left and right to move through the stack. `Dismiss all` clears every waiting card. Two rapid posts that exercise it are in [docs/grok-bot-integration.md](../docs/grok-bot-integration.md).
+Open `firmware/simulator/index.html` in a browser. It polls `http://127.0.0.1:8787` unless you pass `?base=http://192.168.1.20:8787`. `?settings=1` opens settings. `?bt=off` draws the dim rune. `?bt=conn` draws the sage dotted mark. The default is the cream dotted mark. The settings button does the same, and Done closes it. Wheel or drag scrolls the agent list inside the face. The bar and the dock stay fixed. A needs-you status raises the sheet over the list and the dock. The bar stays. A downward swipe, or a tap, dismisses the card on screen. A second needs-you while that card is up stacks on top. Swipe left and right to move through the stack. `Dismiss all` clears every waiting card. Two rapid posts that exercise it are in [docs/grok-bot-integration.md](../docs/grok-bot-integration.md).
 
 ## If `idf.py` is missing
 

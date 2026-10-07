@@ -12,7 +12,7 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
 void ui_bind_unread(void (*on_clear)(void));
 void ui_bind_rotlock(int locked, ui_rotlock_fn on_toggle);
 void ui_set_link(int has_ip, int rssi, int retries, int gave_up);
-/* 0 struck through, 1 advertising, 2 connected. */
+/* 0 dim rune, 1 advertising, 2 connected. Live states draw the dotted mark. */
 void ui_set_bt(int state);
 void ui_open_settings(void);
 int ui_settings_is_open(void);
