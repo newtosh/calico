@@ -73,12 +73,6 @@ enum {
     SHEET_INNER_FAR = 7,
     SHEET_INNER_FAR_OPA = 14,
     SHEET_MARK = 120,
-    /* Two solid discs behind the silhouette. A blurred shadow would want
-     * another full frame; these do not. */
-    SHEET_GLOW = 148,
-    SHEET_GLOW_CORE = 136,
-    SHEET_GLOW_OPA = 140,
-    SHEET_GLOW_CORE_OPA = 210,
     /* 98%. LV_OPA_90 (and the sim's 0.92) still left roster type readable. */
     SHEET_OPA = 250,
     PEEK_OPA = 242,
@@ -128,6 +122,7 @@ _Static_assert(SHEET_RING_OPA0 < SHEET_RING_OPA1 && SHEET_RING_OPA1 < SHEET_RING
                "glow fades as it leaves the card");
 _Static_assert(SHEET_BORDER == 3, "stroke weight stays even on every side");
 _Static_assert(SHEET_INNER_NEAR_OPA > SHEET_INNER_FAR_OPA, "inner highlight is stronger at the stroke");
+_Static_assert(SHEET_MARK == MARK_PX * 5, "sheet mark is five times the list mark");
 _Static_assert(SHEET_OPA >= 248, "sheet stays opaque enough to hide roster type");
 _Static_assert((int)MESSAGE_Y == (int)FACE_MESSAGE_Y, "sleep origin");
 
@@ -140,8 +135,6 @@ static const int k_sheet_ring_out[SHEET_RING_N] = {SHEET_RING_OUT0, SHEET_RING_O
 static const lv_opa_t k_sheet_ring_opa[SHEET_RING_N] = {SHEET_RING_OPA0, SHEET_RING_OPA1, SHEET_RING_OPA2};
 static lv_obj_t *s_peek1;
 static lv_obj_t *s_peek2;
-static lv_obj_t *s_sheet_glow;
-static lv_obj_t *s_sheet_glow_core;
 static lv_obj_t *s_sheet_mark;
 static lv_obj_t *s_sheet_count;
 static lv_obj_t *s_sheet_count_label;
@@ -1135,10 +1128,6 @@ static void sheet_paint(const desk_view_t *view, const int *stack, int at, int n
         }
     }
     apply_mark(s_sheet_mark, color, desk_mark_shape(agent->shape));
-    lv_obj_set_style_bg_color(s_sheet_glow, lv_color_hex(color), 0);
-    if (s_sheet_glow_core) {
-        lv_obj_set_style_bg_color(s_sheet_glow_core, lv_color_hex(color), 0);
-    }
     {
         int ring;
         for (ring = 0; ring < SHEET_RING_N; ring++) {
@@ -1888,20 +1877,6 @@ static void draw_sheet_inner(lv_event_t *event) {
     paint_edge(layer, &far, radius - SHEET_INNER_NEAR, SHEET_INNER_FAR, color, SHEET_INNER_FAR_OPA);
 }
 
-static lv_obj_t *make_disc(lv_obj_t *parent, int size, lv_opa_t opa) {
-    lv_obj_t *disc = lv_obj_create(parent);
-    lv_obj_set_size(disc, size, size);
-    lv_obj_set_style_radius(disc, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(disc, lv_color_hex(DESK_MARK_NEUTRAL), 0);
-    lv_obj_set_style_bg_opa(disc, opa, 0);
-    lv_obj_set_style_border_width(disc, 0, 0);
-    lv_obj_set_style_outline_width(disc, 0, 0);
-    lv_obj_set_style_shadow_width(disc, 0, 0);
-    lv_obj_set_style_pad_all(disc, 0, 0);
-    lv_obj_clear_flag(disc, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    return disc;
-}
-
 /* A 2px border on a round-rect that sticks out `outset` px on every side.
  * The center stays clear. Filled slabs were the heavy bottom rim. */
 static lv_obj_t *make_ring(lv_obj_t *screen, int outset, lv_opa_t opa) {
@@ -2040,12 +2015,11 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     lv_obj_add_event_cb(s_sheet, on_sheet, LV_EVENT_RELEASED, NULL);
     lv_obj_add_event_cb(s_sheet, on_sheet, LV_EVENT_CLICKED, NULL);
     lv_obj_set_hidden(s_sheet, true);
-    s_sheet_glow = make_disc(s_sheet, SHEET_GLOW, SHEET_GLOW_OPA);
-    s_sheet_glow_core = make_disc(s_sheet_glow, SHEET_GLOW_CORE, SHEET_GLOW_CORE_OPA);
-    lv_obj_center(s_sheet_glow_core);
-    s_sheet_mark = lv_obj_create(s_sheet_glow_core);
+    /* Silhouette only. A same-color disc behind this mark reads as a flat
+     * badge: the cloud disappears into the plate, and a circle grows a ring.
+     * Eyes are drawn on the shape. The card glass is the dark edge behind it. */
+    s_sheet_mark = lv_obj_create(s_sheet);
     lv_obj_set_size(s_sheet_mark, SHEET_MARK, SHEET_MARK);
-    lv_obj_center(s_sheet_mark);
     lv_obj_set_style_border_width(s_sheet_mark, 0, 0);
     lv_obj_set_style_outline_width(s_sheet_mark, 0, 0);
     lv_obj_set_style_pad_all(s_sheet_mark, 0, 0);

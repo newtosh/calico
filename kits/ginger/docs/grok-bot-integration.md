@@ -32,7 +32,7 @@ Leave `color`, `shape`, and `icon` off when you have nothing to send. An empty s
 
 ### Shapes
 
-The panel draws a filled 24px silhouette in that agent's color, with two static pixel eyes. The eyes are a 3×4 block on that grid (15×20 on the 120px attention mark), starting about 7px down the face, with a 6px gap. Triangle, teardrop, and the other narrow crowns drop the pair into the wide part of the body. The ink is the body color divided by 6, or `#efe7d6` when the body is already dark (luma under 80). They do not blink. `square` and `diamond` are marks this desk already drew. `rounded_square` is the picker squircle. `oval` is the horizontal pebble.
+The panel draws a filled 24px silhouette in that agent's color, with two static pixel eyes. The attention mark is that same silhouette at 120px. Nothing circular sits behind it. The eyes are a 3×4 block on that grid (15×20 on the attention mark), starting about 7px down the face, with a 6px gap. Triangle, teardrop, and the other narrow crowns drop the pair into the wide part of the body. The ink is the body color divided by 6, or `#efe7d6` when the body is already dark (luma under 80). They do not blink. `square` and `diamond` are marks this desk already drew. `rounded_square` is the picker squircle. `oval` is the horizontal pebble.
 
 | `shape` | Draws |
 | --- | --- |

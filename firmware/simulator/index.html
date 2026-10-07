@@ -625,36 +625,12 @@
         transform: translateY(0);
         pointer-events: auto;
       }
-      #sheet .glow {
-        position: relative;
-        width: 148px;
-        height: 148px;
-        flex: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-      #sheet .glow-outer,
-      #sheet .glow-core {
-        position: absolute;
-        border-radius: 50%;
-        pointer-events: none;
-      }
-      #sheet .glow-outer {
-        width: 148px;
-        height: 148px;
-        opacity: 0.55;
-      }
-      #sheet .glow-core {
-        width: 136px;
-        height: 136px;
-        opacity: 0.82;
-      }
       #sheet .mark {
         position: relative;
         z-index: 1;
         width: 120px;
         height: 120px;
+        flex: none;
       }
       #sheet .mark.square {
         border-radius: 10px;
@@ -786,11 +762,7 @@
       <div id="sheet">
         <i id="sheet-inner-far"></i>
         <i id="sheet-inner-near"></i>
-        <div class="glow">
-          <i class="glow-outer"></i>
-          <i class="glow-core"></i>
-          <i class="mark circle"></i>
-        </div>
+        <i class="mark circle"></i>
         <p id="sheet-new" hidden>1 new</p>
         <h2></h2>
         <div class="copy"></div>
@@ -1156,8 +1128,6 @@
       const sheetGlow = document.getElementById("sheet-glow");
       const sheetInnerNear = document.getElementById("sheet-inner-near");
       const sheetInnerFar = document.getElementById("sheet-inner-far");
-      const glowOuter = sheet.querySelector(".glow-outer");
-      const glowCore = sheet.querySelector(".glow-core");
       let latest = null;
       let sheetAt = 0;
       let sheetFocus = "";
@@ -1236,8 +1206,6 @@
         sheetGlow.querySelector(".near").style.borderColor = hexAlpha(color, 72 / 255);
         sheetInnerNear.style.borderColor = hexAlpha(color, 36 / 255);
         sheetInnerFar.style.borderColor = hexAlpha(color, 14 / 255);
-        glowOuter.style.background = color;
-        glowCore.style.background = color;
         paintMark(mark, agent && agent.shape, color);
         sheet.querySelector("h2").textContent = agent.title || agent.id || "NEEDS YOU";
         if (sheetCopy.dataset.agent !== agent.id) {
