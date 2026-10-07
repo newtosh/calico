@@ -355,6 +355,8 @@ static void on_ble_state(int state) {
 }
 
 static void on_ble_restart(void) {
+    /* ble_link.c runs this on the PSRAM reboot task, after the GATT
+     * response. Calling esp_restart on the NimBLE host deadlocks. */
     esp_restart();
 }
 

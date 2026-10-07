@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Provision the desk over BLE. No USB cable and no joined Wi-Fi required.
 
-The board advertises as ``grokbot-buddy``. Writes land in NVS namespace
-``desk`` and take effect on the next boot. ``reboot`` soft-resets the board.
-The link is GATT. The OS pairing dialog does not connect.
+The board advertises as ``grokbot-buddy``. URL, token, and a verified
+Wi-Fi network land in NVS namespace ``desk``. ``reboot`` soft-resets the
+board. The link is GATT. The OS pairing dialog does not connect.
+
+Wi-Fi is tried before it is saved. The desk associates with the candidate
+and reports ok or fail over BLE. A failure does not write NVS. Success
+writes the network and reboots.
 
 With no command this opens a menu: pick a desk, read status, set the URL,
 set or clear the token, add Wi-Fi from the desk's scan or by typing the
@@ -35,6 +39,7 @@ UUID_TOKEN = "8d7c4b13-6e2a-4f91-a3c5-67726f6b6465"
 UUID_WIFI = "8d7c4b14-6e2a-4f91-a3c5-67726f6b6465"
 UUID_REBOOT = "8d7c4b15-6e2a-4f91-a3c5-67726f6b6465"
 UUID_SCAN = "8d7c4b16-6e2a-4f91-a3c5-67726f6b6465"
+UUID_VERIFY = "8d7c4b17-6e2a-4f91-a3c5-67726f6b6465"
 
 UUIDS = {
     "svc": UUID_SVC,
@@ -44,6 +49,7 @@ UUIDS = {
     "wifi": UUID_WIFI,
     "reboot": UUID_REBOOT,
     "scan": UUID_SCAN,
+    "verify": UUID_VERIFY,
 }
 
 SSID_MAX = 32
@@ -54,6 +60,8 @@ TOKEN_MAX = 127
 MIN_WRITE_MTU = 130
 # Active scan plus coexistence. The desk returns state=busy until it finishes.
 SCAN_WAIT_S = 25.0
+# Association plus a short grace for a disconnect that follows CONNECTED.
+VERIFY_WAIT_S = 20.0
 
 MAIN_MENU = (
     ("status", "Refresh status"),
@@ -279,14 +287,54 @@ def prompt_wifi() -> tuple[str, str]:
     return prompt_ssid(), prompt_password()
 
 
-def confirm_wifi(ssid: str, password: str) -> bytes | None:
+def confirm_wifi(ssid: str, password: str) -> bool:
     kind = "open network" if password == "" else "WPA password"
-    print(f"Save Wi-Fi {ssid} ({kind}). Other saved networks stay.")
-    print("The station joins it on reboot, not on this write.")
+    print(f"Try joining {ssid} ({kind}).")
+    print("The desk associates first. A wrong password is not written to NVS.")
+    print("If it joins, the password is saved and the desk reboots.")
     if not _confirm("Proceed? [y/N] "):
         print("aborted")
-        return None
-    return encode_wifi(ssid, password)
+        return False
+    return True
+
+
+def actions_after_probe(state: str) -> tuple[str, ...]:
+    """NVS and reboot run only after the AP accepts the password."""
+    if state == "ok":
+        return ("wifi", "reboot")
+    return ()
+
+
+def parse_probe(body: str) -> tuple[str, str, str]:
+    fields = parse_status(body)
+    return fields.get("state", ""), fields.get("ssid", ""), fields.get("reason", "")
+
+
+def probe_poll_done(state: str) -> bool:
+    return state in {"ok", "fail"}
+
+
+def describe_probe_failure(state: str, ssid: str, reason: str) -> str:
+    name = ssid or "that network"
+    if reason == "auth":
+        return f"Could not join {name}. The password was rejected. Nothing was saved."
+    if reason == "missing":
+        return f"Could not join {name}. The AP was not found. Nothing was saved."
+    if reason == "timeout":
+        return f"Could not join {name}. The AP did not answer in time. Nothing was saved."
+    if reason == "radio":
+        return f"Could not join {name}. The radio was busy. Nothing was saved."
+    if state == "fail":
+        return f"Could not join {name}. Nothing was saved."
+    return f"Could not join {name}. Nothing was saved."
+
+
+def reboot_exception_is_drop(exc: BaseException) -> bool:
+    """A reset often drops the link. An ATT error means the write was rejected."""
+    text = str(exc).lower()
+    if "unlikely" in text or "protocol error" in text or "insufficient" in text:
+        return False
+    return True
 
 
 def _bleak():
@@ -403,36 +451,104 @@ async def write_char(client, uuid: str, payload: bytes) -> None:
     await client.write_gatt_char(uuid, payload, response=True)
 
 
+async def _disconnect(client) -> None:
+    try:
+        await client.disconnect()
+    except Exception:
+        pass
+
+
+async def request_verify(client, ssid: str, password: str, timeout: float = VERIFY_WAIT_S) -> str:
+    await write_char(client, UUID_VERIFY, encode_wifi(ssid, password))
+    deadline = time.monotonic() + timeout
+    last = ""
+    while True:
+        last = await read_text(client, UUID_VERIFY)
+        state, _ssid, _reason = parse_probe(last)
+        if probe_poll_done(state):
+            return last
+        if time.monotonic() >= deadline:
+            raise TimeoutError(last or "wifi verify timed out")
+        await asyncio.sleep(0.5)
+
+
+async def commit_joined(client, ssid: str, password: str) -> None:
+    await write_char(client, UUID_WIFI, encode_wifi(ssid, password))
+    try:
+        await write_char(client, UUID_REBOOT, encode_reboot())
+    except Exception as exc:
+        if not reboot_exception_is_drop(exc):
+            print(
+                "Saved, but the reboot write was rejected. Choose Reboot from the menu.",
+                file=sys.stderr,
+            )
+            raise
+        print(f"reboot sent. The link dropped ({exc}).", file=sys.stderr)
+        return
+    print("reboot sent. The desk restarts in a moment.")
+
+
+async def run_verify_commit(address: str, ssid: str, password: str) -> tuple[int, str]:
+    bleak = _bleak()
+    print(f"{NAME} {address}")
+    client = bleak.BleakClient(address)
+    joined = False
+    body = ""
+    try:
+        await client.connect()
+        print(f"Joining {ssid}…")
+        body = await request_verify(client, ssid, password)
+        state, got, reason = parse_probe(body)
+        print_text(body)
+        if actions_after_probe(state) != ("wifi", "reboot"):
+            print(describe_probe_failure(state, got or ssid, reason), file=sys.stderr)
+            return 1, body
+        joined = True
+        print(f"Joined {got or ssid}. Saving and rebooting.")
+        await commit_joined(client, ssid, password)
+        return 0, "reboot sent\n"
+    except Exception as exc:
+        if joined:
+            print(f"Joined, but save or reboot failed: {exc}", file=sys.stderr)
+            return 1, body
+        print(f"wifi verify failed: {exc}", file=sys.stderr)
+        return 1, ""
+    finally:
+        await _disconnect(client)
+
+
 async def run_command(command: str, address: str, payload: bytes | None) -> tuple[int, str]:
     bleak = _bleak()
     target = await resolve_address(address)
     print(f"{NAME} {target}")
+    client = bleak.BleakClient(target)
     try:
-        async with bleak.BleakClient(target) as client:
-            if command == "status":
-                text = await read_status(client)
-                print_text(text)
-                return 0, text
-            if command == "reboot":
-                await write_char(client, UUID_REBOOT, payload or encode_reboot())
-                print("reboot sent. The link may drop before the response.")
-                return 0, ""
-            uuid = {
-                "url": UUID_URL,
-                "token": UUID_TOKEN,
-                "wifi": UUID_WIFI,
-            }[command]
-            await write_char(client, uuid, payload or b"")
+        await client.connect()
+        if command == "status":
             text = await read_status(client)
             print_text(text)
             return 0, text
-    except Exception as exc:
-        # A reboot often disconnects before the ATT response. The other
-        # commands should still be connected, so this stays a failure.
-        print(f"{command} failed: {exc}", file=sys.stderr)
         if command == "reboot":
-            print("If the board reset, scan again for the advertisement.", file=sys.stderr)
+            await write_char(client, UUID_REBOOT, payload or encode_reboot())
+            print("reboot sent. The desk restarts in a moment.")
+            return 0, ""
+        uuid = {
+            "url": UUID_URL,
+            "token": UUID_TOKEN,
+            "wifi": UUID_WIFI,
+        }[command]
+        await write_char(client, uuid, payload or b"")
+        text = await read_status(client)
+        print_text(text)
+        return 0, text
+    except Exception as exc:
+        if command == "reboot" and reboot_exception_is_drop(exc):
+            print("reboot sent. The link dropped while the desk restarted.", file=sys.stderr)
+            return 0, ""
+        print(f"{command} failed: {exc}", file=sys.stderr)
         return 1, ""
+    finally:
+        await _disconnect(client)
 
 
 async def fetch_status(address: str) -> str:
@@ -487,9 +603,6 @@ def _prepare_write(command: str) -> bytes | None:
             print("aborted")
             return None
         return encode_token(token)
-    if command == "wifi":
-        ssid, password = prompt_wifi()
-        return confirm_wifi(ssid, password)
     if command == "reboot":
         print("Soft-reset the desk.")
         if not _confirm("Proceed? [y/N] "):
@@ -573,11 +686,11 @@ def pick_scanned_ssid(address: str) -> str | None:
 
 
 def tui_wifi(address: str) -> str | None:
-    """Status text after a write. None when the user backed out."""
+    """Probe text, or the reboot note. None when the user backed out."""
     while True:
         choice = choose(
             "Add Wi-Fi",
-            "Other saved networks stay. The desk joins on reboot.",
+            "The desk tries the password before saving it.",
             WIFI_MENU,
         )
         if choice in (None, "back"):
@@ -591,11 +704,12 @@ def tui_wifi(address: str) -> str | None:
             password = prompt_password()
         else:
             continue
-        payload = confirm_wifi(ssid, password)
-        if payload is None:
+        if not confirm_wifi(ssid, password):
             continue
-        _code, text = asyncio.run(run_command("wifi", address, payload))
-        return text
+        code, text = asyncio.run(run_verify_commit(address, ssid, password))
+        if text:
+            return text
+        return "reboot sent\n" if code == 0 else "verify failed\n"
 
 
 def run_tui(address: str) -> int:
@@ -654,6 +768,16 @@ def provision(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "wifi-scan":
         return asyncio.run(run_wifi_scan(args.address))
+    if args.command == "wifi":
+        _disable_input_history()
+        _require_tty()
+        warn_ignored_env()
+        ssid, password = prompt_wifi()
+        if not confirm_wifi(ssid, password):
+            return 1
+        target = asyncio.run(resolve_address(args.address))
+        code, _text = asyncio.run(run_verify_commit(target, ssid, password))
+        return code
     payload = None
     if args.command != "status":
         payload = _prepare_write(args.command)

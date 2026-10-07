@@ -159,6 +159,91 @@ def test_scan_write_does_not_allocate_a_task():
     assert "nimble_port_freertos_init" in _c_fn(link, "void ble_link_host_start(")
 
 
+def test_probe_gates_the_nvs_write():
+    tool = load_tool()
+    assert "verify" in tool.UUIDS
+    assert tool.actions_after_probe("ok") == ("wifi", "reboot")
+    assert tool.actions_after_probe("fail") == ()
+    assert tool.actions_after_probe("busy") == ()
+    assert tool.actions_after_probe("idle") == ()
+    assert tool.actions_after_probe("") == ()
+    assert tool.parse_probe("state=fail\nssid=home\nreason=auth\n") == ("fail", "home", "auth")
+    assert tool.parse_probe("state=ok\nssid=Cafe WiFi\n") == ("ok", "Cafe WiFi", "")
+    assert tool.probe_poll_done("busy") is False
+    assert tool.probe_poll_done("ok") is True
+    assert tool.probe_poll_done("fail") is True
+    assert "Nothing was saved" in tool.describe_probe_failure("fail", "home", "auth")
+    assert "password was rejected" in tool.describe_probe_failure("fail", "home", "auth")
+    assert tool.reboot_exception_is_drop(Exception("device disconnected")) is True
+    assert tool.reboot_exception_is_drop(Exception("GATT Protocol Error: Unlikely Error")) is False
+    assert tool.reboot_exception_is_drop(Exception("Insufficient Resources")) is False
+    text = SCRIPT.read_text(encoding="utf-8")
+    assert text.index("body = await request_verify") < text.index("await commit_joined")
+    commit = text[text.index("async def commit_joined") : text.index("async def run_verify_commit")]
+    assert commit.index("UUID_WIFI") < commit.index("UUID_REBOOT")
+
+
+def test_reboot_write_is_not_on_the_nimble_host():
+    """f445c2d called esp_restart inside the GATT write. The host task then
+    waited on the controller, and the controller waited on the host task."""
+    link = LINK.read_text(encoding="utf-8")
+    main = (LINK.parent / "main.c").read_text(encoding="utf-8")
+    write = _c_fn(link, "static int write_reboot(")
+    access = _c_fn(link, "static int access(")
+    worker = _c_fn(link, "static void reboot_worker(")
+    start = _c_fn(link, "static void start_reboot_task(")
+    host = _c_fn(link, "void ble_link_host_start(")
+    restart = _c_fn(main, "static void on_ble_restart(")
+    assert "esp_restart" not in write
+    assert "s_on_restart()" not in write
+    assert "xSemaphoreGive(s_reboot_go)" in write
+    assert "xTaskCreate" not in write
+    assert "esp_restart" not in access
+    assert "s_on_restart()" not in access
+    assert "s_on_restart()" in worker
+    assert "vTaskDelay" in worker
+    assert "xTaskCreate(" not in start
+    assert "xTaskCreateStatic" in start
+    assert "MALLOC_CAP_SPIRAM" in start
+    assert host.index("start_scan_task") < host.index("start_reboot_task")
+    assert "nimble_port_freertos_init" in host
+    assert "esp_restart" in restart
+
+
+def test_verify_does_not_save_and_shares_the_psram_worker():
+    link = LINK.read_text(encoding="utf-8")
+    net = (LINK.parent / "net.c").read_text(encoding="utf-8")
+    main = (LINK.parent / "main.c").read_text(encoding="utf-8")
+    stripe = (LINK.parent / "dma_stripe.h").read_text(encoding="utf-8")
+    write = _c_fn(link, "static int write_verify(")
+    worker = _c_fn(link, "static void scan_worker(")
+    probe = _c_fn(net, "int net_wifi_probe(")
+    start = _c_fn(net, "void net_wifi_start(")
+    fill = _c_fn(net, "static void fill_sta(")
+    app = _c_fn(main, "void app_main(")
+    assert "net_save" not in write
+    assert "wifi_upsert" not in write
+    assert "xTaskCreate" not in write
+    assert "xSemaphoreGive(s_scan_go)" in write
+    assert "BLE_LINK_JOB_VERIFY" in write
+    verify = _c_fn(link, "static void run_verify(")
+    assert "run_verify" in worker
+    assert "net_wifi_probe" in verify
+    assert "net_save" not in verify
+    assert "net_save" not in worker
+    assert "xTaskCreate" not in worker
+    assert "net_save" not in probe
+    assert "fill_sta" in probe
+    assert "s_reconnect_hold" in probe
+    assert "fill_sta" in start
+    assert "s_wifi_retries = 0" in start
+    assert "ble_desk_sta_authmode" in fill
+    assert "pmf_cfg.capable = true" in fill
+    assert "pmf_cfg.required = false" in fill
+    assert app.index("net_wifi_prepare") < app.index("ble_link_host_start")
+    assert "DESK_DMA_LINES = 20" in stripe
+
+
 def test_mtu_check_does_not_read_the_warning_property():
     tool = load_tool()
 

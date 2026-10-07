@@ -1,4 +1,5 @@
 #include "net.h"
+#include "ble_desk.h"
 #include "desk_view.h"
 #include "orient.h"
 
@@ -23,6 +24,12 @@ static volatile int s_wifi_retries;
 static volatile int s_wifi_has_ip;
 static volatile int s_wifi_gave_up;
 static int s_wifi_up;
+/* Probe and the cleanup disconnect must not call esp_wifi_connect.
+ * The give-up latch survives until the next intentional join. */
+static volatile int s_reconnect_hold;
+static volatile int s_probe_wait;
+static volatile int s_probe_result;
+static volatile int s_probe_reason;
 /* ponytail: one scan at a time. The glass, the hidden-SSID probe, and BLE share it.
  * A second caller waits. Split this if those scans must overlap. */
 static SemaphoreHandle_t s_scan_mu;
@@ -182,7 +189,6 @@ void net_rotlock_save(const char *value) {
 
 static void on_wifi(void *arg, esp_event_base_t base, int32_t id, void *data) {
     (void)arg;
-    (void)data;
     if (base != WIFI_EVENT) {
         return;
     }
@@ -191,18 +197,42 @@ static void on_wifi(void *arg, esp_event_base_t base, int32_t id, void *data) {
     if (id == WIFI_EVENT_STA_CONNECTED) {
         s_wifi_retries = 0;
         s_wifi_gave_up = 0;
+        if (s_probe_wait) {
+            s_probe_result = 1;
+        }
         return;
     }
     if (id != WIFI_EVENT_STA_DISCONNECTED) {
         return;
     }
     s_wifi_has_ip = 0;
+    if (s_probe_wait) {
+        const wifi_event_sta_disconnected_t *disc = data;
+        int reason = disc ? (int)disc->reason : 0;
+        /* esp_wifi_disconnect posts ASSOC_LEAVE (8) or AUTH_LEAVE (3).
+         * That is our own call, not the AP rejecting the password.
+         * A drop after CONNECTED is a real verdict. */
+        if (s_probe_result != 1 && (reason == 3 || reason == 8)) {
+            return;
+        }
+        s_probe_reason = reason;
+        s_probe_result = -1;
+        ESP_LOGI(TAG, "probe disconnect %d", reason);
+        return;
+    }
+    if (s_reconnect_hold) {
+        return;
+    }
     if (s_wifi_retries < 10) {
         s_wifi_retries++;
         esp_wifi_connect();
         return;
     }
     s_wifi_gave_up = 1;
+    {
+        const wifi_event_sta_disconnected_t *disc = data;
+        ESP_LOGW(TAG, "sta gave up, reason %d", disc ? (int)disc->reason : 0);
+    }
 }
 
 static void on_ip(void *arg, esp_event_base_t base, int32_t id, void *data) {
@@ -289,14 +319,123 @@ void net_wifi_prepare(void) {
     wifi_bringup();
 }
 
+static void fill_sta(wifi_config_t *wifi, const char *ssid, const char *pass) {
+    const char *secret = pass ? pass : "";
+    memset(wifi, 0, sizeof(*wifi));
+    copy_field((char *)wifi->sta.ssid, sizeof(wifi->sta.ssid), ssid);
+    copy_field((char *)wifi->sta.password, sizeof(wifi->sta.password), secret);
+    wifi->sta.threshold.authmode = (wifi_auth_mode_t)ble_desk_sta_authmode(secret[0] != '\0');
+    wifi->sta.pmf_cfg.capable = true;
+    wifi->sta.pmf_cfg.required = false;
+    if (secret[0]) {
+        wifi->sta.sae_pwe_h2e = WPA3_SAE_PWE_BOTH;
+    }
+}
+
+static void restore_sta(const wifi_config_t *previous) {
+    wifi_config_t cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    if (previous) {
+        cfg = *previous;
+    }
+    s_probe_wait = 0;
+    esp_wifi_disconnect();
+    esp_wifi_set_config(WIFI_IF_STA, &cfg);
+    if (cfg.sta.ssid[0]) {
+        s_wifi_retries = 0;
+        s_wifi_gave_up = 0;
+        s_wifi_has_ip = 0;
+        s_reconnect_hold = 0;
+        esp_wifi_connect();
+        return;
+    }
+    s_wifi_retries = 10;
+    s_wifi_gave_up = 1;
+    s_wifi_has_ip = 0;
+    s_reconnect_hold = 0;
+}
+
 void net_wifi_start(const desk_settings_t *in) {
-    wifi_config_t wifi = {0};
+    wifi_config_t wifi;
     wifi_bringup();
-    copy_field((char *)wifi.sta.ssid, sizeof(wifi.sta.ssid), in->ssid);
-    copy_field((char *)wifi.sta.password, sizeof(wifi.sta.password), in->pass);
+    fill_sta(&wifi, in->ssid, in->pass);
+    /* A probe that failed, or a previous give-up, must not eat this join. */
+    s_reconnect_hold = 0;
+    s_wifi_retries = 0;
+    s_wifi_gave_up = 0;
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi));
     ESP_ERROR_CHECK(esp_wifi_connect());
     ESP_LOGI(TAG, "joining %s", in->ssid);
+}
+
+int net_wifi_probe(const char *ssid, const char *pass, int *reason_out) {
+    wifi_config_t trial;
+    wifi_config_t previous;
+    int waited = 0;
+    int reason = 0;
+    const int limit_ms = 12000;
+    if (reason_out) {
+        *reason_out = 0;
+    }
+    if (!ssid || !ssid[0] || !pass) {
+        return -1;
+    }
+    wifi_bringup();
+    if (scan_mu_take() != 0) {
+        return -1;
+    }
+    memset(&previous, 0, sizeof(previous));
+    if (esp_wifi_get_config(WIFI_IF_STA, &previous) != ESP_OK) {
+        memset(&previous, 0, sizeof(previous));
+    }
+    fill_sta(&trial, ssid, pass);
+    s_reconnect_hold = 1;
+    s_probe_wait = 1;
+    s_probe_result = 0;
+    s_probe_reason = 0;
+    esp_wifi_disconnect();
+    vTaskDelay(pdMS_TO_TICKS(200));
+    s_probe_result = 0;
+    s_probe_reason = 0;
+    if (esp_wifi_set_config(WIFI_IF_STA, &trial) != ESP_OK || esp_wifi_connect() != ESP_OK) {
+        memset(trial.sta.password, 0, sizeof(trial.sta.password));
+        restore_sta(&previous);
+        scan_mu_give();
+        return -1;
+    }
+    while (waited < limit_ms && s_probe_result == 0) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+        waited += 100;
+    }
+    if (s_probe_result == 1) {
+        int extra = 0;
+        while (extra < 400 && s_probe_result == 1) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            extra += 50;
+        }
+    }
+    reason = s_probe_reason;
+    if (s_probe_result == 0) {
+        reason = 200;
+    }
+    s_probe_wait = 0;
+    memset(trial.sta.password, 0, sizeof(trial.sta.password));
+    if (s_probe_result != 1) {
+        restore_sta(&previous);
+        scan_mu_give();
+        if (reason_out) {
+            *reason_out = reason;
+        }
+        ESP_LOGI(TAG, "probe %s fail %d", ssid, reason);
+        return 0;
+    }
+    s_reconnect_hold = 0;
+    scan_mu_give();
+    if (reason_out) {
+        *reason_out = reason;
+    }
+    ESP_LOGI(TAG, "probe %s ok", ssid);
+    return 1;
 }
 
 static int scan_aps(net_ap_t *out, int max_out) {

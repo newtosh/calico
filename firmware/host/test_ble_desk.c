@@ -168,6 +168,32 @@ int main(void) {
         check(ble_desk_format_scan(body, 8, BLE_DESK_SCAN_READY, &one, 1) < 0, "scan short buffer");
     }
 
+    n = ble_desk_format_probe(body, sizeof(body), BLE_DESK_PROBE_IDLE, "home", "auth");
+    check(n > 0 && strcmp(body, "state=idle\n") == 0, "probe idle");
+    n = ble_desk_format_probe(body, sizeof(body), BLE_DESK_PROBE_BUSY, "home", NULL);
+    check(n > 0 && strcmp(body, "state=busy\nssid=home\n") == 0, "probe busy");
+    n = ble_desk_format_probe(body, sizeof(body), BLE_DESK_PROBE_OK, "Cafe WiFi", "auth");
+    check(n > 0 && strcmp(body, "state=ok\nssid=Cafe WiFi\n") == 0, "probe ok drops reason");
+    check(strstr(body, "reason=") == NULL, "ok has no reason");
+    n = ble_desk_format_probe(body, sizeof(body), BLE_DESK_PROBE_FAIL, "home", "auth");
+    check(n > 0 && strcmp(body, "state=fail\nssid=home\nreason=auth\n") == 0, "probe auth");
+    n = ble_desk_format_probe(body, sizeof(body), BLE_DESK_PROBE_FAIL, "a\nb", NULL);
+    check(n > 0 && strstr(body, "ssid=a?b\n") != NULL, "probe ssid break");
+    check(strstr(body, "reason=other\n") != NULL, "missing reason");
+    check(ble_desk_format_probe(body, 8, BLE_DESK_PROBE_FAIL, "home", "auth") < 0, "probe short");
+
+    check(strcmp(ble_desk_probe_reason(15), "auth") == 0, "4way is auth");
+    check(strcmp(ble_desk_probe_reason(202), "auth") == 0, "auth fail");
+    check(strcmp(ble_desk_probe_reason(204), "auth") == 0, "handshake timeout");
+    check(strcmp(ble_desk_probe_reason(2), "auth") == 0, "auth expire");
+    check(strcmp(ble_desk_probe_reason(201), "missing") == 0, "no ap");
+    check(strcmp(ble_desk_probe_reason(200), "timeout") == 0, "beacon timeout");
+    check(strcmp(ble_desk_probe_reason(0), "other") == 0, "unset reason");
+    check(strcmp(ble_desk_probe_reason(8), "other") == 0, "assoc leave");
+
+    check(ble_desk_sta_authmode(0) == 0, "open threshold");
+    check(ble_desk_sta_authmode(1) == 3, "wpa2 threshold");
+
     if (g_failed) {
         return 1;
     }

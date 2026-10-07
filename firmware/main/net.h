@@ -39,6 +39,12 @@ void net_mark_reachable(void);
 /* esp_wifi_init only. Call before the NimBLE host task and wifi-join. */
 void net_wifi_prepare(void);
 void net_wifi_start(const desk_settings_t *in);
+/* Associate in RAM only. Does not write NVS.
+ * 1 joined, 0 rejected (*reason_out is a Wi-Fi reason, or 200 on our wait),
+ * -1 the radio could not start the attempt.
+ * Failure restores the previous STA config. Success leaves the trial
+ * association up until reboot. */
+int net_wifi_probe(const char *ssid, const char *pass, int *reason_out);
 int net_wifi_scan(net_ap_t *out, int max_out);
 /* 0 and fills chosen, 1 if no saved network is in range, -1 if the scan failed. */
 int net_wifi_select(const wifi_store_t *store, desk_settings_t *chosen);

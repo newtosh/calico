@@ -257,6 +257,62 @@ int ble_desk_format_scan(char *out, size_t cap, int state, const ble_desk_ap_t *
     return (int)used;
 }
 
+int ble_desk_format_probe(char *out, size_t cap, int state, const char *ssid, const char *reason) {
+    const char *label = "idle";
+    char ssid_buf[BLE_DESK_SSID_MAX + 1];
+    char reason_buf[16];
+    int n;
+    if (!out || cap == 0) {
+        return -1;
+    }
+    if (state == BLE_DESK_PROBE_BUSY) {
+        label = "busy";
+    } else if (state == BLE_DESK_PROBE_OK) {
+        label = "ok";
+    } else if (state == BLE_DESK_PROBE_FAIL) {
+        label = "fail";
+    } else {
+        state = BLE_DESK_PROBE_IDLE;
+    }
+    if (state == BLE_DESK_PROBE_IDLE) {
+        n = snprintf(out, cap, "state=idle\n");
+    } else if (state == BLE_DESK_PROBE_FAIL) {
+        clean_field(ssid_buf, sizeof(ssid_buf), ssid, "");
+        clean_field(reason_buf, sizeof(reason_buf), reason, "other");
+        n = snprintf(out, cap, "state=fail\nssid=%s\nreason=%s\n", ssid_buf, reason_buf);
+    } else {
+        clean_field(ssid_buf, sizeof(ssid_buf), ssid, "");
+        n = snprintf(out, cap, "state=%s\nssid=%s\n", label, ssid_buf);
+    }
+    if (n < 0 || (size_t)n >= cap) {
+        out[0] = '\0';
+        return -1;
+    }
+    return n;
+}
+
+const char *ble_desk_probe_reason(int wifi_reason) {
+    switch (wifi_reason) {
+    case 2:   /* AUTH_EXPIRE */
+    case 14:  /* MIC_FAILURE */
+    case 15:  /* 4WAY_HANDSHAKE_TIMEOUT */
+    case 23:  /* 802_1X_AUTH_FAILED */
+    case 202: /* AUTH_FAIL */
+    case 204: /* HANDSHAKE_TIMEOUT */
+        return "auth";
+    case 201: /* NO_AP_FOUND */
+        return "missing";
+    case 200: /* BEACON_TIMEOUT, also our own wait */
+        return "timeout";
+    default:
+        return "other";
+    }
+}
+
+int ble_desk_sta_authmode(int has_password) {
+    return has_password ? 3 : 0;
+}
+
 int ble_desk_set_url(wifi_store_t *store, const char *url) {
     if (!store || !url || !url[0] || strlen(url) > BLE_DESK_URL_MAX) {
         return -1;
