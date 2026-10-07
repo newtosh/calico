@@ -196,11 +196,10 @@ Ready before or at the first push:
 
 ## AI review
 
-- Cursor Bugbot is the bot reviewer. Copilot code review is not configured.
-- `.cursor/BUGBOT.md` rules: the frozen `/api/status` contract, no `electron` imports in `src/server/`, secrets never logged, Electron security flags, GATT UUID parity, and `DESIGN.md` rules for renderer changes.
-- Advisory, never a required check, so a Bugbot outage or spending cap cannot block merges.
-- Bugbot is usage-billed at roughly $1 to $1.50 per run. It runs when a PR is marked ready for review, not on draft pushes, plus manual `bugbot run` comments. A monthly cap is set in the Cursor dashboard.
-- Review order in CONTRIBUTING: CI green, Bugbot findings fixed or dismissed with a reason, UI audit for renderer PRs, merge.
+- Deferred. Cursor Bugbot was dropped on 2026-10-07 for cost (about $1.20 per review). Claude Code Action, using the author's subscription token, is the candidate to revisit after v1.
+- `docs/review-rules.md` holds the rules any reviewer, human or bot, applies: the frozen `/api/status` contract, no `electron` imports in `src/server/`, secrets never logged, Electron security flags, GATT UUID parity, and `DESIGN.md` rules for renderer changes.
+- Any bot reviewer added later stays advisory, never a required check.
+- Review order in CONTRIBUTING: CI green, self-review against `docs/review-rules.md`, UI audit for renderer PRs, merge.
 
 ## Tooling choices
 
