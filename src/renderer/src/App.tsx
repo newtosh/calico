@@ -1,3 +1,36 @@
+import { useState } from "react";
+import { Dashboard } from "./dashboard/Dashboard";
+import { useInfo } from "./lib/use-info";
+import { ServerErrorPanel } from "./shell/ServerErrorPanel";
+import { Sidebar, type View } from "./shell/Sidebar";
+import { UrlChip } from "./shell/UrlChip";
+
 export function App() {
-  return <main className="p-4">Calico</main>;
+  const info = useInfo();
+  const [view, setView] = useState<View>("dashboard");
+  const panelOnline =
+    info?.lastPanelPoll != null && Date.now() - info.lastPanelPoll < 10_000;
+  const lanUrl = info?.lanUrls[0];
+
+  return (
+    <div className="flex h-screen">
+      <Sidebar view={view} onSelect={setView} panelOnline={panelOnline} />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex items-center justify-end gap-3 border-b border-stroke/40 px-4 py-2">
+          {lanUrl ? <UrlChip url={lanUrl} /> : null}
+        </header>
+        <main className="min-h-0 flex-1 overflow-y-auto">
+          {info?.serverError ? (
+            <ServerErrorPanel error={info.serverError} />
+          ) : null}
+          {view === "dashboard" && info?.serverUrl ? (
+            <Dashboard serverUrl={info.serverUrl} />
+          ) : null}
+          {view !== "dashboard" ? (
+            <p className="p-4 text-muted">Coming in a later task.</p>
+          ) : null}
+        </main>
+      </div>
+    </div>
+  );
 }

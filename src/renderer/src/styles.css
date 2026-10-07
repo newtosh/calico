@@ -1,1 +1,56 @@
 @import "tailwindcss";
+
+@theme {
+  --color-glass: #0c0e09;
+  --color-surface: #14160f;
+  --color-field: #2a2d24;
+  --color-stroke: #6d6756;
+  --color-selected: #3d4f32;
+  --color-sage: #9bb57a;
+  --color-cream: #efe7d6;
+  --color-muted: #a39b88;
+  --color-amber: #e2a23a;
+  --color-red: #c4544a;
+  --font-sans: system-ui, "Cantarell", "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", "Fira Code", monospace;
+}
+
+@layer base {
+  html {
+    font-feature-settings: "tnum" 1;
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    @apply bg-glass font-sans text-sm text-cream;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-sage;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+}
+
+@layer components {
+  .field {
+    @apply w-full rounded-md border border-stroke bg-field px-2.5 py-1.5 text-cream outline-none placeholder:text-muted focus:border-cream;
+  }
+  .btn {
+    @apply rounded-md border border-stroke bg-field px-3 py-1.5 text-cream transition-colors duration-150 hover:border-cream disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply border-sage bg-selected;
+  }
+  .label {
+    @apply text-xs text-muted;
+  }
+  .section-title {
+    @apply px-4 pt-4 pb-2 text-xs font-medium tracking-wide text-muted uppercase;
+  }
+  .row {
+    @apply flex items-center gap-3 border-b border-stroke/30 px-4 py-2;
+  }
+}
