@@ -198,7 +198,13 @@ int ble_desk_parse_reboot(const uint8_t *in, size_t len) {
 
 int ble_desk_parse_scan(const uint8_t *in, size_t len) {
     size_t n;
-    if (strip_tail(in, len, &n) != 0 || n != 4 || memcmp(in, "scan", 4) != 0) {
+    if (strip_tail(in, len, &n) != 0) {
+        return -1;
+    }
+    if (n > 0 && in[n - 1] == '\0') {
+        n--;
+    }
+    if (n != 4 || memcmp(in, "scan", 4) != 0) {
         return -1;
     }
     return 0;

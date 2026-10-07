@@ -120,6 +120,7 @@ int main(void) {
     check(ble_desk_parse_scan((const uint8_t *)"scan", 4) == 0, "scan");
     check(ble_desk_parse_scan((const uint8_t *)"scan\n", 5) == 0, "scan nl");
     check(ble_desk_parse_scan((const uint8_t *)"scan\r\n", 6) == 0, "scan crlf");
+    check(ble_desk_parse_scan((const uint8_t *)"scan\0", 5) == 0, "scan nul");
     check(ble_desk_parse_scan((const uint8_t *)"scan-now", 8) != 0, "scan extra");
     check(ble_desk_parse_scan((const uint8_t *)"sca", 3) != 0, "scan short");
 

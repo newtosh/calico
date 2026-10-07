@@ -71,6 +71,8 @@ static int s_gatt_ok;
 static int s_host_up;
 static char s_scan_text[BLE_DESK_SCAN_TEXT];
 static int s_scan_busy;
+static TaskHandle_t s_scan_task;
+static SemaphoreHandle_t s_scan_go;
 
 /* Little-endian UUID bytes. The 13th byte is the time_low LSB:
  * 0x10 service, 0x11 status, 0x12 url, 0x13 token, 0x14 wifi, 0x15 reboot, 0x16 scan.
@@ -263,30 +265,69 @@ static void publish_scan(int state, const ble_desk_ap_t *aps, int count) {
 
 _Static_assert(BLE_DESK_SCAN_MAX == NET_SCAN_MAX, "scan cap");
 
+/* The 48-record gather in net_wifi_scan is on the heap. This stack only
+ * has to survive esp_wifi_scan_start's wait. 12288 matches the glass scan.
+ * 8192 is the floor if the larger block is no longer contiguous. */
+#define BLE_SCAN_STACK 12288
+#define BLE_SCAN_STACK_FLOOR 8192
+
 /* Off the NimBLE host. esp_wifi_scan_start blocks for the air time, and the
- * host has to keep answering the link. Same 12KB stack as the glass scan.
- * Created only after esp_wifi_init, so it does not take the STA's DMA block. */
+ * host has to keep answering the link. The task is created once, after
+ * esp_wifi_init, so its stack does not take the STA's DMA block. A write
+ * must not call xTaskCreate: on 5151902 that ran on the host task, the
+ * 12KB internal alloc failed, and the callback returned BLE_ATT_ERR_UNLIKELY
+ * (ATT 0x0E) before any scan started. */
 static void scan_worker(void *arg) {
-    net_ap_t found[NET_SCAN_MAX];
-    ble_desk_ap_t aps[BLE_DESK_SCAN_MAX];
-    int n;
-    int i;
-    int count;
     (void)arg;
-    n = net_wifi_scan(found, NET_SCAN_MAX);
-    if (n < 0) {
-        publish_scan(BLE_DESK_SCAN_FAIL, NULL, 0);
-    } else {
-        count = n;
-        memset(aps, 0, sizeof(aps));
-        for (i = 0; i < count; i++) {
-            memcpy(aps[i].ssid, found[i].ssid, sizeof(aps[i].ssid));
-            aps[i].ssid[sizeof(aps[i].ssid) - 1] = '\0';
-            aps[i].rssi = found[i].rssi;
+    for (;;) {
+        net_ap_t found[NET_SCAN_MAX];
+        ble_desk_ap_t aps[BLE_DESK_SCAN_MAX];
+        int n;
+        int i;
+        int count;
+        if (!s_scan_go || xSemaphoreTake(s_scan_go, portMAX_DELAY) != pdTRUE) {
+            continue;
         }
-        publish_scan(BLE_DESK_SCAN_READY, aps, count);
+        n = net_wifi_scan(found, NET_SCAN_MAX);
+        if (n < 0) {
+            publish_scan(BLE_DESK_SCAN_FAIL, NULL, 0);
+        } else {
+            count = n;
+            memset(aps, 0, sizeof(aps));
+            for (i = 0; i < count; i++) {
+                memcpy(aps[i].ssid, found[i].ssid, sizeof(aps[i].ssid));
+                aps[i].ssid[sizeof(aps[i].ssid) - 1] = '\0';
+                aps[i].rssi = found[i].rssi;
+            }
+            publish_scan(BLE_DESK_SCAN_READY, aps, count);
+        }
     }
-    vTaskDelete(NULL);
+}
+
+static void start_scan_task(void) {
+    uint32_t stack = BLE_SCAN_STACK;
+    if (s_scan_task) {
+        return;
+    }
+    if (!s_scan_go) {
+        s_scan_go = xSemaphoreCreateBinary();
+    }
+    if (!s_scan_go) {
+        ESP_LOGE(TAG, "scan signal missing");
+        return;
+    }
+    if (xTaskCreate(scan_worker, "ble-scan", stack, NULL, 4, &s_scan_task) == pdPASS) {
+        return;
+    }
+    s_scan_task = NULL;
+    stack = BLE_SCAN_STACK_FLOOR;
+    if (xTaskCreate(scan_worker, "ble-scan", stack, NULL, 4, &s_scan_task) == pdPASS) {
+        ESP_LOGW(TAG, "ble-scan stack %u", (unsigned)stack);
+        return;
+    }
+    s_scan_task = NULL;
+    ESP_LOGE(TAG, "ble-scan not started, largest internal %u",
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
 }
 
 static int read_scan(struct os_mbuf *om) {
@@ -309,20 +350,20 @@ static int write_scan(const uint8_t *buf, uint16_t len) {
         ble_link_leave();
         return 0;
     }
+    if (!s_scan_task || !s_scan_go) {
+        ble_link_leave();
+        return BLE_ATT_ERR_INSUFFICIENT_RES;
+    }
     s_scan_busy = 1;
     if (ble_desk_format_scan(s_scan_text, sizeof(s_scan_text), BLE_DESK_SCAN_BUSY, NULL, 0) < 0) {
         s_scan_busy = 0;
         ble_link_leave();
         return BLE_ATT_ERR_INSUFFICIENT_RES;
     }
-    /* The worker does not take s_mu until the scan returns. */
-    if (xTaskCreate(scan_worker, "ble-scan", 12288, NULL, 4, NULL) != pdPASS) {
-        s_scan_busy = 0;
-        ble_desk_format_scan(s_scan_text, sizeof(s_scan_text), BLE_DESK_SCAN_FAIL, NULL, 0);
-        ble_link_leave();
-        return BLE_ATT_ERR_UNLIKELY;
-    }
+    /* Wake the worker after dropping s_mu. publish_scan takes it at the end,
+     * and the host has to send this response before the air time starts. */
     ble_link_leave();
+    xSemaphoreGive(s_scan_go);
     ESP_LOGI(TAG, "wifi scan");
     return 0;
 }
@@ -551,7 +592,10 @@ void ble_link_host_start(void) {
         return;
     }
     s_host_up = 1;
+    /* Host stack first (6144). The scan task is the next internal alloc,
+     * still after esp_wifi_init. A write only gives s_scan_go. */
     nimble_port_freertos_init(host_task);
+    start_scan_task();
 }
 
 #endif /* CONFIG_BT_NIMBLE_ENABLED */

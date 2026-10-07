@@ -124,3 +124,56 @@ def test_menus_cover_provisioning():
     assert tool.build_parser().parse_args(["status"]).command == "status"
     assert tool.build_parser().parse_args(["wifi-scan"]).command == "wifi-scan"
     assert tool.build_parser().parse_args(["wifi"]).command == "wifi"
+
+
+def _c_fn(src: str, signature: str) -> str:
+    start = src.find(signature)
+    assert start >= 0, signature
+    brace = src.find("{", start)
+    depth = 0
+    for i in range(brace, len(src)):
+        if src[i] == "{":
+            depth += 1
+        elif src[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return src[brace : i + 1]
+    raise AssertionError(signature)
+
+
+def test_scan_write_does_not_allocate_a_task():
+    """5151902 created the 12KB task inside the GATT write. That alloc failed
+    on the NimBLE host and the desk answered ATT 0x0E Unlikely Error."""
+    link = LINK.read_text(encoding="utf-8")
+    write = _c_fn(link, "static int write_scan(")
+    start = _c_fn(link, "static void start_scan_task(")
+    assert "xTaskCreate" not in write
+    assert "xSemaphoreGive" in write
+    assert "xTaskCreate" in start
+    assert "nimble_port_freertos_init" in _c_fn(link, "void ble_link_host_start(")
+
+
+def test_mtu_check_does_not_read_the_warning_property():
+    tool = load_tool()
+
+    class Backend:
+        _mtu_size = None
+
+    class Client:
+        _backend = Backend()
+
+        @property
+        def mtu_size(self):
+            raise AssertionError("mtu_size warns and reports 23")
+
+    assert tool.reported_mtu(Client()) == 0
+    tool._check_mtu(Client(), b"scan")
+    client = Client()
+    client._backend = Backend()
+    client._backend._mtu_size = 23
+    tool._check_mtu(client, b"scan")
+    try:
+        tool._check_mtu(client, b"x" * 200)
+    except SystemExit:
+        return
+    raise AssertionError("long write on a known small MTU")

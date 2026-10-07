@@ -345,8 +345,25 @@ async def resolve_address(address: str) -> str:
     raise SystemExit(f"more than one {NAME}. Pass --address.\n{lines}")
 
 
+def reported_mtu(client) -> int:
+    """Bytes the backend has actually learned.
+
+    Bleak's ``mtu_size`` property warns and returns 23 until something calls
+    the private ``_acquire_mtu``. That call needs a write-without-response
+    or notify characteristic, and this desk has neither. Reading the property
+    from ``_check_mtu`` was the warning on the scan write. BlueZ ReadValue
+    and WriteValue still use the MTU the controller negotiated (the desk
+    asks for 256). Unknown means do not invent 23.
+    """
+    backend = getattr(client, "_backend", None)
+    known = getattr(backend, "_mtu_size", None)
+    if isinstance(known, int) and known > 0:
+        return known
+    return 0
+
+
 def _check_mtu(client, payload: bytes) -> None:
-    mtu = getattr(client, "mtu_size", 0) or 0
+    mtu = reported_mtu(client)
     if mtu and mtu < MIN_WRITE_MTU and len(payload) + 3 > mtu:
         raise SystemExit(
             f"ATT MTU is {mtu}. This write needs at least {MIN_WRITE_MTU}. "
