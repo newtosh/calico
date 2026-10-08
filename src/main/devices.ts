@@ -1,6 +1,6 @@
 import { type BrowserWindow, ipcMain } from "electron";
 import type { Candidate } from "../shared/ipc";
-import { execFileP, serialReadFix } from "./assist";
+import { prepareSerial } from "./assist";
 
 /** Electron has no device picker UI. Forward candidates to the renderer and wait for its choice. */
 export function wireDevicePickers(win: BrowserWindow): void {
@@ -36,16 +36,16 @@ export function wireDevicePickers(win: BrowserWindow): void {
     contents.send("device:serial-candidates", list);
   });
   ipcMain.on("device:serial-choose", (_event, id: unknown) => {
-    const chosen = typeof id === "string" ? id : "";
     const callback = serialCallback;
+    if (!callback) return;
     serialCallback = null;
-    const fix =
-      process.platform === "linux"
-        ? serialReadFix(serialNames.get(chosen) ?? "")
-        : null;
-    // Best effort: if stty is missing or refuses, open the port as it is.
-    const ready = fix ? execFileP("stty", fix) : Promise.resolve(undefined);
-    void ready.finally(() => callback?.(chosen));
+    const chosen = typeof id === "string" ? id : "";
+    const name = serialNames.get(chosen);
+    const ready =
+      name && process.platform === "linux"
+        ? prepareSerial(name)
+        : Promise.resolve();
+    void ready.then(() => callback(chosen));
   });
 
   const allowed = new Set(["serial", "clipboard-sanitized-write"]);

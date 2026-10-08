@@ -6,11 +6,12 @@ import type { FirewallKind } from "../shared/ipc";
 export type Exec = (
   file: string,
   args: string[],
+  timeoutMs?: number,
 ) => Promise<{ code: number; stdout: string }>;
 
-export const execFileP: Exec = (file, args) =>
+export const execFileP: Exec = (file, args, timeoutMs = 120_000) =>
   new Promise((resolve) => {
-    execFile(file, args, { timeout: 120_000 }, (err, stdout, stderr) => {
+    execFile(file, args, { timeout: timeoutMs }, (err, stdout, stderr) => {
       const code = err ? (typeof err.code === "number" ? err.code : 1) : 0;
       resolve({ code, stdout: `${stdout}${stderr}` });
     });
@@ -74,6 +75,20 @@ export function serialFix(group: string, user: string): string[] {
 export function serialReadFix(portName: string): string[] | null {
   if (!/^tty(ACM|USB)\d+$/.test(portName)) return null;
   return ["-F", `/dev/${portName}`, "min", "1", "time", "0"];
+}
+
+/** Best effort: never rejects, so the picker callback always fires. */
+export async function prepareSerial(
+  portName: string,
+  exec: Exec = execFileP,
+): Promise<void> {
+  const args = serialReadFix(portName);
+  if (!args) return;
+  try {
+    await exec("stty", args, 2000);
+  } catch {
+    // Open the port as it is.
+  }
 }
 
 export function deniedSerialPorts(devDir = "/dev"): string[] {
