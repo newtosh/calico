@@ -22,7 +22,9 @@ test("launches, serves status, and renders the dashboard", async () => {
       ).calico.info(),
     );
     expect(info.serverUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
-    const status = await (await fetch(`${info.serverUrl}/api/status`)).json();
+    const status = (await (
+      await fetch(`${info.serverUrl}/api/status`)
+    ).json()) as { phase: string };
     expect(status.phase).toBe("idle");
   } finally {
     await app.close();
