@@ -84,7 +84,9 @@ describe("frozen HTTP contract", () => {
   it("matches the Python companion step for step, including key order", async () => {
     let config: CalicoConfig = { ...defaultConfig(), webhook_token: "secret" };
     const { server } = createCompanionServer({
-      store: new DeskStore(),
+      // The capture ran inside one second, so every timestamp ties. A real
+      // clock can cross a second boundary mid-run and reorder agents.
+      store: new DeskStore({ now: () => new Date("2026-01-01T00:00:00Z") }),
       getConfig: () => config,
       setConfig: (next) => {
         config = next;
