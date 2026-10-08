@@ -56,6 +56,7 @@ describe("DeskStore", () => {
       icon: "",
       attention,
       message: "",
+      source: "grok-bot",
     });
     const snapshot: Snapshot = {
       events: [],
@@ -264,5 +265,36 @@ describe("DeskStore", () => {
     expect(onChange).toHaveBeenCalledTimes(1);
     const copy = new DeskStore({ now: c.now, snapshot: store.snapshot() });
     expect(copy.status()).toEqual(store.status());
+  });
+
+  it("remembers where each agent's last update came from", () => {
+    const store = new DeskStore({ now: clock().now });
+    store.applyEvent({
+      type: "agent.launched",
+      agent_id: "g1",
+      title: "Desky",
+    });
+    store.applyEvent({
+      type: "agent.launched",
+      agent_id: "m1",
+      title: "Test",
+      source: "manual",
+    });
+    store.applyCursorItem("c1", "Fix tests", "running", "2026-10-07T12:00:00Z");
+    const sources = Object.fromEntries(
+      store.status(true).agents.map((a) => [a.id, a.source]),
+    );
+    expect(sources).toEqual({ g1: "grok-bot", m1: "manual", c1: "cursor" });
+  });
+
+  it("keeps source out of the panel's status unless asked", () => {
+    const store = new DeskStore({ now: clock().now });
+    store.applyEvent({
+      type: "agent.launched",
+      agent_id: "g1",
+      title: "Desky",
+    });
+    expect(Object.keys(store.status().agents[0] ?? {})).not.toContain("source");
+    expect(Object.keys(store.status(true).agents[0] ?? {})).toContain("source");
   });
 });

@@ -192,7 +192,11 @@ export function createCompanionServer(deps: ServerDeps): {
       if (path === "/api/status") {
         if (!isLoopback(req.socket.remoteAddress))
           stats.lastPanelPoll = Date.now();
-        const body = store.status();
+        const detail =
+          new URL(req.url ?? "/", "http://calico").searchParams.get(
+            "detail",
+          ) === "1";
+        const body = store.status(detail);
         const panel = panelStatusField(deps.getConfig());
         // First key: the panel buffer is 16 KB and drops the tail.
         return json(res, 200, panel ? { panel, ...body } : body);

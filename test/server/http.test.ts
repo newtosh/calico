@@ -185,3 +185,24 @@ describe("GET /api/cursor", () => {
     });
   });
 });
+
+describe("GET /api/status?detail=1", () => {
+  it("adds each agent's source for the app, and only then", async () => {
+    const { base, store } = await start();
+    store.applyEvent({
+      type: "agent.launched",
+      agent_id: "g1",
+      title: "Desky",
+    });
+    const plain = (await (await fetch(`${base}/api/status`)).json()) as {
+      agents: Record<string, unknown>[];
+    };
+    const detail = (await (
+      await fetch(`${base}/api/status?detail=1`)
+    ).json()) as {
+      agents: Record<string, unknown>[];
+    };
+    expect(plain.agents[0]).not.toHaveProperty("source");
+    expect(detail.agents[0]?.source).toBe("grok-bot");
+  });
+});
