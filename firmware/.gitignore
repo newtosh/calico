@@ -1,0 +1,18 @@
+# ESP-IDF output and per-machine config
+build/
+managed_components/
+sdkconfig
+dependencies.lock
+
+# NVS images from scripts/provision-wifi.py hold Wi-Fi passwords. The script
+# uses a temp dir; never commit these.
+provision-wifi.csv
+provision-wifi.bin
+nvs.bin
+*.nvs.bin
+
+# Python tooling in scripts/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv*/

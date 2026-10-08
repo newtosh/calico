@@ -7,3 +7,8 @@ test-results/
 *.log
 .env
 __pycache__/
+# NVS images hold Wi-Fi passwords (see firmware/scripts/provision-wifi.py)
+nvs.bin
+*.nvs.bin
+provision-wifi.csv
+provision-wifi.bin
