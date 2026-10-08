@@ -42,6 +42,7 @@ const info: CalicoInfo = {
   webhookToken: "",
   serverError: null,
   autostart: { enabled: false, available: false },
+  version: "0.0.0-test",
 };
 
 afterEach(() => {

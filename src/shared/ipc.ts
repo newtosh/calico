@@ -22,6 +22,8 @@ export interface CalicoInfo {
   webhookToken: string;
   serverError: ServerErrorInfo | null;
   autostart: { enabled: boolean; available: boolean };
+  /** Release version from package.json. */
+  version: string;
 }
 
 export type FirewallKind = "ufw" | "firewalld" | "nftables" | "none";

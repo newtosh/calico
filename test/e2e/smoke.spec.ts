@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { _electron as electron, expect, test } from "@playwright/test";
@@ -37,6 +37,12 @@ test("launches, serves status, and renders the dashboard", async () => {
       }),
     });
     await expect(page.getByText("Smoke agent").first()).toBeVisible();
+    // Settings shows this release's version, not Electron's.
+    const { version } = JSON.parse(readFileSync("package.json", "utf8")) as {
+      version: string;
+    };
+    await page.getByRole("button", { name: "Settings" }).click();
+    await expect(page.getByText(`Calico ${version}`)).toBeVisible();
   } finally {
     await app.close();
   }
