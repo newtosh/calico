@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { injectBody, postWebhook } from "../lib/api";
+import { ErrorNote } from "../shell/ErrorNote";
 
 const TYPES = [
   "agent.launched",
@@ -54,7 +55,11 @@ export function InjectBar({ onSent }: { onSent: () => void }) {
           </button>
         ))}
       </div>
-      {error ? <p className="px-4 pb-3 text-red">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="px-4 pb-3">
+          <ErrorNote>{error}</ErrorNote>
+        </p>
+      ) : null}
     </details>
   );
 }

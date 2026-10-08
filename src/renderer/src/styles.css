@@ -23,6 +23,9 @@
   body {
     @apply bg-glass font-sans text-sm text-cream;
   }
+  p {
+    text-wrap: pretty;
+  }
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-sage;
   }
@@ -45,7 +48,7 @@
     @apply border-sage bg-selected;
   }
   .label {
-    @apply text-xs text-muted;
+    @apply flex flex-col text-xs text-muted;
   }
   .section-title {
     @apply px-4 pt-4 pb-2 text-xs font-medium tracking-wide text-muted uppercase;

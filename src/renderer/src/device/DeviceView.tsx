@@ -7,6 +7,7 @@ import { LinkActions } from "./LinkActions";
 import { ProvisionFlow } from "./ProvisionFlow";
 import { SerialAssist } from "./SerialAssist";
 import { connectUsb } from "./usb";
+import { ErrorNote } from "../shell/ErrorNote";
 
 interface Props {
   info: CalicoInfo;
@@ -68,8 +69,8 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
           a cable once the desk is advertising.
         </p>
         {error ? (
-          <p role="alert" className="px-4 pt-2 text-red">
-            {error}
+          <p role="alert" className="px-4 pt-2">
+            <ErrorNote>{error}</ErrorNote>
           </p>
         ) : null}
         {assist === "serial" ? <SerialAssist /> : null}

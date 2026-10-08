@@ -2,7 +2,7 @@
 
 Desktop companion and developer kit for [grokbot-buddy](https://github.com/newtosh/grokbot-buddy), an ESP32-S3 AMOLED desk panel that shows what your coding agents are doing.
 
-> Status: pre-alpha. Built in public. The first release targets Linux.
+> Status: alpha. v0.1 targets Linux.
 
 ## What it does
 
@@ -10,6 +10,9 @@ Desktop companion and developer kit for [grokbot-buddy](https://github.com/newto
 - Shows a dashboard of agents, events, and the panel's state.
 - Sets up the panel over USB or Bluetooth: Wi-Fi (tested before it is saved), companion URL, token, reboot.
 - Lives in the tray and starts at login, so the panel keeps working when the window is closed.
+
+![Dashboard](resources/screenshots/dashboard.png)
+![Device setup](resources/screenshots/device.png)
 
 Planned: firmware flashing and a first-run wizard, a screen simulator built from the real firmware UI, more agent integrations, macOS and Windows.
 

@@ -22,7 +22,7 @@ export function App() {
   const lanUrl = info?.lanUrls[0];
 
   return (
-    <div className="flex h-screen">
+    <div className="flex h-dvh">
       <Sidebar view={view} onSelect={setView} panelOnline={panelOnline} />
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-end gap-3 border-b border-stroke/40 px-4 py-2">

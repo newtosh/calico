@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { CalicoInfo } from "../../../shared/ipc";
 import { panelOnlineSince } from "../lib/panel-online";
 import type { Ap, DeviceLink } from "./commands";
+import { ErrorNote } from "../shell/ErrorNote";
 
 type Stage =
   | "idle"
@@ -147,7 +148,7 @@ export function ProvisionFlow({
         </button>
       </div>
       <p role="status" className="px-4 pt-2">
-        {error ? <span className="text-red">{error}</span> : null}
+        {error ? <ErrorNote>{error}</ErrorNote> : null}
         {stage === "waiting" ? (
           <span className="text-amber">
             Rebooted. Waiting up to 30 s for the panel to poll calico.

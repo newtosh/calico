@@ -4,6 +4,7 @@ import { AgentRows } from "./AgentRows";
 import { EventRows } from "./EventRows";
 import { InjectBar } from "./InjectBar";
 import { NeedsYouStrip } from "./NeedsYouStrip";
+import { ErrorNote } from "../shell/ErrorNote";
 
 export function Dashboard({ serverUrl }: { serverUrl: string }) {
   const [status, setStatus] = useState<DeskStatus | null>(null);
@@ -40,7 +41,11 @@ export function Dashboard({ serverUrl }: { serverUrl: string }) {
         <span className="text-muted">
           {running}/{status?.agents.length ?? 0} active
         </span>
-        {error ? <span className="text-red">{error}</span> : null}
+        {error ? (
+          <span role="alert">
+            <ErrorNote>{error}</ErrorNote>
+          </span>
+        ) : null}
       </div>
       <h2 className="section-title">Agents</h2>
       <AgentRows agents={status?.agents ?? []} />
