@@ -62,4 +62,37 @@ describe("ConfigSection running timeout", () => {
     await screen.findByText("Saved.");
     expect(puts[0]).toMatchObject({ running_timeout_seconds: 600 });
   });
+
+  it.each([
+    ["", /from 30 to 3600/],
+    ["abc", /from 30 to 3600/],
+    ["10", /from 30 to 3600/],
+    ["99999", /from 30 to 3600/],
+    ["60.5", /from 30 to 3600/],
+  ])(
+    "does not send a save for the timeout %j, and says why",
+    async (value, message) => {
+      const { puts } = serve(120);
+      render(<ConfigSection />);
+      const field = (await screen.findByLabelText(
+        "Running timeout seconds",
+      )) as HTMLInputElement;
+      await vi.waitFor(() => expect(field.value).toBe("120"));
+      fireEvent.change(field, { target: { value } });
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      expect((await screen.findByRole("status")).textContent).toMatch(message);
+      expect(puts).toHaveLength(0);
+    },
+  );
+
+  it("catches a bad port or poll interval before the server rejects the whole save", async () => {
+    const { puts } = serve(120);
+    render(<ConfigSection />);
+    const port = (await screen.findByLabelText("Port")) as HTMLInputElement;
+    await vi.waitFor(() => expect(port.value).toBe("8787"));
+    fireEvent.change(port, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText(/Port must be/)).toBeTruthy();
+    expect(puts).toHaveLength(0);
+  });
 });

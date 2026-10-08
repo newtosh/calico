@@ -16,11 +16,11 @@ export const DEFAULT_PORT = 8787;
 
 /** Startup-fatal. The message names the file. */
 export class ConfigError extends Error {}
-/** A request body the HTTP layer answers with 400. */
 export const DEFAULT_RUNNING_TIMEOUT = 120;
 export const MIN_RUNNING_TIMEOUT = 30;
 export const MAX_RUNNING_TIMEOUT = 3600;
 
+/** A request body the HTTP layer answers with 400. */
 export class BadInput extends Error {}
 
 export function defaultConfig(): CalicoConfig {

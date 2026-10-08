@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchConfig, type PublicConfig, putConfig } from "../lib/api";
+import { parseWhole } from "../lib/whole";
 
 export function ConfigSection() {
   const [config, setConfig] = useState<PublicConfig | null>(null);
@@ -25,11 +26,25 @@ export function ConfigSection() {
   }, []);
 
   async function save() {
+    // The server refuses the whole save over one bad number, so check here.
+    const portNumber = parseWhole(port, 1, 65535);
+    const pollNumber = parseWhole(poll, 5, 86400);
+    const runningNumber = parseWhole(runningFor, 30, 3600);
+    if (portNumber === null)
+      return setNotice("Port must be a whole number from 1 to 65535.");
+    if (pollNumber === null)
+      return setNotice(
+        "Cursor poll seconds must be a whole number from 5 to 86400.",
+      );
+    if (runningNumber === null)
+      return setNotice(
+        "Enter a whole number of seconds from 30 to 3600 for the running timeout.",
+      );
     try {
       const { restart_required } = await putConfig({
-        port: Number(port),
-        cursor_poll_seconds: Number(poll),
-        running_timeout_seconds: Number(runningFor),
+        port: portNumber,
+        cursor_poll_seconds: pollNumber,
+        running_timeout_seconds: runningNumber,
         ...(token !== null ? { webhook_token: token } : {}),
         ...(apiKey !== null ? { cursor_api_key: apiKey } : {}),
       });
