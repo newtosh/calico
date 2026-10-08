@@ -99,11 +99,12 @@ class Store:
 
 
 def repo_root() -> Path:
-    return Path(__file__).resolve().parent.parent
+    # scripts/ lives in firmware/, which lives in the repo root.
+    return Path(__file__).resolve().parent.parent.parent
 
 
 def partitions_csv() -> Path:
-    return repo_root() / "firmware" / "partitions.csv"
+    return Path(__file__).resolve().parent.parent / "partitions.csv"
 
 
 def nvs_geometry(path: Path) -> tuple[int, int]:

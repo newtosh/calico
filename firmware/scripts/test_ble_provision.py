@@ -7,8 +7,8 @@ import os
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parent / "ble-provision.py"
-HEADER = Path(__file__).resolve().parent.parent / "firmware" / "main" / "ble_desk.h"
-LINK = Path(__file__).resolve().parent.parent / "firmware" / "main" / "ble_link.c"
+HEADER = Path(__file__).resolve().parent.parent / "main" / "ble_desk.h"
+LINK = Path(__file__).resolve().parent.parent / "main" / "ble_link.c"
 
 
 def load_tool():
