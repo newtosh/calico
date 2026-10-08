@@ -1,6 +1,6 @@
 # Firmware
 
-ESP-IDF app for the Waveshare ESP32-S3-Touch-AMOLED-2.16. It polls `GET {companion}/api/status`. Agent rows under the title scroll in that list. The panel keeps 24 rows. The status bar and the dock stay put. IDLE / RUNNING / NEEDS YOU show as the status-bar lamp and a short toast. NEEDS YOU raises a dark glass sheet from the bottom, just under the status bar. The card is `#0c0e09` at 250/255 (98%) so roster type does not read through the glass. The stroke is a 3px border at full opacity, the same on every side, in the agent's mark color. Outside it, three 2px rings sit 2px, 4px, and 6px away from the card on every side, at 72/255, 32/255, and 12/255. They do not overlap, so that is the fringe: strongest beside the stroke, faintest at the outside. The outer edge is the 24px case line the dock already uses (16px bezel plus 8px lip). The card border stays 30px from the left, right, and bottom, so the rounded bottom and `Dismiss all` stay on the glass. Inside the stroke, a 3px band at 36/255 and a 7px band at 14/255 are a light inner highlight. The mark is the row shape at 120px, the same silhouette as the 24px list mark, including the two static eyes. Nothing circular sits behind it: a same-color disc reads as a flat badge and hides the cloud. The name is Montserrat 48 and the aside is Montserrat 28. A long aside still scrolls, and a quick downward flick still dismisses. A tap, or a downward swipe, dismisses that one card and posts `/api/dismiss` with its `agent_id`. A later `needs_you` while a card is still up covers it: one or two peeks show above the front card, and `N new` is how many cards are still under the one on screen. Swipe left for the older card and right to come back. `Dismiss all` posts `/api/dismiss` with no agent. The glass is one translucent object plus the three outer rings and the inner highlight. It does not add a DMA stripe. Each row is a 24px mark: `color` (`#RRGGBB`) and `shape` from the status JSON, plus two static pixel eyes. Shape names and the sampled picker palette are in [docs/grok-bot-integration.md](../docs/grok-bot-integration.md). A missing or unusable value is one neutral circle, `#a39b88`. Agent icons are not drawn on the panel. Settings are stored in NVS namespace `desk`: a list of known networks plus a global companion URL and bearer token. The Mic button is a dimmed icon and only shows `Voice not in this PoC`.
+ESP-IDF app for the Waveshare ESP32-S3-Touch-AMOLED-2.16. It polls `GET {companion}/api/status`. Agent rows under the title scroll in that list. The panel keeps 24 rows. The status bar and the dock stay put. IDLE / RUNNING / NEEDS YOU show as the status-bar lamp and a short toast. NEEDS YOU raises a dark glass sheet from the bottom, just under the status bar. The card is `#0c0e09` at 250/255 (98%) so roster type does not read through the glass. The stroke is a 3px border at full opacity, the same on every side, in the agent's mark color. Outside it, three 2px rings sit 2px, 4px, and 6px away from the card on every side, at 72/255, 32/255, and 12/255. They do not overlap, so that is the fringe: strongest beside the stroke, faintest at the outside. The outer edge is the 24px case line the dock already uses (16px bezel plus 8px lip). The card border stays 30px from the left, right, and bottom, so the rounded bottom and `Dismiss all` stay on the glass. Inside the stroke, a 3px band at 36/255 and a 7px band at 14/255 are a light inner highlight. The mark is the row shape at 120px, the same silhouette as the 24px list mark, including the two static eyes. Nothing circular sits behind it: a same-color disc reads as a flat badge and hides the cloud. The name is Montserrat 48 and the aside is Montserrat 28. A long aside still scrolls, and a quick downward flick still dismisses. A tap, or a downward swipe, dismisses that one card and posts `/api/dismiss` with its `agent_id`. A later `needs_you` while a card is still up covers it: one or two peeks show above the front card, and `N new` is how many cards are still under the one on screen. Swipe left for the older card and right to come back. `Dismiss all` posts `/api/dismiss` with no agent. The glass is one translucent object plus the three outer rings and the inner highlight. It does not add a DMA stripe. Each row is a 24px mark: `color` (`#RRGGBB`) and `shape` from the status JSON, plus two static pixel eyes. Shape names and the sampled picker palette are in [docs/grok-bot-integration.md](../kits/ginger/docs/grok-bot-integration.md). A missing or unusable value is one neutral circle, `#a39b88`. Agent icons are not drawn on the panel. Settings are stored in NVS namespace `desk`: a list of known networks plus a global companion URL and bearer token. The Mic button is a dimmed icon and only shows `Voice not in this PoC`.
 
 ## Flash
 
@@ -132,14 +132,14 @@ With no command the script opens a menu. It scans for `grokbot-buddy`, shows sta
 
 ```bash
 .venv-ble/bin/pip install bleak prompt_toolkit
-.venv-ble/bin/python scripts/ble-provision.py
-scripts/ble-provision.py scan
-scripts/ble-provision.py status
-scripts/ble-provision.py url
-scripts/ble-provision.py token
-scripts/ble-provision.py wifi-scan
-scripts/ble-provision.py wifi
-scripts/ble-provision.py reboot
+.venv-ble/bin/python firmware/scripts/ble-provision.py
+firmware/scripts/ble-provision.py scan
+firmware/scripts/ble-provision.py status
+firmware/scripts/ble-provision.py url
+firmware/scripts/ble-provision.py token
+firmware/scripts/ble-provision.py wifi-scan
+firmware/scripts/ble-provision.py wifi
+firmware/scripts/ble-provision.py reboot
 ```
 
 `url`, `token`, and `wifi` prompt. The password and the bearer are not arguments and not environment variables. `--address AA:BB:CC:DD:EE:FF` picks one desk when more than one is advertising. `wifi-scan` prints `rssi`, a tab, and the SSID. The named commands stay for scripts.
@@ -149,27 +149,27 @@ Host mbufs are allocated from PSRAM (`CONFIG_BT_NIMBLE_MEM_ALLOC_MODE_EXTERNAL`)
 An existing `firmware/sdkconfig` does not pick up `sdkconfig.defaults`. Delete that file and reconfigure. Do not erase the device. `idf.py` was not on the machine that added this, so the image has not been built here.
 
 ```bash
-python3 -m pytest scripts/test_ble_provision.py
+python3 -m pytest firmware/scripts/test_ble_provision.py
 gcc -Wall -Werror -I firmware/main firmware/host/test_ble_desk.c firmware/main/ble_desk.c firmware/main/wifi_store.c -o /tmp/test_ble_desk
 /tmp/test_ble_desk
 ```
 
 ## Provision Wi-Fi over USB
 
-`scripts/provision-wifi.py` reads and writes the same NVS namespace the firmware reads (`desk`). It does not flash the application. It does not pick an SSID or a password for you.
+`firmware/scripts/provision-wifi.py` reads and writes the same NVS namespace the firmware reads (`desk`). It does not flash the application. It does not pick an SSID or a password for you.
 
 ESP-IDF 5.5.x has to be on the machine. This checkout does not include it. Source the IDF export so `IDF_PATH` is set, then run the script from the repo root. The script calls that install's `nvs_partition_gen.py` and `esptool.py`. It does not vendor a second NVS format.
 
 ```bash
 . "$IDF_PATH/export.sh"
-scripts/provision-wifi.py add
-scripts/provision-wifi.py remove
+firmware/scripts/provision-wifi.py add
+firmware/scripts/provision-wifi.py remove
 ```
 
 The serial port defaults to `/dev/ttyACM0`. Override it with `PORT`:
 
 ```bash
-PORT=/dev/ttyACM1 scripts/provision-wifi.py add
+PORT=/dev/ttyACM1 firmware/scripts/provision-wifi.py add
 ```
 
 `add` prompts for the SSID and reads the Wi-Fi password from a hidden prompt (twice). It does not take the password as an argument, and it ignores `SSID`, `PASSWORD`, `WIFI_PASSWORD`, `TOKEN`, and similar variables if they are set in the environment. Companion URL and bearer token are optional prompts for this network only. Leave either blank to inherit the global default. The token is not echoed. Nothing from the prompt is written into the repo or into your shell history as a command. `remove` prompts for an SSID and does not ask for a password.
@@ -181,7 +181,7 @@ After a successful write the script soft-resets the board with `esptool.py --chi
 Host checks (no board, no IDF):
 
 ```bash
-python3 -m pytest scripts/test_provision_wifi.py
+python3 -m pytest firmware/scripts/test_provision_wifi.py
 ```
 
 After Wi-Fi is up, a successful `GET /api/status` may include `panel` with `url` and `token`. When those differ from the global NVS url and token, the firmware writes just those two keys and restarts. Saved networks, SSIDs, and passwords are not on that path. The object is absent until the dashboard stores a push, and a failed poll does not apply it. That is separate from the `link down` label, which is three missed polls, and from `NO NETWORK`, which means a scan found none of the saved SSIDs.
@@ -213,7 +213,7 @@ gcc -Wall -Werror -I firmware/main firmware/host/test_control_center.c firmware/
 /tmp/test_control_center
 ```
 
-Open `firmware/simulator/index.html` in a browser. It polls `http://127.0.0.1:8787` unless you pass `?base=http://192.168.1.20:8787`. `?settings=1` opens settings. `?bt=off` draws the dim rune. `?bt=conn` draws the sage dotted mark. The default is the cream dotted mark. The settings button does the same, and Done closes it. A swipe down on the status strip opens Control Center. Swipe up on that sheet, or a tap on the dimmed face, closes it. `?cc=1` opens it. Wheel or drag scrolls the agent list inside the face. The bar and the dock stay fixed. A needs-you status raises the sheet over the list and the dock. The bar stays. A downward swipe, or a tap, dismisses the card on screen. A second needs-you while that card is up stacks on top. Swipe left and right to move through the stack. `Dismiss all` clears every waiting card. Two rapid posts that exercise it are in [docs/grok-bot-integration.md](../docs/grok-bot-integration.md).
+Open `firmware/simulator/index.html` in a browser. It polls `http://127.0.0.1:8787` unless you pass `?base=http://192.168.1.20:8787`. `?settings=1` opens settings. `?bt=off` draws the dim rune. `?bt=conn` draws the sage dotted mark. The default is the cream dotted mark. The settings button does the same, and Done closes it. A swipe down on the status strip opens Control Center. Swipe up on that sheet, or a tap on the dimmed face, closes it. `?cc=1` opens it. Wheel or drag scrolls the agent list inside the face. The bar and the dock stay fixed. A needs-you status raises the sheet over the list and the dock. The bar stays. A downward swipe, or a tap, dismisses the card on screen. A second needs-you while that card is up stacks on top. Swipe left and right to move through the stack. `Dismiss all` clears every waiting card. Two rapid posts that exercise it are in [docs/grok-bot-integration.md](../kits/ginger/docs/grok-bot-integration.md).
 
 ## If `idf.py` is missing
 

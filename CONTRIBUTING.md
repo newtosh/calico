@@ -35,4 +35,4 @@ pnpm dev
 
 ## Firmware
 
-The firmware lives in [grokbot-buddy](https://github.com/newtosh/grokbot-buddy). Changes to the Bluetooth or USB protocol start there. `docs/usb-console-protocol.md` here is the contract both sides follow.
+The firmware lives in `firmware/` (see [firmware/README.md](firmware/README.md) for building and flashing). Run its host tests with `firmware/host/run.sh`. A change to the Bluetooth or USB protocol touches both sides in one pull request: `docs/usb-console-protocol.md` is the contract, and a test in `src/renderer/src/device/ble.test.ts` fails if the BLE UUIDs in `firmware/main/ble_desk.h` and the app drift apart.
