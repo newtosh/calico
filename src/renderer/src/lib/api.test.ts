@@ -1,0 +1,97 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  agentMark,
+  configureApi,
+  fetchStatus,
+  injectBody,
+  NEUTRAL_MARK,
+  parseStatus,
+  postDismiss,
+} from "./api";
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("api", () => {
+  it("builds a manual inject body with optional identity", () => {
+    expect(
+      injectBody("agent.needs_you", "a1", "Pick one", {
+        color: " #9bb57a ",
+        shape: "",
+      }),
+    ).toEqual({
+      type: "agent.needs_you",
+      agent_id: "a1",
+      title: "a1",
+      message: "Pick one",
+      source: "manual",
+      color: "#9bb57a",
+    });
+  });
+
+  it("normalizes marks", () => {
+    expect(agentMark("9bb57a", "Diamond")).toEqual({
+      color: "#9bb57a",
+      shape: "diamond",
+    });
+    expect(agentMark("red", "blob")).toEqual({
+      color: NEUTRAL_MARK,
+      shape: "circle",
+    });
+  });
+
+  it("parses status and keeps attention and message", () => {
+    const status = parseStatus({
+      phase: "needs_you",
+      needs_you: true,
+      unread: 1,
+      agents: [
+        {
+          id: "a1",
+          title: "A",
+          status: "needs_you",
+          attention: true,
+          message: "q",
+        },
+        { nope: 1 },
+      ],
+      last_event: null,
+      events: [],
+    });
+    expect(status.agents).toEqual([
+      {
+        id: "a1",
+        title: "A",
+        status: "needs_you",
+        attention: true,
+        message: "q",
+        updated_at: "",
+        color: "",
+        shape: "",
+        icon: "",
+      },
+    ]);
+    expect(status.unread).toBe(1);
+  });
+
+  it("uses the configured base URL and token", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+    configureApi("http://127.0.0.1:8788", "secret");
+    await postDismiss();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:8788/api/dismiss",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer secret" }),
+      }),
+    );
+  });
+
+  it("throws on a bad status body", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ nope: true })),
+    );
+    configureApi("http://127.0.0.1:8787", "");
+    await expect(fetchStatus()).rejects.toThrow("bad status");
+  });
+});
