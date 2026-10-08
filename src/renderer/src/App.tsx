@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Dashboard } from "./dashboard/Dashboard";
 import { useInfo } from "./lib/use-info";
+import { SettingsView } from "./settings/SettingsView";
 import { ServerErrorPanel } from "./shell/ServerErrorPanel";
 import { Sidebar, type View } from "./shell/Sidebar";
 import { UrlChip } from "./shell/UrlChip";
@@ -26,7 +27,8 @@ export function App() {
           {view === "dashboard" && info?.serverUrl ? (
             <Dashboard serverUrl={info.serverUrl} />
           ) : null}
-          {view !== "dashboard" ? (
+          {view === "settings" && info ? <SettingsView info={info} /> : null}
+          {view === "device" || view === "console" ? (
             <p className="p-4 text-muted">Coming in a later task.</p>
           ) : null}
         </main>
