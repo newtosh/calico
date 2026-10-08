@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { CalicoInfo } from "../../../shared/ipc";
 import { connectBle } from "./ble";
 import type { DeviceLink } from "./commands";
 import { FirewallAssist } from "./FirewallAssist";
 import { LinkActions } from "./LinkActions";
 import { ProvisionFlow } from "./ProvisionFlow";
+import { RebootWait } from "./RebootWait";
 import { SerialAssist } from "./SerialAssist";
 import { connectUsb } from "./usb";
 import { ErrorNote } from "../shell/ErrorNote";
@@ -20,9 +21,26 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
   const [error, setError] = useState("");
   const [assist, setAssist] = useState<"firewall" | "serial" | null>(null);
   const manualClose = useRef(false);
+  const [rebootAt, setRebootAt] = useState<number | null>(null);
+  const showFirewall = useCallback(() => setAssist("firewall"), []);
+
+  // The desk resets as it takes the command, so the link drop that follows is
+  // expected. RebootWait reports the outcome from here, where it stays mounted.
+  async function reboot(target: DeviceLink) {
+    setError("");
+    manualClose.current = true;
+    setRebootAt(Date.now());
+    const reply = await target.send({ op: "reboot" });
+    if (!reply.ok) {
+      manualClose.current = false;
+      setRebootAt(null);
+      setError(reply.error);
+    }
+  }
 
   async function open(kind: "usb" | "ble") {
     setError("");
+    setRebootAt(null);
     const lost = () => {
       setLink(null);
       if (manualClose.current) {
@@ -73,6 +91,9 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
             <ErrorNote>{error}</ErrorNote>
           </p>
         ) : null}
+        {rebootAt !== null ? (
+          <RebootWait since={rebootAt} onSilent={showFirewall} />
+        ) : null}
         {assist === "serial" ? <SerialAssist /> : null}
         {assist === "firewall" ? <FirewallAssist port={info.port} /> : null}
       </div>
@@ -97,12 +118,8 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
           Disconnect
         </button>
       </div>
-      <LinkActions info={info} link={link} />
-      <ProvisionFlow
-        info={info}
-        link={link}
-        onSilent={() => setAssist("firewall")}
-      />
+      <LinkActions info={info} link={link} onReboot={() => reboot(link)} />
+      <ProvisionFlow info={info} link={link} onReboot={() => reboot(link)} />
       <button
         type="button"
         className="btn mx-4 mt-4"
@@ -110,6 +127,9 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
       >
         Panel not connecting?
       </button>
+      {rebootAt !== null ? (
+        <RebootWait since={rebootAt} onSilent={showFirewall} />
+      ) : null}
       {assist === "serial" ? <SerialAssist /> : null}
       {assist === "firewall" ? <FirewallAssist port={info.port} /> : null}
     </div>
