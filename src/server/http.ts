@@ -203,8 +203,13 @@ export function createCompanionServer(deps: ServerDeps): {
       }
       if (path === "/api/panel")
         return json(res, 200, panelPublicView(deps.getConfig()));
-      if (path === "/api/config")
-        return json(res, 200, publicView(deps.getConfig()));
+      if (path === "/api/config") {
+        const detail =
+          new URL(req.url ?? "/", "http://calico").searchParams.get(
+            "detail",
+          ) === "1";
+        return json(res, 200, publicView(deps.getConfig(), detail));
+      }
       if (path === "/api/cursor")
         return json(res, 200, deps.cursorStatus?.() ?? EMPTY_CURSOR_STATUS);
       return json(res, 404, { error: "not found" });

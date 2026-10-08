@@ -297,4 +297,27 @@ describe("DeskStore", () => {
     expect(Object.keys(store.status().agents[0] ?? {})).not.toContain("source");
     expect(Object.keys(store.status(true).agents[0] ?? {})).toContain("source");
   });
+
+  it("lets a running agent go idle after the timeout, which can be longer", () => {
+    const c = clock();
+    let ttlMs = 120_000;
+    const store = new DeskStore({ now: c.now, runningTtlMs: () => ttlMs });
+    store.applyEvent({ type: "agent.launched", agent_id: "a1", title: "Bot" });
+    c.advance(119);
+    expect(store.status().agents[0]?.status).toBe("running");
+    c.advance(2);
+    expect(store.status().agents[0]?.status).toBe("idle");
+    // A routine that can only ping every 5 minutes needs a longer window.
+    ttlMs = 600_000;
+    c.advance(-121);
+    store.applyEvent({ type: "agent.launched", agent_id: "a2", title: "Slow" });
+    c.advance(300);
+    expect(store.status().agents.find((a) => a.id === "a2")?.status).toBe(
+      "running",
+    );
+    c.advance(301);
+    expect(store.status().agents.find((a) => a.id === "a2")?.status).toBe(
+      "idle",
+    );
+  });
 });

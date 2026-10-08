@@ -57,6 +57,8 @@ test("launches, serves status, and renders the dashboard", async () => {
     // Settings fills the field when its first load lands. Typing before that
     // gets overwritten and the save becomes a no-op.
     await expect(page.getByLabel("Port")).not.toHaveValue("");
+    // The running timeout loads with the Python companion's 120 seconds.
+    await expect(page.getByLabel("Running timeout seconds")).toHaveValue("120");
     await page.getByLabel("Port").fill("9001");
     await page
       .getByRole("button", { name: "Save", exact: true })

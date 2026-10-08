@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { fetchConfig, type PublicConfig, putConfig } from "../lib/api";
+import { parseWhole } from "../lib/whole";
 
 export function ConfigSection() {
   const [config, setConfig] = useState<PublicConfig | null>(null);
   const [port, setPort] = useState("");
   const [poll, setPoll] = useState("");
+  const [runningFor, setRunningFor] = useState("");
   const [token, setToken] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
@@ -14,6 +16,7 @@ export function ConfigSection() {
     setConfig(loaded);
     setPort(String(loaded.port));
     setPoll(String(loaded.cursor_poll_seconds));
+    setRunningFor(String(loaded.running_timeout_seconds));
   };
 
   useEffect(() => {
@@ -23,10 +26,25 @@ export function ConfigSection() {
   }, []);
 
   async function save() {
+    // The server refuses the whole save over one bad number, so check here.
+    const portNumber = parseWhole(port, 1, 65535);
+    const pollNumber = parseWhole(poll, 5, 86400);
+    const runningNumber = parseWhole(runningFor, 30, 3600);
+    if (portNumber === null)
+      return setNotice("Port must be a whole number from 1 to 65535.");
+    if (pollNumber === null)
+      return setNotice(
+        "Cursor poll seconds must be a whole number from 5 to 86400.",
+      );
+    if (runningNumber === null)
+      return setNotice(
+        "Enter a whole number of seconds from 30 to 3600 for the running timeout.",
+      );
     try {
       const { restart_required } = await putConfig({
-        port: Number(port),
-        cursor_poll_seconds: Number(poll),
+        port: portNumber,
+        cursor_poll_seconds: pollNumber,
+        running_timeout_seconds: runningNumber,
         ...(token !== null ? { webhook_token: token } : {}),
         ...(apiKey !== null ? { cursor_api_key: apiKey } : {}),
       });
@@ -65,6 +83,23 @@ export function ConfigSection() {
             onChange={(e) => setPoll(e.target.value)}
           />
         </label>
+        <div className="col-span-2">
+          <label className="label">
+            Running timeout seconds
+            <input
+              className="field mt-1"
+              inputMode="numeric"
+              aria-describedby="running-timeout-hint"
+              value={runningFor}
+              onChange={(e) => setRunningFor(e.target.value)}
+            />
+          </label>
+          <p id="running-timeout-hint" className="mt-1 text-xs text-muted">
+            How long a bot stays Running without an update, from 30 to 3600. Set
+            it above how often your routines ping: Grok Bot routines run at most
+            every 5 minutes, so use 360 or more.
+          </p>
+        </div>
         <label className="label">
           Webhook token
           <input

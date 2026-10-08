@@ -206,3 +206,34 @@ describe("GET /api/status?detail=1", () => {
     expect(detail.agents[0]?.source).toBe("grok-bot");
   });
 });
+
+describe("running timeout over HTTP", () => {
+  it("is shown on detail only, so the panel contract is unchanged", async () => {
+    const { base } = await start({ running_timeout_seconds: 600 });
+    const plain = (await (await fetch(`${base}/api/config`)).json()) as Record<
+      string,
+      unknown
+    >;
+    const detail = (await (
+      await fetch(`${base}/api/config?detail=1`)
+    ).json()) as Record<string, unknown>;
+    expect(plain).not.toHaveProperty("running_timeout_seconds");
+    expect(detail.running_timeout_seconds).toBe(600);
+  });
+
+  it("is changed with PUT /api/config and refuses nonsense", async () => {
+    const { base } = await start();
+    const put = (body: unknown) =>
+      fetch(`${base}/api/config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    expect((await put({ running_timeout_seconds: 900 })).status).toBe(200);
+    const detail = (await (
+      await fetch(`${base}/api/config?detail=1`)
+    ).json()) as Record<string, unknown>;
+    expect(detail.running_timeout_seconds).toBe(900);
+    expect((await put({ running_timeout_seconds: 5 })).status).toBe(400);
+  });
+});
