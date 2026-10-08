@@ -1,7 +1,10 @@
+import { existsSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("electron", () => ({ app: { isPackaged: false } }));
-import { desktopEntry } from "../../src/main/autostart";
+import { desktopEntry, initAutostartOnce } from "../../src/main/autostart";
 
 describe("autostart entry", () => {
   it("starts hidden and quotes paths with spaces", () => {
@@ -30,5 +33,34 @@ describe("autostart entry", () => {
     ["/opt/100%/calico", "Exec=/opt/100%%/calico --hidden"],
   ])("quotes %s for the Exec key", (exec, line) => {
     expect(desktopEntry(exec).split("\n")).toContain(line);
+  });
+});
+
+describe("first-run autostart", () => {
+  const dir = () => mkdtempSync(join(tmpdir(), "calico-autostart-"));
+
+  it("turns startup on the first time an installed build runs", () => {
+    const enable = vi.fn();
+    const userData = dir();
+    expect(initAutostartOnce(userData, true, enable)).toBe(true);
+    expect(enable).toHaveBeenCalledTimes(1);
+    expect(existsSync(join(userData, "autostart-initialized"))).toBe(true);
+  });
+
+  it("does not turn it back on after the user switched it off", () => {
+    const enable = vi.fn();
+    const userData = dir();
+    initAutostartOnce(userData, true, enable);
+    expect(initAutostartOnce(userData, true, enable)).toBe(false);
+    expect(enable).toHaveBeenCalledTimes(1);
+  });
+
+  it("is not used up by a dev run, so the installed build still gets its first run", () => {
+    const enable = vi.fn();
+    const userData = dir();
+    expect(initAutostartOnce(userData, false, enable)).toBe(false);
+    expect(enable).not.toHaveBeenCalled();
+    expect(existsSync(join(userData, "autostart-initialized"))).toBe(false);
+    expect(initAutostartOnce(userData, true, enable)).toBe(true);
   });
 });
