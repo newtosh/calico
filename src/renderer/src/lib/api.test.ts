@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   agentMark,
   configureApi,
+  fetchCursor,
   fetchStatus,
   injectBody,
   NEUTRAL_MARK,
@@ -93,5 +94,30 @@ describe("api", () => {
     );
     configureApi("http://127.0.0.1:8787", "");
     await expect(fetchStatus()).rejects.toThrow("bad status");
+  });
+});
+
+describe("fetchCursor", () => {
+  it("reads the poll status and defaults anything malformed", async () => {
+    configureApi("http://127.0.0.1:1", "");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          configured: true,
+          last_poll_at: "2026-10-08T12:00:00Z",
+          ok: false,
+          agents: "many",
+          error: "Cursor rejected the API key (HTTP 401).",
+        }),
+      ),
+    );
+    expect(await fetchCursor()).toEqual({
+      configured: true,
+      last_poll_at: "2026-10-08T12:00:00Z",
+      ok: false,
+      agents: 0,
+      error: "Cursor rejected the API key (HTTP 401).",
+    });
   });
 });

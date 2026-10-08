@@ -53,6 +53,14 @@ export interface ConfigPatch {
   cursor_api_key?: string;
 }
 
+export interface CursorInfo {
+  configured: boolean;
+  last_poll_at: string | null;
+  ok: boolean | null;
+  agents: number;
+  error: string;
+}
+
 export interface PanelPush {
   url: string;
   token_set: boolean;
@@ -258,4 +266,17 @@ export async function putPanel(patch: PanelPatch): Promise<PanelPush> {
       })
     ).json(),
   );
+}
+
+export async function fetchCursor(): Promise<CursorInfo> {
+  const value: unknown = await (await call("/api/cursor")).json();
+  if (!isRecord(value)) throw new Error("bad cursor status");
+  return {
+    configured: value.configured === true,
+    last_poll_at:
+      typeof value.last_poll_at === "string" ? value.last_poll_at : null,
+    ok: typeof value.ok === "boolean" ? value.ok : null,
+    agents: typeof value.agents === "number" ? value.agents : 0,
+    error: typeof value.error === "string" ? value.error : "",
+  };
 }
