@@ -8,6 +8,7 @@
     "email": "jonn@hey.com"
   },
   "license": "MIT",
+  "desktopName": "calico.desktop",
   "homepage": "https://github.com/newtosh/calico",
   "main": "out/main/index.js",
   "packageManager": "pnpm@11.25.0",
