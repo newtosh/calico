@@ -13,8 +13,10 @@ import {
   validateCmd,
 } from "./commands";
 
-export const BLE_NAME = "grokbot-buddy";
-// Canonical text: grokbot-buddy firmware/main/ble_desk.h (vendored in test/parity).
+// The first name is the firmware's (firmware/main/ble_desk.h, checked by a test).
+// A panel flashed before the rename still advertises the old one.
+export const BLE_NAMES = ["ginger", "grokbot-buddy"] as const;
+// UUIDs are checked against firmware/main/ble_desk.h by a test.
 export const UUID = {
   svc: "8d7c4b10-6e2a-4f91-a3c5-67726f6b6465",
   status: "8d7c4b11-6e2a-4f91-a3c5-67726f6b6465",
@@ -147,7 +149,7 @@ export class BleLink implements DeviceLink {
 
 export async function connectBle(onClosed: () => void): Promise<BleLink> {
   const device = await navigator.bluetooth.requestDevice({
-    filters: [{ name: BLE_NAME }],
+    filters: BLE_NAMES.map((name) => ({ name })),
     optionalServices: [UUID.svc],
   });
   if (!device.gatt) throw new Error("This device has no GATT server.");

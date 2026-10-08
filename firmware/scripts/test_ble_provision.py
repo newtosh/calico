@@ -28,7 +28,7 @@ def test_uuids_match_firmware():
     tool = load_tool()
     header = HEADER.read_text(encoding="utf-8")
     link = "".join(LINK.read_text(encoding="utf-8").split())
-    assert tool.NAME == "grokbot-buddy"
+    assert tool.NAME == "ginger"
     assert f'#define BLE_DESK_NAME "{tool.NAME}"' in header
     for key, uuid in tool.UUIDS.items():
         assert f'"{uuid}"' in header, key
@@ -72,14 +72,14 @@ def test_encode_matches_desk_parser():
 def test_status_parse_hides_nothing_it_was_not_given():
     tool = load_tool()
     body = (
-        "name=grokbot-buddy\n"
+        "name=ginger\n"
         "fw=886dd11\n"
         "ssid=none\n"
         "url=http://192.168.4.30:8787\n"
         "token=none\n"
     )
     fields = tool.parse_status(body)
-    assert fields["name"] == "grokbot-buddy"
+    assert fields["name"] == "ginger"
     assert fields["fw"] == "886dd11"
     assert fields["ssid"] == "none"
     assert fields["url"] == "http://192.168.4.30:8787"
@@ -291,3 +291,12 @@ def test_mtu_check_does_not_read_the_warning_property():
     except SystemExit:
         return
     raise AssertionError("long write on a known small MTU")
+
+
+def test_finds_a_panel_under_its_new_or_old_name():
+    tool = load_tool()
+    # A panel flashed before the rename still advertises the old name.
+    assert tool.is_desk_name("ginger")
+    assert tool.is_desk_name("grokbot-buddy")
+    assert not tool.is_desk_name("")
+    assert not tool.is_desk_name("Bose QC352G")

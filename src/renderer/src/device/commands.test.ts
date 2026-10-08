@@ -47,10 +47,10 @@ describe("validateCmd", () => {
 describe("parsers", () => {
   it("reads the status body", () => {
     const kv = parseKv(
-      "name=grokbot-buddy\nfw=1.2\nssid=none\nurl=http://h:8787\ntoken=set\n",
+      "name=ginger\nfw=1.2\nssid=none\nurl=http://h:8787\ntoken=set\n",
     );
     expect(infoFromKv(kv)).toEqual({
-      name: "grokbot-buddy",
+      name: "ginger",
       fw: "1.2",
       ssid: "",
       url: "http://h:8787",

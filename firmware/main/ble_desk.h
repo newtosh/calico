@@ -30,7 +30,7 @@
  * and on failure "reason=auth|missing|timeout|radio|other".
  */
 
-#define BLE_DESK_NAME "grokbot-buddy"
+#define BLE_DESK_NAME "ginger"
 
 #define BLE_DESK_UUID_SVC "8d7c4b10-6e2a-4f91-a3c5-67726f6b6465"
 #define BLE_DESK_UUID_STATUS "8d7c4b11-6e2a-4f91-a3c5-67726f6b6465"

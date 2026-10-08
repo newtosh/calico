@@ -88,7 +88,7 @@ describe("UsbLink", () => {
     expect(
       toReply({
         ok: true,
-        name: "grokbot-buddy",
+        name: "ginger",
         fw: "1",
         ssid: "",
         url: "",
@@ -97,7 +97,7 @@ describe("UsbLink", () => {
     ).toEqual({
       ok: true,
       info: {
-        name: "grokbot-buddy",
+        name: "ginger",
         fw: "1",
         ssid: "",
         url: "",
