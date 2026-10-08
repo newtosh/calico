@@ -1,0 +1,152 @@
+[
+  { "method": "GET", "path": "/api/status" },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "json": { "type": "agent.launched", "agent_id": "a1" }
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "headers": { "Authorization": "Bearer nope" },
+    "json": { "type": "agent.launched", "agent_id": "a1" }
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "auth": true,
+    "json": {
+      "type": "agent.launched",
+      "agent_id": "a1",
+      "title": "Scaffold",
+      "color": "#9bb57a",
+      "shape": " Diamond ",
+      "icon": "https://example.com/i.png"
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "auth": true,
+    "json": { "type": "nope", "agent_id": "a1" }
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "auth": true,
+    "json": {
+      "type": "agent.needs_you",
+      "agent_id": "a1",
+      "title": "Question?",
+      "message": "Pick one"
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "auth": true,
+    "json": {
+      "type": "agent.launched",
+      "agent_id": "b2",
+      "title": "Builder",
+      "message": "Compiling"
+    }
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "auth": true,
+    "json": { "type": "note", "message": "Deploy done" }
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "auth": true,
+    "json": { "type": "agent.launched", "agent_id": "c3", "title": "Café ✓ 🙂" }
+  },
+  { "method": "GET", "path": "/api/status" },
+  { "method": "POST", "path": "/api/unread/dismiss", "auth": true },
+  {
+    "method": "POST",
+    "path": "/api/dismiss",
+    "auth": true,
+    "json": { "agent_id": "zz" }
+  },
+  { "method": "GET", "path": "/api/status" },
+  {
+    "method": "POST",
+    "path": "/api/dismiss",
+    "auth": true,
+    "json": { "agent_id": "a1" }
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "auth": true,
+    "json": { "type": "agent.finished", "agent_id": "b2" }
+  },
+  { "method": "GET", "path": "/api/status" },
+  {
+    "method": "PUT",
+    "path": "/api/panel",
+    "auth": true,
+    "json": { "ssid": "home" }
+  },
+  {
+    "method": "PUT",
+    "path": "/api/panel",
+    "auth": true,
+    "json": { "token": "t" }
+  },
+  {
+    "method": "PUT",
+    "path": "/api/panel",
+    "auth": true,
+    "json": { "url": "http://192.168.4.30:8787/", "token": "desk-secret" }
+  },
+  { "method": "GET", "path": "/api/status" },
+  { "method": "GET", "path": "/api/panel" },
+  { "method": "POST", "path": "/api/frame/request", "auth": true },
+  { "method": "GET", "path": "/api/status" },
+  {
+    "method": "POST",
+    "path": "/api/frame",
+    "auth": true,
+    "headers": { "Content-Type": "image/bmp" },
+    "body_b64": "Qk0AAQID"
+  },
+  { "method": "GET", "path": "/api/frame" },
+  {
+    "method": "POST",
+    "path": "/api/frame",
+    "auth": true,
+    "headers": { "Content-Type": "text/plain" },
+    "body_b64": "Qk0AAQID"
+  },
+  {
+    "method": "POST",
+    "path": "/api/frame",
+    "auth": true,
+    "headers": { "Content-Type": "image/bmp" },
+    "body_b64": "WFhYWA=="
+  },
+  {
+    "method": "POST",
+    "path": "/api/webhook/grok-bot",
+    "auth": true,
+    "headers": { "Content-Type": "application/json" },
+    "body_b64": "bm90IGpzb24="
+  },
+  {
+    "method": "PUT",
+    "path": "/api/panel",
+    "auth": true,
+    "json": { "clear": true }
+  },
+  { "method": "GET", "path": "/api/status" },
+  { "method": "GET", "path": "/api/nope" },
+  { "method": "POST", "path": "/api/nope", "auth": true },
+  { "method": "OPTIONS", "path": "/api/status" },
+  { "method": "POST", "path": "/api/needs-auth-check", "json": {} },
+  { "method": "POST", "path": "/api/dismiss", "auth": true }
+]

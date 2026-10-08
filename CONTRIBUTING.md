@@ -22,7 +22,7 @@ pnpm dev
 ## Review order
 
 1. CI is green.
-2. Cursor Bugbot runs when the pull request is marked ready for review. Fix each finding, or reply with the reason it does not apply and resolve the thread. Comment `bugbot run` to request another pass.
+2. Self-review the diff against [docs/review-rules.md](docs/review-rules.md). Resolve every review thread before merging.
 3. Renderer changes get a UI audit against [DESIGN.md](DESIGN.md) and the checklist in the pull request template.
 4. Merge with squash.
 

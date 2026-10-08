@@ -1,6 +1,6 @@
-# Bugbot rules for calico
+# Review rules for calico
 
-Flag any change that breaks these.
+Any reviewer, human or bot, flags a change that breaks these.
 
 1. **Frozen panel contract.** `src/server/http.ts` and `src/server/store.ts` must keep the paths, methods, auth checks, JSON shapes, and key order of `/api/status`, `/api/dismiss`, `/api/unread/dismiss`, `/api/frame`, `/api/frame/request`. `panel` stays the first key of the status body and `capture` stays before `agents`. JSON responses must escape non-ASCII as `\uXXXX`.
 2. **Server boundary.** Nothing under `src/server/` imports `electron` or code from `src/main`, `src/preload`, or `src/renderer`.
