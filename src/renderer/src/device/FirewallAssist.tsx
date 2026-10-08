@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FirewallInfo, FixResult } from "../../../shared/ipc";
+import { ErrorNote } from "../shell/ErrorNote";
 
 export function FirewallAssist({ port }: { port: number | null }) {
   const [fw, setFw] = useState<FirewallInfo | null>(null);
@@ -58,9 +59,9 @@ export function FirewallAssist({ port }: { port: number | null }) {
       {result ? (
         <p
           role="status"
-          className={`px-4 pt-2 ${result.ok ? "text-sage" : "text-red"}`}
+          className={`px-4 pt-2 ${result.ok ? "text-sage" : ""}`}
         >
-          {result.output}
+          {result.ok ? result.output : <ErrorNote>{result.output}</ErrorNote>}
         </p>
       ) : null}
     </section>

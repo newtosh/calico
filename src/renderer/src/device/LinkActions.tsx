@@ -5,9 +5,11 @@ import type { DeskInfo, DeviceLink } from "./commands";
 export function LinkActions({
   info,
   link,
+  onReboot,
 }: {
   info: CalicoInfo;
   link: DeviceLink;
+  onReboot: () => Promise<void>;
 }) {
   const [desk, setDesk] = useState<DeskInfo | null>(null);
   const [url, setUrl] = useState(info.lanUrls[0] ?? "");
@@ -44,9 +46,10 @@ export function LinkActions({
     await refresh();
   }
 
+  // DeviceView shows the outcome: the wait for the panel, or the error.
   async function reboot() {
-    const reply = await link.send({ op: "reboot" });
-    setNotice(reply.ok ? "Rebooting the desk." : reply.error);
+    setNotice("");
+    await onReboot();
   }
 
   return (

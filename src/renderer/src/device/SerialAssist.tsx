@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FixResult, SerialAccess } from "../../../shared/ipc";
+import { ErrorNote } from "../shell/ErrorNote";
 
 const UDEV =
   'SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", MODE="0660", TAG+="uaccess"';
@@ -50,11 +51,13 @@ export function SerialAssist() {
       {result ? (
         <p
           role="status"
-          className={`px-4 pt-2 ${result.ok ? "text-sage" : "text-red"}`}
+          className={`px-4 pt-2 ${result.ok ? "text-sage" : ""}`}
         >
-          {result.ok
-            ? "Done. Log out and back in, then connect again."
-            : result.output}
+          {result.ok ? (
+            "Done. Log out and back in, then connect again."
+          ) : (
+            <ErrorNote>{result.output}</ErrorNote>
+          )}
         </p>
       ) : null}
     </section>

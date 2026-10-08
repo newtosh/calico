@@ -1,26 +1,18 @@
 import { useState } from "react";
 import type { CalicoInfo } from "../../../shared/ipc";
-import { panelOnlineSince } from "../lib/panel-online";
 import type { Ap, DeviceLink } from "./commands";
+import { ErrorNote } from "../shell/ErrorNote";
 
-type Stage =
-  | "idle"
-  | "scanning"
-  | "pick"
-  | "verifying"
-  | "saving"
-  | "waiting"
-  | "online"
-  | "silent";
+type Stage = "idle" | "scanning" | "pick" | "verifying" | "saving";
 
 export function ProvisionFlow({
   info,
   link,
-  onSilent,
+  onReboot,
 }: {
   info: CalicoInfo;
   link: DeviceLink;
-  onSilent: () => void;
+  onReboot: () => Promise<void>;
 }) {
   const [stage, setStage] = useState<Stage>("idle");
   const [aps, setAps] = useState<Ap[]>([]);
@@ -64,24 +56,12 @@ export function ProvisionFlow({
     }
     setPass("");
     if (lan) await window.calico.adoptPort();
-    const rebootAt = Date.now();
-    await link.send({ op: "reboot" });
-    setStage("waiting");
-    for (let i = 0; i < 15; i++) {
-      await new Promise((r) => setTimeout(r, 2000));
-      const next = await window.calico.info();
-      if (panelOnlineSince(next.lastPanelPoll, rebootAt))
-        return setStage("online");
-    }
-    setStage("silent");
-    onSilent();
+    setStage("idle");
+    await onReboot();
   }
 
   const busy =
-    stage === "scanning" ||
-    stage === "verifying" ||
-    stage === "saving" ||
-    stage === "waiting";
+    stage === "scanning" || stage === "verifying" || stage === "saving";
   return (
     <section>
       <h2 className="section-title">Set up Wi-Fi</h2>
@@ -147,20 +127,7 @@ export function ProvisionFlow({
         </button>
       </div>
       <p role="status" className="px-4 pt-2">
-        {error ? <span className="text-red">{error}</span> : null}
-        {stage === "waiting" ? (
-          <span className="text-amber">
-            Rebooted. Waiting up to 30 s for the panel to poll calico.
-          </span>
-        ) : null}
-        {stage === "online" ? (
-          <span className="text-sage">Panel online.</span>
-        ) : null}
-        {stage === "silent" ? (
-          <span className="text-amber">
-            The panel joined Wi-Fi but has not reached calico. See below.
-          </span>
-        ) : null}
+        {error ? <ErrorNote>{error}</ErrorNote> : null}
       </p>
     </section>
   );

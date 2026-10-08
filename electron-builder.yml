@@ -1,0 +1,18 @@
+appId: io.github.newtosh.calico
+productName: Calico
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - out/**
+  - package.json
+artifactName: ${productName}-${version}-${arch}.${ext}
+publish: null
+linux:
+  target: [AppImage, deb, pacman]
+  category: Development
+  executableName: calico
+  syncDesktopName: true
+  icon: resources/icon.png
+  synopsis: Desktop companion for the grokbot-buddy desk panel
+  description: Runs the companion server the panel polls, shows agent status, and sets up the panel over USB or Bluetooth.

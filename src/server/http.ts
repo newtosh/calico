@@ -33,6 +33,8 @@ export interface ServerDeps {
   store: DeskStore;
   getConfig(): CalicoConfig;
   setConfig(next: CalicoConfig): void;
+  /** Origins allowed to call the server, such as the dev renderer. */
+  allowedOrigins?: string[];
 }
 
 export interface ServerStats {
@@ -167,6 +169,13 @@ export function createCompanionServer(deps: ServerDeps): {
   ): Promise<void> {
     const path = new URL(req.url ?? "/", "http://calico").pathname;
     const method = req.method ?? "GET";
+
+    // The panel, agents, and the packaged renderer send no Origin. Browsers
+    // always do on cross-origin requests, so this keeps web pages from reading
+    // the panel token or re-pointing the panel.
+    const origin = req.headers.origin;
+    if (origin !== undefined && !deps.allowedOrigins?.includes(origin))
+      return json(res, 403, { error: "forbidden origin" });
 
     if (method === "OPTIONS") return empty(res);
 

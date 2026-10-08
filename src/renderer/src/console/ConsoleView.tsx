@@ -9,7 +9,7 @@ export function ConsoleView({
   usbConnected: boolean;
   onClear: () => void;
 }) {
-  const end = useRef<HTMLDivElement>(null);
+  const end = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });
   }, [lines]);
@@ -27,7 +27,7 @@ export function ConsoleView({
       </div>
       <pre className="min-h-0 flex-1 overflow-y-auto px-4 py-2 font-mono text-xs leading-5 whitespace-pre-wrap">
         {lines.join("\n")}
-        <div ref={end} />
+        <span ref={end} />
       </pre>
     </div>
   );

@@ -1,4 +1,5 @@
 import type { DeskEvent } from "../lib/api";
+import { localTime } from "../lib/time";
 
 export function EventRows({ events }: { events: DeskEvent[] }) {
   if (events.length === 0)
@@ -8,7 +9,7 @@ export function EventRows({ events }: { events: DeskEvent[] }) {
       {events.map((event) => (
         <li key={event.id} className="row">
           <time className="shrink-0 font-mono text-xs text-muted">
-            {event.at.slice(11, 19)}
+            {localTime(event.at)}
           </time>
           <span
             className={`shrink-0 text-xs ${event.type === "agent.needs_you" ? "text-amber" : "text-muted"}`}

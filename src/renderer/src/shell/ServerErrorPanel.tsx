@@ -1,10 +1,11 @@
 import type { ServerErrorInfo } from "../../../shared/ipc";
+import { ErrorNote } from "./ErrorNote";
 
 export function ServerErrorPanel({ error }: { error: ServerErrorInfo }) {
   return (
     <section role="alert" className="m-4 border border-red/60 bg-surface p-4">
-      <p className="font-medium text-red">
-        The companion server is not running.
+      <p className="font-medium">
+        <ErrorNote>The companion server is not running.</ErrorNote>
       </p>
       <p className="mt-1 text-muted">
         Ports {error.first} to {error.last} are all in use, so the panel and

@@ -14,3 +14,5 @@ I aim to acknowledge reports within a week. Calico is a hobby project with one m
 ## Known posture
 
 The companion has no user accounts by design. Status reads are open to the LAN. When a panel token is pushed, `/api/status` includes it, because the panel polls without authentication. See the README.
+
+The server refuses any request that carries an `Origin` header (403). The panel, agent webhooks, and the packaged app send none, while browsers always do on cross-origin requests. This keeps web pages you visit from reading the panel token or changing settings. Writes still need the webhook token when one is set; without one, anything on your LAN can post events.

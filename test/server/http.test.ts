@@ -1,3 +1,4 @@
+import { request } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { defaultConfig, type CalicoConfig } from "../../src/server/config";
@@ -11,11 +12,15 @@ import { DeskStore } from "../../src/server/store";
 let close: (() => void) | null = null;
 afterEach(() => close?.());
 
-async function start(config: Partial<CalicoConfig> = {}) {
+async function start(
+  config: Partial<CalicoConfig> = {},
+  allowedOrigins: string[] = [],
+) {
   let current: CalicoConfig = { ...defaultConfig(), ...config };
   const store = new DeskStore();
   const { server, stats } = createCompanionServer({
     store,
+    allowedOrigins,
     getConfig: () => current,
     setConfig: (next) => {
       current = next;
@@ -29,6 +34,61 @@ async function start(config: Partial<CalicoConfig> = {}) {
     stats,
   };
 }
+
+// fetch() treats Origin as a forbidden header, so send it with node:http.
+function withOrigin(
+  url: string,
+  method: string,
+  origin: string,
+  body = "",
+): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const req = request(
+      url,
+      {
+        method,
+        headers: { Origin: origin, "Content-Type": "application/json" },
+      },
+      (res) => {
+        res.resume();
+        resolve(res.statusCode ?? 0);
+      },
+    );
+    req.on("error", reject);
+    req.end(body);
+  });
+}
+
+describe("browser origins", () => {
+  it("refuses any request a web page makes, including preflights", async () => {
+    const { base } = await start();
+    for (const origin of ["https://evil.example", "null"]) {
+      expect(await withOrigin(`${base}/api/status`, "GET", origin)).toBe(403);
+      expect(await withOrigin(`${base}/api/panel`, "OPTIONS", origin)).toBe(
+        403,
+      );
+      expect(
+        await withOrigin(
+          `${base}/api/panel`,
+          "PUT",
+          origin,
+          JSON.stringify({ url: "http://attacker:1" }),
+        ),
+      ).toBe(403);
+    }
+    const panel = (await (await fetch(`${base}/api/panel`)).json()) as {
+      url: string;
+    };
+    expect(panel.url).toBe("");
+  });
+
+  it("serves the dev renderer's own origin", async () => {
+    const { base } = await start({}, ["http://localhost:5173"]);
+    expect(
+      await withOrigin(`${base}/api/status`, "GET", "http://localhost:5173"),
+    ).toBe(200);
+  });
+});
 
 describe("companion server", () => {
   it("escapes non-ASCII like Python", async () => {

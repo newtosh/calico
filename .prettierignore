@@ -3,3 +3,5 @@ dist
 pnpm-lock.yaml
 test/contract/fixtures
 test/parity/ble_desk.h
+.superpowers/
+.claude/
