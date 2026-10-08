@@ -12,6 +12,7 @@ import { createCompanionServer } from "../server/http";
 import {
   lanUrls,
   listenWithFallback,
+  PanelPort,
   PortsBusyError,
   resolvePort,
 } from "../server/port";
@@ -112,12 +113,15 @@ async function start(): Promise<void> {
         : [],
   });
 
+  const panelPort = new PanelPort(config.port);
   let bound: number | null = null;
   let serverError: ServerErrorInfo | null = null;
   try {
     bound = await listenWithFallback(server, "0.0.0.0", config.port);
-    if (resolvePort(loaded.existed, config.port, bound).persist)
+    if (resolvePort(loaded.existed, config.port, bound).persist) {
+      panelPort.adopt(bound);
       save({ ...config, port: bound });
+    }
   } catch (err) {
     if (!(err instanceof PortsBusyError)) throw err;
     serverError = {
@@ -133,7 +137,7 @@ async function start(): Promise<void> {
   const info = (): CalicoInfo => ({
     serverUrl: bound ? `http://127.0.0.1:${bound}` : null,
     port: bound,
-    expectedPort: config.port,
+    expectedPort: panelPort.expected,
     lanUrls: bound ? lanUrls(bound) : [],
     lastPanelPoll: stats.lastPanelPoll,
     webhookToken: config.webhook_token,
@@ -147,7 +151,10 @@ async function start(): Promise<void> {
     info,
     boundPort: () => bound,
     adoptPort: () => {
-      if (bound) save({ ...config, port: bound });
+      if (!bound) return;
+      panelPort.adopt(bound);
+      save({ ...config, port: bound });
+      refreshTray();
     },
   });
 
@@ -159,8 +166,9 @@ async function start(): Promise<void> {
     },
   };
   createTray(actions);
-  const drift = bound !== null && bound !== config.port ? config.port : null;
-  updateTray(actions, info().lanUrls[0] ?? null, drift);
+  const refreshTray = () =>
+    updateTray(actions, info().lanUrls[0] ?? null, panelPort.driftFrom(bound));
+  refreshTray();
 
   app.on("before-quit", () => {
     quitting = true;
