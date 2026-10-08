@@ -5,8 +5,10 @@ import {
   type Exec,
   firewallFix,
   parseSsHolders,
+  prepareSerial,
   serialFix,
   serialGroup,
+  serialReadFix,
   validPort,
 } from "../../src/main/assist";
 
@@ -80,5 +82,66 @@ describe("port holders", () => {
     expect(validPort(8787)).toBe(true);
     expect(validPort("8787")).toBe(false);
     expect(validPort(70000)).toBe(false);
+  });
+});
+
+describe("serial read fix", () => {
+  it("resets VMIN and VTIME so Chromium's first read waits instead of seeing EOF", () => {
+    expect(serialReadFix("ttyACM0")).toEqual([
+      "-F",
+      "/dev/ttyACM0",
+      "min",
+      "1",
+      "time",
+      "0",
+    ]);
+    expect(serialReadFix("ttyUSB12")?.[1]).toBe("/dev/ttyUSB12");
+  });
+
+  it("refuses anything that is not a USB serial node", () => {
+    for (const name of [
+      "",
+      "ttyS0",
+      "../etc/passwd",
+      "ttyACM0; rm -rf",
+      "ttyACM",
+      "null",
+    ])
+      expect(serialReadFix(name)).toBeNull();
+  });
+});
+
+describe("prepareSerial", () => {
+  it("runs stty with a short timeout so a stuck port cannot freeze the picker", async () => {
+    const calls: unknown[][] = [];
+    await prepareSerial("ttyACM0", async (...args) => {
+      calls.push(args);
+      return { code: 0, stdout: "" };
+    });
+    expect(calls).toEqual([
+      ["stty", ["-F", "/dev/ttyACM0", "min", "1", "time", "0"], 2000],
+    ]);
+  });
+
+  it("resolves even when stty rejects or throws", async () => {
+    await expect(
+      prepareSerial("ttyACM0", async () => {
+        throw new Error("no stty");
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      prepareSerial("ttyACM0", () => {
+        throw new Error("sync");
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("does not run anything for a name that is not a USB serial node", async () => {
+    let ran = false;
+    await prepareSerial("ttyS0", async () => {
+      ran = true;
+      return { code: 0, stdout: "" };
+    });
+    expect(ran).toBe(false);
   });
 });
