@@ -2,6 +2,10 @@ out
 dist
 pnpm-lock.yaml
 test/contract/fixtures
-test/parity/ble_desk.h
 .superpowers/
 .claude/
+# Imported grokbot-buddy code keeps its own conventions.
+firmware
+tools
+kits
+docs/history

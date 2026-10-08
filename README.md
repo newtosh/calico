@@ -1,6 +1,6 @@
 # Calico
 
-Desktop companion and developer kit for [grokbot-buddy](https://github.com/newtosh/grokbot-buddy), an ESP32-S3 AMOLED desk panel that shows what your coding agents are doing.
+Desktop companion and developer kit for the grokbot-buddy desk panel, an ESP32-S3 AMOLED display that shows what your coding agents are doing. This repository holds the app, the panel firmware, and the agent kits.
 
 > Status: alpha. v0.1 targets Linux.
 
@@ -15,6 +15,16 @@ Desktop companion and developer kit for [grokbot-buddy](https://github.com/newto
 ![Device setup](resources/screenshots/device.png)
 
 Planned: firmware flashing and a first-run wizard, a screen simulator built from the real firmware UI, more agent integrations, macOS and Windows.
+
+## Repository layout
+
+| Path                      | What it is                                                                                                                                                     |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/`                    | The Electron app: companion server, tray, dashboard, device setup.                                                                                             |
+| `firmware/`               | ESP-IDF firmware for the Waveshare ESP32-S3-Touch-AMOLED-2.16, with host tests and BLE/USB provisioning scripts. See [firmware/README.md](firmware/README.md). |
+| `kits/ginger/`            | The Grok kit: the Grok Bot webhook guide and the original project README.                                                                                      |
+| `tools/python-companion/` | The original Python companion and web UI, kept as the reference implementation the app's contract tests are captured from.                                     |
+| `docs/`                   | Protocol docs and design history.                                                                                                                              |
 
 ## Install
 
@@ -38,7 +48,7 @@ pnpm install
 pnpm dev
 ```
 
-Checks: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Checks: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`. Firmware host tests: `firmware/host/run.sh`. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Security
 

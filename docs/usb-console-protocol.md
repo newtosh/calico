@@ -1,6 +1,6 @@
 # USB console protocol
 
-The contract between calico and grokbot-buddy firmware over USB. The firmware side is a separate spec in grokbot-buddy; this file is the source of truth both sides follow.
+The contract between calico and the panel firmware (`firmware/`) over USB. This file is the source of truth both sides follow. The firmware side is not implemented yet.
 
 ## Transport
 

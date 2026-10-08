@@ -9,6 +9,8 @@ export default tseslint.config(
       "node_modules/**",
       "test/contract/fixtures/**",
       ".claude/**",
+      "firmware/**",
+      "tools/**",
     ],
   },
   js.configs.recommended,

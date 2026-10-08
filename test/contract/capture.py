@@ -1,8 +1,9 @@
 """Record the Python companion's responses for calico's contract tests.
 
-Run from the calico repo root, against a grokbot-buddy checkout:
+Run from the calico repo root. It drives the reference implementation in
+tools/python-companion:
 
-    python3 test/contract/capture.py /home/jonn/src/grokbot-buddy
+    python3 test/contract/capture.py
 
 Writes test/contract/fixtures/companion.json. Re-run only when the frozen
 contract changes on purpose, and say so in the pull request.
@@ -12,7 +13,6 @@ from __future__ import annotations
 
 import base64
 import json
-import subprocess
 import sys
 from pathlib import Path
 from urllib.error import HTTPError
@@ -51,8 +51,8 @@ def run(base: str, step: dict[str, object]) -> dict[str, object]:
 
 
 def main() -> None:
-    repo = Path(sys.argv[1]).resolve()
-    sys.path.insert(0, str(repo / "companion" / "src"))
+    repo = Path(__file__).resolve().parents[2]
+    sys.path.insert(0, str(repo / "tools" / "python-companion" / "companion" / "src"))
     from grok_desk_buddy.config import default_config
     from grok_desk_buddy.server import serve_in_thread
     from grok_desk_buddy.store import DeskStore
@@ -66,14 +66,10 @@ def main() -> None:
         results = [run(base, step) for step in steps]
     finally:
         server.shutdown()
-    commit = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "--short", "HEAD"],
-        capture_output=True, text=True, check=True,
-    ).stdout.strip()
     out = here / "fixtures" / "companion.json"
     out.parent.mkdir(exist_ok=True)
     out.write_text(
-        json.dumps({"source": f"grokbot-buddy@{commit}", "steps": results}, indent=2, ensure_ascii=False) + "\n",
+        json.dumps({"source": "tools/python-companion", "steps": results}, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
     print(f"wrote {len(results)} steps to {out}")
