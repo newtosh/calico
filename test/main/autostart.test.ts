@@ -63,4 +63,23 @@ describe("first-run autostart", () => {
     expect(existsSync(join(userData, "autostart-initialized"))).toBe(false);
     expect(initAutostartOnce(userData, true, enable)).toBe(true);
   });
+
+  it("never lets a failure to set startup abort the app, and retries next launch", () => {
+    const userData = dir();
+    const boom = () => {
+      throw new Error("read-only home");
+    };
+    expect(() => initAutostartOnce(userData, true, boom)).not.toThrow();
+    expect(initAutostartOnce(userData, true, boom)).toBe(false);
+    // No marker was written, so a launch where it works still gets its first run.
+    const enable = vi.fn();
+    expect(initAutostartOnce(userData, true, enable)).toBe(true);
+    expect(enable).toHaveBeenCalledTimes(1);
+  });
+
+  it("creates the data folder if it does not exist yet", () => {
+    const userData = join(dir(), "nested", "calico");
+    expect(initAutostartOnce(userData, true, vi.fn())).toBe(true);
+    expect(existsSync(join(userData, "autostart-initialized"))).toBe(true);
+  });
 });

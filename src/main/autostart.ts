@@ -70,8 +70,18 @@ export function initAutostartOnce(
 ): boolean {
   const marker = join(userData, "autostart-initialized");
   if (!available || existsSync(marker)) return false;
-  enable();
-  mkdirSync(userData, { recursive: true });
-  writeFileSync(marker, "");
+  // A login item is not worth failing to start over. If enabling fails, leave
+  // no marker so the next launch tries again.
+  try {
+    enable();
+  } catch {
+    return false;
+  }
+  try {
+    mkdirSync(userData, { recursive: true });
+    writeFileSync(marker, "");
+  } catch {
+    // Worst case it is enabled again next launch.
+  }
   return true;
 }

@@ -54,6 +54,9 @@ test("launches, serves status, and renders the dashboard", async () => {
 
     // Saving a new port takes effect on restart. The panel is still pointed at
     // the port calico is on, so the drift banner must stay away.
+    // Settings fills the field when its first load lands. Typing before that
+    // gets overwritten and the save becomes a no-op.
+    await expect(page.getByLabel("Port")).not.toHaveValue("");
     await page.getByLabel("Port").fill("9001");
     await page
       .getByRole("button", { name: "Save", exact: true })
