@@ -65,12 +65,18 @@ interface Pending {
   timer: ReturnType<typeof setTimeout>;
 }
 
+// Secrets sent since the app started. The desk reboots after provisioning and
+// the app reconnects on a new link, so a per-link set would forget them just
+// when the boot log may echo them.
+const sessionSecrets = new Set<string>();
+
+// The firmware prints JSON, which escapes quotes and backslashes.
+const jsonEscaped = (secret: string) => JSON.stringify(secret).slice(1, -1);
+
 export class UsbLink implements DeviceLink {
   readonly kind = "usb" as const;
   private nextId = 1;
   private readonly pending = new Map<number, Pending>();
-  // Secrets sent this session. Redacted from any log line, even after the reply.
-  private readonly secrets = new Set<string>();
 
   constructor(
     private readonly transport: LineTransport,
@@ -102,7 +108,7 @@ export class UsbLink implements DeviceLink {
     } catch (err) {
       return { ok: false, error: (err as FieldError).message };
     }
-    for (const secret of secretsOf(cmd)) this.secrets.add(secret);
+    for (const secret of secretsOf(cmd)) sessionSecrets.add(secret);
     const id = this.nextId++;
     const seconds = timeoutFor(cmd) / 1000;
     const reply = new Promise<Reply>((resolve) => {
@@ -139,7 +145,9 @@ export class UsbLink implements DeviceLink {
 
   private redact(line: string): string {
     let out = line;
-    for (const secret of this.secrets) out = out.split(secret).join("••••");
+    for (const secret of sessionSecrets)
+      for (const form of new Set([secret, jsonEscaped(secret)]))
+        out = out.split(form).join("••••");
     return out;
   }
 }

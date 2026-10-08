@@ -112,3 +112,39 @@ describe("UsbLink", () => {
     ).toEqual({ ok: false, error: "auth failed", reason: "auth" });
   });
 });
+
+describe("secret redaction across links", () => {
+  async function fresh() {
+    vi.resetModules();
+    return await import("./usb");
+  }
+  const mk = (UsbLink: typeof import("./usb").UsbLink, logs: string[]) =>
+    new UsbLink({ async write() {}, close() {} }, (line) => logs.push(line));
+
+  it("keeps hiding a password after the desk reboots and the app reconnects", async () => {
+    const { UsbLink } = await fresh();
+    const first = mk(UsbLink, []);
+    const pending = first.send({ op: "wifi", ssid: "home", pass: "hunter22" });
+    await Promise.resolve();
+    first.handleLine('{"id":1,"ok":true}');
+    await pending;
+    first.close();
+    const logs: string[] = [];
+    mk(UsbLink, logs).handleLine("I (40) desk: saved home hunter22");
+    expect(logs).toEqual(["I (40) desk: saved home ••••"]);
+  });
+
+  it("hides a secret the firmware printed JSON-escaped", async () => {
+    const { UsbLink } = await fresh();
+    const logs: string[] = [];
+    const usb = mk(UsbLink, logs);
+    const secret = 'to"ken\\1';
+    const pending = usb.send({ op: "token", value: secret });
+    await Promise.resolve();
+    usb.handleLine('{"id":1,"ok":true}');
+    await pending;
+    usb.handleLine(JSON.stringify({ note: `token is ${secret}` }));
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toBe('{"note":"token is ••••"}');
+  });
+});
