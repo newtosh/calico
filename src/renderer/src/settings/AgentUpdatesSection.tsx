@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { CalicoInfo } from "../../../shared/ipc";
 import { configureApi, putConfig, putPanel } from "../lib/api";
 import { newWebhookToken } from "../lib/token";
+import { webhookUrl } from "../lib/webhook";
 import { ErrorNote } from "../shell/ErrorNote";
 
 type Step = "idle" | "confirm" | "working";
@@ -31,8 +32,8 @@ export function AgentUpdatesSection({ info }: { info: CalicoInfo }) {
   const [token, setToken] = useState("");
   const [note, setNote] = useState("");
 
-  const base = info.lanUrls[0] ?? info.serverUrl;
-  if (!base)
+  const webhook = webhookUrl(info);
+  if (!webhook)
     return (
       <section>
         <h2 className="section-title">Agent updates</h2>
@@ -42,7 +43,6 @@ export function AgentUpdatesSection({ info }: { info: CalicoInfo }) {
         </p>
       </section>
     );
-  const webhook = `${base}/api/webhook/grok-bot`;
   const auth = info.webhookToken ? ' -H "Authorization: Bearer <token>"' : "";
   const example = `curl -X POST ${webhook} -H "Content-Type: application/json"${auth} -d '{"type":"agent.launched","agent_id":"desky","title":"Desky","message":"hello"}'`;
 

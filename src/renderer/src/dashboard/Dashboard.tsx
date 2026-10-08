@@ -1,13 +1,31 @@
 import { useCallback, useEffect, useState } from "react";
 import { type DeskStatus, fetchStatus, postDismiss } from "../lib/api";
+import {
+  agentSource,
+  loadFilter,
+  matchesFilter,
+  saveFilter,
+  type SourceFilter,
+} from "../lib/sources";
 import { AgentRows } from "./AgentRows";
+import { EmptyAgents } from "./EmptyAgents";
 import { EventRows } from "./EventRows";
 import { InjectBar } from "./InjectBar";
 import { NeedsYouStrip } from "./NeedsYouStrip";
+import { SourceToggle } from "./SourceToggle";
 import { ErrorNote } from "../shell/ErrorNote";
 
-export function Dashboard({ serverUrl }: { serverUrl: string }) {
+export function Dashboard({
+  serverUrl,
+  webhookUrl,
+  onSetup,
+}: {
+  serverUrl: string;
+  webhookUrl: string | null;
+  onSetup: () => void;
+}) {
   const [status, setStatus] = useState<DeskStatus | null>(null);
+  const [filter, setFilter] = useState<SourceFilter>(loadFilter);
   const [error, setError] = useState("");
 
   const refresh = useCallback(async () => {
@@ -25,7 +43,22 @@ export function Dashboard({ serverUrl }: { serverUrl: string }) {
     return () => window.clearInterval(id);
   }, [refresh, serverUrl]);
 
-  const running = status?.agents.filter((a) => a.status !== "idle").length ?? 0;
+  const events = status?.events ?? [];
+  const everyAgent = status?.agents ?? [];
+  const sourceOfAgent = (agent: DeskStatus["agents"][number]) =>
+    agentSource(agent, events);
+  const agents = everyAgent.filter((a) =>
+    matchesFilter(sourceOfAgent(a), filter),
+  );
+  const shownEvents = events.filter((e) => matchesFilter(e.source, filter));
+  const counts: Record<SourceFilter, number> = {
+    combined: everyAgent.length,
+    grok: everyAgent.filter((a) => matchesFilter(sourceOfAgent(a), "grok"))
+      .length,
+    cursor: everyAgent.filter((a) => matchesFilter(sourceOfAgent(a), "cursor"))
+      .length,
+  };
+  const running = agents.filter((a) => a.status !== "idle").length;
   return (
     <div className="flex flex-col">
       {status ? (
@@ -39,7 +72,7 @@ export function Dashboard({ serverUrl }: { serverUrl: string }) {
           {(status?.phase ?? "idle").replace("_", " ")}
         </h1>
         <span className="text-muted">
-          {running}/{status?.agents.length ?? 0} active
+          {running}/{agents.length} active
         </span>
         {error ? (
           <span role="alert">
@@ -47,10 +80,30 @@ export function Dashboard({ serverUrl }: { serverUrl: string }) {
           </span>
         ) : null}
       </div>
+      <SourceToggle
+        value={filter}
+        counts={counts}
+        onChange={(next) => {
+          setFilter(next);
+          saveFilter(next);
+        }}
+      />
       <h2 className="section-title">Agents</h2>
-      <AgentRows agents={status?.agents ?? []} />
+      {agents.length === 0 ? (
+        <EmptyAgents
+          filter={filter}
+          webhookUrl={webhookUrl}
+          onSetup={onSetup}
+        />
+      ) : (
+        <AgentRows
+          agents={agents}
+          events={events}
+          showSource={filter === "combined"}
+        />
+      )}
       <h2 className="section-title">Events</h2>
-      <EventRows events={status?.events ?? []} />
+      <EventRows events={shownEvents} />
       <InjectBar onSent={() => void refresh()} />
     </div>
   );

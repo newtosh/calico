@@ -8,6 +8,8 @@ export interface DeskAgent {
   color: string;
   shape: string;
   icon: string;
+  /** grok-bot, cursor, or manual. Empty for state saved before sources. */
+  source: string;
 }
 
 export interface DeskEvent {
@@ -162,6 +164,7 @@ function agentFrom(value: unknown): DeskAgent | null {
     color: s(value.color),
     shape: s(value.shape),
     icon: s(value.icon),
+    source: s(value.source),
   };
 }
 
@@ -197,7 +200,7 @@ async function call(path: string, init: RequestInit = {}): Promise<Response> {
 }
 
 export async function fetchStatus(): Promise<DeskStatus> {
-  return parseStatus(await (await call("/api/status")).json());
+  return parseStatus(await (await call("/api/status?detail=1")).json());
 }
 
 export async function postWebhook(body: WebhookBody): Promise<void> {

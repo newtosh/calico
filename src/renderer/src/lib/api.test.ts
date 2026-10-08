@@ -69,6 +69,7 @@ describe("api", () => {
         color: "",
         shape: "",
         icon: "",
+        source: "",
       },
     ]);
     expect(status.unread).toBe(1);
@@ -119,5 +120,24 @@ describe("fetchCursor", () => {
       agents: 0,
       error: "Cursor rejected the API key (HTTP 401).",
     });
+  });
+});
+
+describe("detail status", () => {
+  it("asks for sources and keeps them", async () => {
+    configureApi("http://127.0.0.1:1", "");
+    const fetchMock = vi.fn<(url: string) => Promise<Response>>(async () =>
+      Response.json({
+        phase: "idle",
+        agents: [{ id: "a", title: "A", status: "running", source: "cursor" }],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const status = await fetchStatus();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "http://127.0.0.1:1/api/status?detail=1",
+    );
+    expect(status.agents[0]?.source).toBe("cursor");
   });
 });
