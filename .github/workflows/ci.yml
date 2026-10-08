@@ -65,7 +65,7 @@ jobs:
         with:
           persist-credentials: false
       - run: firmware/host/run.sh
-      - run: python3 -m venv "$RUNNER_TEMP/venv" && "$RUNNER_TEMP/venv/bin/pip" install pytest
+      - run: python3 -m venv "$RUNNER_TEMP/venv" && "$RUNNER_TEMP/venv/bin/pip" install 'pytest>=8'
       - name: Python reference companion
         run: cd tools/python-companion/companion && "$RUNNER_TEMP/venv/bin/python" -m pytest -q
       - name: Provisioning scripts

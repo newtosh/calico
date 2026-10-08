@@ -2,6 +2,7 @@
 build/
 managed_components/
 sdkconfig
+sdkconfig.old
 dependencies.lock
 
 # NVS images from scripts/provision-wifi.py hold Wi-Fi passwords. The script

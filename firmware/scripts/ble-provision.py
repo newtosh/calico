@@ -613,7 +613,7 @@ def _prepare_write(command: str) -> bytes | None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="scripts/ble-provision.py")
+    parser = argparse.ArgumentParser(prog="firmware/scripts/ble-provision.py")
     parser.add_argument(
         "command",
         nargs="?",

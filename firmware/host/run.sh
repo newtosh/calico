@@ -10,7 +10,11 @@ run() { # test name, then the firmware sources it links
   local name=$1
   shift
   gcc -Wall -Werror -I firmware/main "firmware/host/$name.c" "$@" -o "$out/$name"
-  "$out/$name" >/dev/null
+  "$out/$name" >"$out/$name.log" 2>&1 || {
+    echo "FAIL $name"
+    cat "$out/$name.log"
+    exit 1
+  }
   echo "ok   $name"
 }
 
