@@ -9,6 +9,7 @@ import {
   panelStatusField,
   publicView,
 } from "./config";
+import { type CursorStatus, EMPTY_CURSOR_STATUS } from "./cursor-poll";
 import {
   COLOR_LIMIT,
   clipShape,
@@ -33,6 +34,8 @@ export interface ServerDeps {
   store: DeskStore;
   getConfig(): CalicoConfig;
   setConfig(next: CalicoConfig): void;
+  /** Cursor polling health, for the app's Settings. Empty when not wired. */
+  cursorStatus?(): CursorStatus;
   /** Origins allowed to call the server, such as the dev renderer. */
   allowedOrigins?: string[];
 }
@@ -198,6 +201,8 @@ export function createCompanionServer(deps: ServerDeps): {
         return json(res, 200, panelPublicView(deps.getConfig()));
       if (path === "/api/config")
         return json(res, 200, publicView(deps.getConfig()));
+      if (path === "/api/cursor")
+        return json(res, 200, deps.cursorStatus?.() ?? EMPTY_CURSOR_STATUS);
       return json(res, 404, { error: "not found" });
     }
 

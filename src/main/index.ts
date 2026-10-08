@@ -7,7 +7,7 @@ import {
   saveConfig,
 } from "../server/config";
 import { version } from "../../package.json";
-import { startCursorPoll } from "../server/cursor-poll";
+import { CursorState, startCursorPoll } from "../server/cursor-poll";
 import { createCompanionServer } from "../server/http";
 import {
   lanUrls,
@@ -107,6 +107,7 @@ async function start(): Promise<void> {
     getConfig: () => config,
     setConfig: save,
     // Dev serves the renderer over http, so it sends an Origin. Packaged builds load file:// and send none.
+    cursorStatus: () => cursorState.snapshot(config.cursor_api_key !== ""),
     allowedOrigins:
       !app.isPackaged && process.env.ELECTRON_RENDERER_URL
         ? [new URL(process.env.ELECTRON_RENDERER_URL).origin]
@@ -114,6 +115,7 @@ async function start(): Promise<void> {
   });
 
   const panelPort = new PanelPort(config.port);
+  const cursorState = new CursorState();
   let bound: number | null = null;
   let serverError: ServerErrorInfo | null = null;
   try {
@@ -132,7 +134,7 @@ async function start(): Promise<void> {
   }
   if (!loaded.existed && autostartAvailable()) setAutostart(true);
 
-  const stopPoll = startCursorPoll(store, () => config);
+  const stopPoll = startCursorPoll(store, () => config, cursorState);
 
   const info = (): CalicoInfo => ({
     serverUrl: bound ? `http://127.0.0.1:${bound}` : null,
