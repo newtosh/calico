@@ -100,6 +100,7 @@ def test_legacy_nvs_migrates_and_add_keeps_the_first_network():
     summary = "\n".join(tool.summary_lines(store, "/dev/ttyACM0", 0x9000, 0x6000, "add"))
     assert first_pass not in summary
     assert second_pass not in summary
+    assert "global-token" not in summary
     assert "home" in summary and "away" in summary
 
 
