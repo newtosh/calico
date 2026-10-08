@@ -104,6 +104,11 @@ async function start(): Promise<void> {
     store,
     getConfig: () => config,
     setConfig: save,
+    // Dev serves the renderer over http, so it sends an Origin. Packaged builds load file:// and send none.
+    allowedOrigins:
+      !app.isPackaged && process.env.ELECTRON_RENDERER_URL
+        ? [new URL(process.env.ELECTRON_RENDERER_URL).origin]
+        : [],
   });
 
   let bound: number | null = null;
