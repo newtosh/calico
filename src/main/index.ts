@@ -17,6 +17,7 @@ import {
 import { loadSnapshot, saveSnapshot } from "../server/state-file";
 import { DeskStore } from "../server/store";
 import type { CalicoInfo, ServerErrorInfo } from "../shared/ipc";
+import { execFileP, portHolders } from "./assist";
 import { autostartAvailable, setAutostart } from "./autostart";
 import { wireDevicePickers } from "./devices";
 import { autostartState, registerIpc } from "./ipc";
@@ -113,7 +114,11 @@ async function start(): Promise<void> {
       save({ ...config, port: bound });
   } catch (err) {
     if (!(err instanceof PortsBusyError)) throw err;
-    serverError = { first: err.first, last: err.last, holders: [] };
+    serverError = {
+      first: err.first,
+      last: err.last,
+      holders: await portHolders(err.first, execFileP),
+    };
   }
   if (!loaded.existed && autostartAvailable()) setAutostart(true);
 

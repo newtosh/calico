@@ -15,6 +15,11 @@ export function ServerErrorPanel({ error }: { error: ServerErrorInfo }) {
         Close whatever holds those ports, then quit and reopen calico from the
         tray.
       </p>
+      {error.holders.length ? (
+        <p className="mt-2 font-mono text-xs">
+          Port {error.first}: {error.holders.join(", ")}
+        </p>
+      ) : null}
     </section>
   );
 }

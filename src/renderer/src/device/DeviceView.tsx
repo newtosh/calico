@@ -2,8 +2,10 @@ import { useRef, useState } from "react";
 import type { CalicoInfo } from "../../../shared/ipc";
 import { connectBle } from "./ble";
 import type { DeviceLink } from "./commands";
+import { FirewallAssist } from "./FirewallAssist";
 import { LinkActions } from "./LinkActions";
 import { ProvisionFlow } from "./ProvisionFlow";
+import { SerialAssist } from "./SerialAssist";
 import { connectUsb } from "./usb";
 
 interface Props {
@@ -15,7 +17,7 @@ interface Props {
 
 export function DeviceView({ info, link, setLink, onLog }: Props) {
   const [error, setError] = useState("");
-  const [, setAssist] = useState<"firewall" | "serial" | null>(null);
+  const [assist, setAssist] = useState<"firewall" | "serial" | null>(null);
   const manualClose = useRef(false);
 
   async function open(kind: "usb" | "ble") {
@@ -70,6 +72,8 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
             {error}
           </p>
         ) : null}
+        {assist === "serial" ? <SerialAssist /> : null}
+        {assist === "firewall" ? <FirewallAssist port={info.port} /> : null}
       </div>
     );
   }
@@ -98,6 +102,15 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
         link={link}
         onSilent={() => setAssist("firewall")}
       />
+      <button
+        type="button"
+        className="btn mx-4 mt-4"
+        onClick={() => setAssist("firewall")}
+      >
+        Panel not connecting?
+      </button>
+      {assist === "serial" ? <SerialAssist /> : null}
+      {assist === "firewall" ? <FirewallAssist port={info.port} /> : null}
     </div>
   );
 }

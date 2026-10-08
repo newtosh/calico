@@ -6,6 +6,7 @@ import { DeviceView } from "./device/DeviceView";
 import { Picker } from "./device/Picker";
 import { useInfo } from "./lib/use-info";
 import { SettingsView } from "./settings/SettingsView";
+import { DriftBanner } from "./shell/DriftBanner";
 import { ServerErrorPanel } from "./shell/ServerErrorPanel";
 import { Sidebar, type View } from "./shell/Sidebar";
 import { UrlChip } from "./shell/UrlChip";
@@ -28,6 +29,9 @@ export function App() {
           {lanUrl ? <UrlChip url={lanUrl} /> : null}
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto">
+          {info ? (
+            <DriftBanner info={info} onRepoint={() => setView("device")} />
+          ) : null}
           {info?.serverError ? (
             <ServerErrorPanel error={info.serverError} />
           ) : null}
