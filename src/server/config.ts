@@ -105,6 +105,8 @@ export function loadConfig(path: string): {
   }
 }
 
+// Keys calico does not know are not kept: a save rewrites the file from the
+// known fields only.
 export function saveConfig(path: string, config: CalicoConfig): void {
   writeAtomic(path, `${JSON.stringify(config, null, 2)}\n`);
 }

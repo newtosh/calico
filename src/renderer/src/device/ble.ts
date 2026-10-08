@@ -104,6 +104,9 @@ export class BleLink implements DeviceLink {
           : { ok: false, error: "The desk could not scan for networks." };
       }
       case "verify": {
+        // The desk sets state=busy before this write returns (firmware
+        // ble_link.c, write_verify), so polling right after the write cannot
+        // see an older state=ok.
         await this.gatt.write(UUID.verify, encode(`${cmd.ssid}\n${cmd.pass}`));
         const body = await this.pollUntil(
           UUID.verify,
