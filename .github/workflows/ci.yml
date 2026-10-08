@@ -30,3 +30,29 @@ jobs:
       # Ubuntu 24.04 blocks the unprivileged user namespaces Chromium's sandbox needs.
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: xvfb-run -a pnpm test:e2e
+  # Packaged builds on stock Ubuntu 24.04, which restricts the user namespaces
+  # Chromium's sandbox needs. No sysctl here: this is what users get.
+  package:
+    name: package (ubuntu 24.04)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: pnpm
+      # libfuse2t64 lets the AppImage mount, so its step tests the sandbox alone.
+      - run: sudo apt-get update && sudo apt-get install -y libarchive-tools libfuse2t64
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm dist
+      - run: sudo apt-get install -y ./dist/*.deb
+      - name: deb launches
+        run: xvfb-run -a scripts/package-smoke.sh calico
+      - name: AppImage launches
+        continue-on-error: true
+        run: |
+          chmod +x dist/*.AppImage
+          xvfb-run -a scripts/package-smoke.sh dist/*.AppImage
