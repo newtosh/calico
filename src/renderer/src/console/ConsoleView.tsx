@@ -10,7 +10,9 @@ export function ConsoleView({
   onClear: () => void;
 }) {
   const end = useRef<HTMLDivElement>(null);
-  useEffect(() => end.current?.scrollIntoView({ block: "end" }), [lines]);
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: "end" });
+  }, [lines]);
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 border-b border-stroke/40 px-4 py-2">
