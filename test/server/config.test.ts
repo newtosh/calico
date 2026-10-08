@@ -41,6 +41,18 @@ describe("config file", () => {
     expect(readFileSync(path, "utf8")).toBe("{oops");
   });
 
+  it.each([12345, null, true, ["t"]])(
+    "refuses a non-string webhook_token %j instead of turning auth off",
+    (value) => {
+      const path = file();
+      const text = JSON.stringify({ webhook_token: value });
+      writeFileSync(path, text);
+      expect(() => loadConfig(path)).toThrow(ConfigError);
+      expect(() => loadConfig(path)).toThrow("webhook_token");
+      expect(readFileSync(path, "utf8")).toBe(text);
+    },
+  );
+
   it("refuses an out-of-range port", () => {
     const path = file();
     writeFileSync(path, JSON.stringify({ port: 70000 }));

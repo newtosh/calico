@@ -32,8 +32,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function str(value: unknown): string {
-  return typeof value === "string" ? value : "";
+// A missing key means unset. Any other non-string is a hand-edit gone wrong,
+// and treating it as unset would quietly turn auth off.
+function str(data: Record<string, unknown>, key: string): string {
+  const value = data[key];
+  if (value === undefined) return "";
+  if (typeof value === "string") return value;
+  throw new BadInput(key);
 }
 
 function boundedInt(value: unknown, low: number, high: number): number {
@@ -73,20 +78,22 @@ export function loadConfig(path: string): {
       existed: true,
       config: {
         port: "port" in data ? boundedInt(data.port, 1, 65535) : base.port,
-        webhook_token: str(data.webhook_token),
-        cursor_api_key: str(data.cursor_api_key),
+        webhook_token: str(data, "webhook_token"),
+        cursor_api_key: str(data, "cursor_api_key"),
         cursor_poll_seconds:
           "cursor_poll_seconds" in data
             ? boundedInt(data.cursor_poll_seconds, 5, 86400)
             : base.cursor_poll_seconds,
-        panel_url: str(data.panel_url),
-        panel_token: str(data.panel_token),
+        panel_url: str(data, "panel_url"),
+        panel_token: str(data, "panel_token"),
       },
     };
-  } catch {
-    throw new ConfigError(
-      `${path} has an invalid port or cursor_poll_seconds.`,
-    );
+  } catch (err) {
+    const what =
+      err instanceof BadInput && err.message !== "bad number"
+        ? err.message
+        : "port or cursor_poll_seconds";
+    throw new ConfigError(`${path} has an invalid ${what}.`);
   }
 }
 
