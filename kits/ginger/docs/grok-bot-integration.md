@@ -30,6 +30,14 @@ Send `Authorization: Bearer <token>` when `webhook_token` is set. Leave the head
 
 Leave `color`, `shape`, and `icon` off when you have nothing to send. An empty string, or a non-string, keeps the previous value for that agent. Omitted fields are not filled in from the agent id. Every session without a color and shape uses the same neutral circle, `#a39b88`. The companion stores a shape string as sent (clipped and lowercased) and does not drop names it does not draw.
 
+## How long a bot stays Running
+
+A bot shows as Running on the panel until it has gone quiet for the **running timeout**. The default is 120 seconds, the same as the old Python companion. A routine that can only fire every few minutes would flicker to idle between pings.
+
+Raise it in Calico's Settings, under Companion, **Running timeout seconds** (30 to 3600), to more than the longest gap between a routine's pings. For Grok Bot routines that run at most every 5 minutes, use 360 or more. The tradeoff is that a bot that stops without sending `agent.finished` keeps showing Running for that long.
+
+It can also be set with `PUT /api/config` and `{"running_timeout_seconds": 600}`, and read back with `GET /api/config?detail=1`. A plain `GET /api/config` is unchanged.
+
 ### Shapes
 
 The panel draws a filled 24px silhouette in that agent's color, with two static pixel eyes. The attention mark is that same silhouette at 120px. Nothing circular sits behind it. The eyes are a 3×4 block on that grid (15×20 on the attention mark), starting about 7px down the face, with a 6px gap. Triangle, teardrop, and the other narrow crowns drop the pair into the wide part of the body. The ink is the body color divided by 6, or `#efe7d6` when the body is already dark (luma under 80). They do not blink. `square` and `diamond` are marks this desk already drew. `rounded_square` is the picker squircle. `oval` is the horizontal pebble.

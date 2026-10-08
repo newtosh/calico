@@ -89,6 +89,8 @@ export interface Snapshot {
 
 export interface StoreOptions {
   now?: () => Date;
+  /** Read on every status, so a change applies without a restart. */
+  runningTtlMs?: () => number;
   snapshot?: Snapshot | null;
   onChange?: (snapshot: Snapshot) => void;
 }
@@ -142,10 +144,12 @@ export class DeskStore {
   private capture = false;
   private frameBytes: Buffer | null = null;
   private readonly now: () => Date;
+  private readonly runningTtlMs: () => number;
   private readonly onChange: (snapshot: Snapshot) => void;
 
   constructor(opts: StoreOptions = {}) {
     this.now = opts.now ?? (() => new Date());
+    this.runningTtlMs = opts.runningTtlMs ?? (() => RUNNING_TTL_MS);
     this.onChange = opts.onChange ?? (() => undefined);
     if (opts.snapshot) {
       this.events = opts.snapshot.events
@@ -305,7 +309,7 @@ export class DeskStore {
     const agents: PublicAgent[] = ordered.map((agent) => ({
       id: agent.id,
       title: agent.title,
-      status: visibleStatus(agent, now),
+      status: visibleStatus(agent, now, this.runningTtlMs()),
       attention: agent.attention,
       message: agent.message,
       updated_at: agent.updated_at,
@@ -453,11 +457,9 @@ export class DeskStore {
   }
 }
 
-function visibleStatus(agent: AgentRecord, now: number): Phase {
+function visibleStatus(agent: AgentRecord, now: number, ttlMs: number): Phase {
   if (agent.attention) return "needs_you";
   if (agent.status !== "running") return "idle";
   if (!STAMP.test(agent.updated_at)) return agent.status;
-  return now - Date.parse(agent.updated_at) > RUNNING_TTL_MS
-    ? "idle"
-    : "running";
+  return now - Date.parse(agent.updated_at) > ttlMs ? "idle" : "running";
 }

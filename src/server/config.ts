@@ -8,6 +8,8 @@ export interface CalicoConfig {
   cursor_poll_seconds: number;
   panel_url: string;
   panel_token: string;
+  /** How long a running agent stays running without an update. */
+  running_timeout_seconds: number;
 }
 
 export const DEFAULT_PORT = 8787;
@@ -15,6 +17,10 @@ export const DEFAULT_PORT = 8787;
 /** Startup-fatal. The message names the file. */
 export class ConfigError extends Error {}
 /** A request body the HTTP layer answers with 400. */
+export const DEFAULT_RUNNING_TIMEOUT = 120;
+export const MIN_RUNNING_TIMEOUT = 30;
+export const MAX_RUNNING_TIMEOUT = 3600;
+
 export class BadInput extends Error {}
 
 export function defaultConfig(): CalicoConfig {
@@ -25,6 +31,7 @@ export function defaultConfig(): CalicoConfig {
     cursor_poll_seconds: 30,
     panel_url: "",
     panel_token: "",
+    running_timeout_seconds: DEFAULT_RUNNING_TIMEOUT,
   };
 }
 
@@ -97,6 +104,15 @@ export function loadConfig(path: string): {
             : base.cursor_poll_seconds,
         panel_url: str(data, "panel_url"),
         panel_token: str(data, "panel_token"),
+        running_timeout_seconds:
+          "running_timeout_seconds" in data
+            ? boundedInt(
+                data.running_timeout_seconds,
+                MIN_RUNNING_TIMEOUT,
+                MAX_RUNNING_TIMEOUT,
+                "running_timeout_seconds",
+              )
+            : base.running_timeout_seconds,
       },
     };
   } catch (err) {
@@ -111,12 +127,16 @@ export function saveConfig(path: string, config: CalicoConfig): void {
   writeAtomic(path, `${JSON.stringify(config, null, 2)}\n`);
 }
 
-export function publicView(config: CalicoConfig) {
+/** `detail` adds settings the Python companion never had, so its plain view stays as the panel contract froze it. */
+export function publicView(config: CalicoConfig, detail = false) {
   return {
     port: config.port,
     cursor_poll_seconds: config.cursor_poll_seconds,
     webhook_token_set: Boolean(config.webhook_token),
     cursor_api_key_set: Boolean(config.cursor_api_key),
+    ...(detail
+      ? { running_timeout_seconds: config.running_timeout_seconds }
+      : {}),
   };
 }
 
@@ -132,6 +152,13 @@ export function mergeConfig(
       5,
       86400,
       "cursor_poll_seconds",
+    );
+  if ("running_timeout_seconds" in patch)
+    merged.running_timeout_seconds = boundedInt(
+      patch.running_timeout_seconds,
+      MIN_RUNNING_TIMEOUT,
+      MAX_RUNNING_TIMEOUT,
+      "running_timeout_seconds",
     );
   if ("webhook_token" in patch)
     merged.webhook_token = String(patch.webhook_token);

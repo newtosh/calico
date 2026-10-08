@@ -46,11 +46,14 @@ export interface PublicConfig {
   cursor_poll_seconds: number;
   webhook_token_set: boolean;
   cursor_api_key_set: boolean;
+  /** How long a running agent stays running without an update. */
+  running_timeout_seconds: number;
 }
 
 export interface ConfigPatch {
   port?: number;
   cursor_poll_seconds?: number;
+  running_timeout_seconds?: number;
   webhook_token?: string;
   cursor_api_key?: string;
 }
@@ -220,7 +223,7 @@ export async function postDismiss(agentId = ""): Promise<void> {
 }
 
 export async function fetchConfig(): Promise<PublicConfig> {
-  const value: unknown = await (await call("/api/config")).json();
+  const value: unknown = await (await call("/api/config?detail=1")).json();
   if (!isRecord(value) || typeof value.port !== "number")
     throw new Error("bad config");
   return {
@@ -231,6 +234,10 @@ export async function fetchConfig(): Promise<PublicConfig> {
         : 30,
     webhook_token_set: value.webhook_token_set === true,
     cursor_api_key_set: value.cursor_api_key_set === true,
+    running_timeout_seconds:
+      typeof value.running_timeout_seconds === "number"
+        ? value.running_timeout_seconds
+        : 120,
   };
 }
 

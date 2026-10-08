@@ -99,6 +99,7 @@ async function start(): Promise<void> {
   };
 
   const store = new DeskStore({
+    runningTtlMs: () => config.running_timeout_seconds * 1000,
     snapshot: loadSnapshot(statePath),
     onChange: (s) => saveSnapshot(statePath, s),
   });
