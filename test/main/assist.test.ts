@@ -7,6 +7,7 @@ import {
   parseSsHolders,
   serialFix,
   serialGroup,
+  serialReadFix,
   validPort,
 } from "../../src/main/assist";
 
@@ -80,5 +81,31 @@ describe("port holders", () => {
     expect(validPort(8787)).toBe(true);
     expect(validPort("8787")).toBe(false);
     expect(validPort(70000)).toBe(false);
+  });
+});
+
+describe("serial read fix", () => {
+  it("resets VMIN and VTIME so Chromium's first read waits instead of seeing EOF", () => {
+    expect(serialReadFix("ttyACM0")).toEqual([
+      "-F",
+      "/dev/ttyACM0",
+      "min",
+      "1",
+      "time",
+      "0",
+    ]);
+    expect(serialReadFix("ttyUSB12")?.[1]).toBe("/dev/ttyUSB12");
+  });
+
+  it("refuses anything that is not a USB serial node", () => {
+    for (const name of [
+      "",
+      "ttyS0",
+      "../etc/passwd",
+      "ttyACM0; rm -rf",
+      "ttyACM",
+      "null",
+    ])
+      expect(serialReadFix(name)).toBeNull();
   });
 });

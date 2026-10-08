@@ -64,6 +64,18 @@ export function serialFix(group: string, user: string): string[] {
   return ["usermod", "-aG", group, user];
 }
 
+/**
+ * A cdc_acm tty keeps its termios across closes, and esptool, idf.py and
+ * pyserial leave it at VMIN=0 VTIME=0. Chromium reads right after opening and
+ * treats the resulting zero-byte read as a disconnect ("The device has been
+ * lost"). Returns the stty arguments that put the port back to waiting reads,
+ * or null for anything that is not a USB serial node.
+ */
+export function serialReadFix(portName: string): string[] | null {
+  if (!/^tty(ACM|USB)\d+$/.test(portName)) return null;
+  return ["-F", `/dev/${portName}`, "min", "1", "time", "0"];
+}
+
 export function deniedSerialPorts(devDir = "/dev"): string[] {
   let names: string[];
   try {
