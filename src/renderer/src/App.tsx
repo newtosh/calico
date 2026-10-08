@@ -1,5 +1,9 @@
 import { useState } from "react";
+import { ConsoleView } from "./console/ConsoleView";
 import { Dashboard } from "./dashboard/Dashboard";
+import type { DeviceLink } from "./device/commands";
+import { DeviceView } from "./device/DeviceView";
+import { Picker } from "./device/Picker";
 import { useInfo } from "./lib/use-info";
 import { SettingsView } from "./settings/SettingsView";
 import { ServerErrorPanel } from "./shell/ServerErrorPanel";
@@ -9,6 +13,9 @@ import { UrlChip } from "./shell/UrlChip";
 export function App() {
   const info = useInfo();
   const [view, setView] = useState<View>("dashboard");
+  const [link, setLink] = useState<DeviceLink | null>(null);
+  const [log, setLog] = useState<string[]>([]);
+  const onLog = (line: string) => setLog((prev) => [...prev.slice(-499), line]);
   const panelOnline =
     info?.lastPanelPoll != null && Date.now() - info.lastPanelPoll < 10_000;
   const lanUrl = info?.lanUrls[0];
@@ -28,11 +35,24 @@ export function App() {
             <Dashboard serverUrl={info.serverUrl} />
           ) : null}
           {view === "settings" && info ? <SettingsView info={info} /> : null}
-          {view === "device" || view === "console" ? (
-            <p className="p-4 text-muted">Coming in a later task.</p>
+          {view === "device" && info ? (
+            <DeviceView
+              info={info}
+              link={link}
+              setLink={setLink}
+              onLog={onLog}
+            />
+          ) : null}
+          {view === "console" ? (
+            <ConsoleView
+              lines={log}
+              usbConnected={link?.kind === "usb"}
+              onClear={() => setLog([])}
+            />
           ) : null}
         </main>
       </div>
+      <Picker />
     </div>
   );
 }
