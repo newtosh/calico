@@ -4,3 +4,4 @@ allowBuilds:
   electron-winstaller: false
 minimumReleaseAgeExclude:
   - electron@44.7.0
+  - electron-vite@6.0.0-beta.7

@@ -34,4 +34,20 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    files: ["src/renderer/**/*.tsx", "src/renderer/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          // React calls whatever an effect returns as its cleanup. A value such
+          // as the Promise Chromium's scrollIntoView returns crashes on unmount.
+          selector:
+            "CallExpression[callee.name=/^use(Layout)?Effect$/] > ArrowFunctionExpression[expression=true]",
+          message:
+            "Give effects a block body so they return nothing or a cleanup.",
+        },
+      ],
+    },
+  },
 );
