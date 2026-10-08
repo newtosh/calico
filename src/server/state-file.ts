@@ -49,6 +49,7 @@ function agentFrom(value: unknown): AgentRecord {
     icon: str(value.icon),
     attention: value.attention === true,
     message: str(value.message),
+    source: str(value.source),
   };
 }
 

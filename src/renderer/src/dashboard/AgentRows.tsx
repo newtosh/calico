@@ -1,4 +1,6 @@
-import type { DeskAgent } from "../lib/api";
+import type { DeskAgent, DeskEvent } from "../lib/api";
+import { agentSource, sourceOf } from "../lib/sources";
+import { ago } from "../lib/time";
 import { AgentMark } from "./AgentMark";
 
 const STATUS_CLASS: Record<string, string> = {
@@ -6,14 +8,15 @@ const STATUS_CLASS: Record<string, string> = {
   running: "text-sage",
 };
 
-export function AgentRows({ agents }: { agents: DeskAgent[] }) {
-  if (agents.length === 0)
-    return (
-      <p className="px-4 py-3 text-muted">
-        No agents yet. They appear when a webhook or the Cursor poll reports
-        one.
-      </p>
-    );
+export function AgentRows({
+  agents,
+  events,
+  showSource,
+}: {
+  agents: DeskAgent[];
+  events: DeskEvent[];
+  showSource: boolean;
+}) {
   return (
     <ul>
       {agents.map((agent) => (
@@ -28,8 +31,18 @@ export function AgentRows({ agents }: { agents: DeskAgent[] }) {
           <span className="min-w-0 flex-1 truncate text-muted">
             {agent.message}
           </span>
+          {showSource ? (
+            <span className="w-16 shrink-0 text-xs text-muted">
+              {sourceOf(agentSource(agent, events)) === "cursor"
+                ? "Cursor"
+                : "Grok Bot"}
+            </span>
+          ) : null}
+          <span className="w-20 shrink-0 text-right text-xs text-muted">
+            {ago(agent.updated_at)}
+          </span>
           <span
-            className={`shrink-0 text-xs uppercase ${STATUS_CLASS[agent.status] ?? "text-muted"}`}
+            className={`w-20 shrink-0 text-right text-xs uppercase ${STATUS_CLASS[agent.status] ?? "text-muted"}`}
           >
             {agent.status.replaceAll("_", " ")}
           </span>

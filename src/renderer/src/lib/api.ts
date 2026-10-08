@@ -8,6 +8,8 @@ export interface DeskAgent {
   color: string;
   shape: string;
   icon: string;
+  /** grok-bot, cursor, or manual. Empty for state saved before sources. */
+  source: string;
 }
 
 export interface DeskEvent {
@@ -53,6 +55,14 @@ export interface ConfigPatch {
   cursor_api_key?: string;
 }
 
+export interface CursorInfo {
+  configured: boolean;
+  last_poll_at: string | null;
+  ok: boolean | null;
+  agents: number;
+  error: string;
+}
+
 export interface PanelPush {
   url: string;
   token_set: boolean;
@@ -75,10 +85,10 @@ export function configureApi(serverUrl: string, webhookToken: string): void {
   token = webhookToken;
 }
 
-function headers(json = true): Record<string, string> {
+function headers(json = true, bearer = token): Record<string, string> {
   return {
     ...(json ? { "Content-Type": "application/json" } : {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
   };
 }
 
@@ -154,6 +164,7 @@ function agentFrom(value: unknown): DeskAgent | null {
     color: s(value.color),
     shape: s(value.shape),
     icon: s(value.icon),
+    source: s(value.source),
   };
 }
 
@@ -189,7 +200,7 @@ async function call(path: string, init: RequestInit = {}): Promise<Response> {
 }
 
 export async function fetchStatus(): Promise<DeskStatus> {
-  return parseStatus(await (await call("/api/status")).json());
+  return parseStatus(await (await call("/api/status?detail=1")).json());
 }
 
 export async function postWebhook(body: WebhookBody): Promise<void> {
@@ -248,14 +259,31 @@ export async function fetchPanel(): Promise<PanelPush> {
   return panelFrom(await (await call("/api/panel")).json());
 }
 
-export async function putPanel(patch: PanelPatch): Promise<PanelPush> {
+/** `bearer` overrides the shared token, for a call made right after the token changed. */
+export async function putPanel(
+  patch: PanelPatch,
+  bearer?: string,
+): Promise<PanelPush> {
   return panelFrom(
     await (
       await call("/api/panel", {
         method: "PUT",
-        headers: headers(),
+        headers: headers(true, bearer),
         body: JSON.stringify(patch),
       })
     ).json(),
   );
+}
+
+export async function fetchCursor(): Promise<CursorInfo> {
+  const value: unknown = await (await call("/api/cursor")).json();
+  if (!isRecord(value)) throw new Error("bad cursor status");
+  return {
+    configured: value.configured === true,
+    last_poll_at:
+      typeof value.last_poll_at === "string" ? value.last_poll_at : null,
+    ok: typeof value.ok === "boolean" ? value.ok : null,
+    agents: typeof value.agents === "number" ? value.agents : 0,
+    error: typeof value.error === "string" ? value.error : "",
+  };
 }

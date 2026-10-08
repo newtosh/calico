@@ -7,6 +7,7 @@ import {
   createCompanionServer,
   isLoopback,
 } from "../../src/server/http";
+import type { CursorStatus } from "../../src/server/cursor-poll";
 import { DeskStore } from "../../src/server/store";
 
 let close: (() => void) | null = null;
@@ -15,12 +16,14 @@ afterEach(() => close?.());
 async function start(
   config: Partial<CalicoConfig> = {},
   allowedOrigins: string[] = [],
+  cursorStatus?: () => CursorStatus,
 ) {
   let current: CalicoConfig = { ...defaultConfig(), ...config };
   const store = new DeskStore();
   const { server, stats } = createCompanionServer({
     store,
     allowedOrigins,
+    ...(cursorStatus ? { cursorStatus } : {}),
     getConfig: () => current,
     setConfig: (next) => {
       current = next;
@@ -153,5 +156,53 @@ describe("companion server", () => {
 
   it("asciiJson leaves ASCII alone", () => {
     expect(asciiJson({ a: "plain", b: 1 })).toBe('{"a":"plain","b":1}');
+  });
+});
+
+describe("GET /api/cursor", () => {
+  it("serves the poll status the app supplies", async () => {
+    const status = {
+      configured: true,
+      last_poll_at: "2026-10-07T12:00:00Z",
+      ok: true,
+      agents: 2,
+      error: "",
+    };
+    const { base } = await start({}, [], () => status);
+    const res = await fetch(`${base}/api/cursor`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(status);
+  });
+
+  it("answers with an empty status when no poller is wired", async () => {
+    const { base } = await start();
+    expect(await (await fetch(`${base}/api/cursor`)).json()).toEqual({
+      configured: false,
+      last_poll_at: null,
+      ok: null,
+      agents: 0,
+      error: "",
+    });
+  });
+});
+
+describe("GET /api/status?detail=1", () => {
+  it("adds each agent's source for the app, and only then", async () => {
+    const { base, store } = await start();
+    store.applyEvent({
+      type: "agent.launched",
+      agent_id: "g1",
+      title: "Desky",
+    });
+    const plain = (await (await fetch(`${base}/api/status`)).json()) as {
+      agents: Record<string, unknown>[];
+    };
+    const detail = (await (
+      await fetch(`${base}/api/status?detail=1`)
+    ).json()) as {
+      agents: Record<string, unknown>[];
+    };
+    expect(plain.agents[0]).not.toHaveProperty("source");
+    expect(detail.agents[0]?.source).toBe("grok-bot");
   });
 });

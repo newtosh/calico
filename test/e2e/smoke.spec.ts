@@ -37,6 +37,14 @@ test("launches, serves status, and renders the dashboard", async () => {
       }),
     });
     await expect(page.getByText("Smoke agent").first()).toBeVisible();
+    // The source toggle narrows to Cursor, where this Grok Bot agent is absent.
+    await expect(
+      page.getByRole("radiogroup", { name: "Show agents from" }),
+    ).toBeVisible();
+    await page.getByRole("radio", { name: /^Cursor/ }).click();
+    await expect(page.getByText(/No Cursor agents yet/)).toBeVisible();
+    await page.getByRole("radio", { name: /^Combined/ }).click();
+    await expect(page.getByText("Smoke agent").first()).toBeVisible();
     // Settings shows this release's version, not Electron's.
     const { version } = JSON.parse(readFileSync("package.json", "utf8")) as {
       version: string;

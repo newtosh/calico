@@ -51,6 +51,8 @@ export interface AgentRecord {
   // Awaiting the user. Independent of running/idle so a finish does not drop the lamp.
   attention: boolean;
   message: string;
+  // Where the last update came from: grok-bot, cursor, or manual.
+  source: string;
 }
 
 export type Phase = "idle" | "running" | "needs_you";
@@ -65,6 +67,8 @@ export interface PublicAgent {
   color: string;
   shape: string;
   icon: string;
+  /** Only on a detail request. The panel's status never carries it. */
+  source?: string;
 }
 
 export interface StatusBody {
@@ -278,7 +282,8 @@ export class DeskStore {
     this.persist();
   }
 
-  status(): StatusBody {
+  /** `detail` adds each agent's source. Only the app asks for it. */
+  status(detail = false): StatusBody {
     // attention, then newest updated_at. Two needs_you in one second follow
     // event order (later event first). id is the last tie. Stable sorts keep
     // the earlier key, exactly like the Python companion.
@@ -307,6 +312,7 @@ export class DeskStore {
       color: agent.color,
       shape: agent.shape,
       icon: agent.icon,
+      ...(detail ? { source: agent.source } : {}),
     }));
     const statuses = new Set(agents.map((a) => a.status));
     const phase: Phase = statuses.has("needs_you")
@@ -401,6 +407,7 @@ export class DeskStore {
       icon: event.icon || current?.icon || "",
       attention,
       message: message ?? current?.message ?? "",
+      source: event.source || current?.source || "",
     });
   }
 

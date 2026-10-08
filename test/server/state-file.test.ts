@@ -40,6 +40,7 @@ const sample: Snapshot = {
       icon: "",
       attention: true,
       message: "q",
+      source: "grok-bot",
     },
   ],
 };
@@ -80,5 +81,13 @@ describe("state file", () => {
     };
     writeFileSync(path, JSON.stringify(raw));
     expect(loadSnapshot(path)?.agents[0]?.status).toBe("idle");
+  });
+
+  it("loads a snapshot saved before agents carried a source", () => {
+    const path = join(dir(), "state.json");
+    const old: Record<string, unknown> = { ...sample.agents[0] };
+    delete old.source;
+    writeFileSync(path, JSON.stringify({ ...sample, agents: [old] }));
+    expect(loadSnapshot(path)?.agents[0]?.source).toBe("");
   });
 });

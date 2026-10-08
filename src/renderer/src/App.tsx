@@ -5,6 +5,7 @@ import type { DeviceLink } from "./device/commands";
 import { DeviceView } from "./device/DeviceView";
 import { Picker } from "./device/Picker";
 import { useInfo } from "./lib/use-info";
+import { webhookUrl } from "./lib/webhook";
 import { SettingsView } from "./settings/SettingsView";
 import { DriftBanner } from "./shell/DriftBanner";
 import { ServerErrorPanel } from "./shell/ServerErrorPanel";
@@ -36,7 +37,11 @@ export function App() {
             <ServerErrorPanel error={info.serverError} />
           ) : null}
           {view === "dashboard" && info?.serverUrl ? (
-            <Dashboard serverUrl={info.serverUrl} />
+            <Dashboard
+              serverUrl={info.serverUrl}
+              webhookUrl={webhookUrl(info)}
+              onSetup={() => setView("settings")}
+            />
           ) : null}
           {view === "settings" && info ? <SettingsView info={info} /> : null}
           {view === "device" && info ? (

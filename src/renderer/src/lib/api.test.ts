@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   agentMark,
   configureApi,
+  fetchCursor,
   fetchStatus,
   injectBody,
   NEUTRAL_MARK,
@@ -68,6 +69,7 @@ describe("api", () => {
         color: "",
         shape: "",
         icon: "",
+        source: "",
       },
     ]);
     expect(status.unread).toBe(1);
@@ -93,5 +95,49 @@ describe("api", () => {
     );
     configureApi("http://127.0.0.1:8787", "");
     await expect(fetchStatus()).rejects.toThrow("bad status");
+  });
+});
+
+describe("fetchCursor", () => {
+  it("reads the poll status and defaults anything malformed", async () => {
+    configureApi("http://127.0.0.1:1", "");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          configured: true,
+          last_poll_at: "2026-10-08T12:00:00Z",
+          ok: false,
+          agents: "many",
+          error: "Cursor rejected the API key (HTTP 401).",
+        }),
+      ),
+    );
+    expect(await fetchCursor()).toEqual({
+      configured: true,
+      last_poll_at: "2026-10-08T12:00:00Z",
+      ok: false,
+      agents: 0,
+      error: "Cursor rejected the API key (HTTP 401).",
+    });
+  });
+});
+
+describe("detail status", () => {
+  it("asks for sources and keeps them", async () => {
+    configureApi("http://127.0.0.1:1", "");
+    const fetchMock = vi.fn<(url: string) => Promise<Response>>(async () =>
+      Response.json({
+        phase: "idle",
+        agents: [{ id: "a", title: "A", status: "running", source: "cursor" }],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const status = await fetchStatus();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      "http://127.0.0.1:1/api/status?detail=1",
+    );
+    expect(status.agents[0]?.source).toBe("cursor");
   });
 });
