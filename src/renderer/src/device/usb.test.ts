@@ -147,4 +147,30 @@ describe("secret redaction across links", () => {
     expect(logs).toHaveLength(1);
     expect(logs[0]).toBe('{"note":"token is ••••"}');
   });
+
+  it("hides the longer secret whole when one contains the other", async () => {
+    const { UsbLink } = await fresh();
+    const logs: string[] = [];
+    const usb = mk(UsbLink, logs);
+    for (const value of ["abcd", "abcdwxyz"]) {
+      const pending = usb.send({ op: "token", value });
+      await Promise.resolve();
+      usb.handleLine(`{"id":${value === "abcd" ? 1 : 2},"ok":true}`);
+      await pending;
+    }
+    usb.handleLine("token abcdwxyz set");
+    expect(logs).toEqual(["token •••• set"]);
+  });
+
+  it("leaves very short secrets alone instead of blanking letters in every line", async () => {
+    const { UsbLink } = await fresh();
+    const logs: string[] = [];
+    const usb = mk(UsbLink, logs);
+    const pending = usb.send({ op: "token", value: "a" });
+    await Promise.resolve();
+    usb.handleLine('{"id":1,"ok":true}');
+    await pending;
+    usb.handleLine("a banana");
+    expect(logs).toEqual(["a banana"]);
+  });
 });

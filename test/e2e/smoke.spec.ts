@@ -52,7 +52,8 @@ test("launches, serves status, and renders the dashboard", async () => {
       .first()
       .click();
     await expect(page.getByText(/Saved\. Quit and reopen/)).toBeVisible();
-    await page.waitForTimeout(2500);
+    // Two polls of the info bridge (2 s each), so a banner would have shown.
+    await page.waitForTimeout(4500);
     await expect(page.getByText(/The panel is set to port/)).toHaveCount(0);
 
     // Permission requests are denied unless the app asked for them.

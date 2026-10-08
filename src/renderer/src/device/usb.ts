@@ -70,6 +70,9 @@ interface Pending {
 // when the boot log may echo them.
 const sessionSecrets = new Set<string>();
 
+// Hiding a 1 to 3 character secret would blank letters out of every log line.
+const MIN_SECRET = 4;
+
 // The firmware prints JSON, which escapes quotes and backslashes.
 const jsonEscaped = (secret: string) => JSON.stringify(secret).slice(1, -1);
 
@@ -108,7 +111,8 @@ export class UsbLink implements DeviceLink {
     } catch (err) {
       return { ok: false, error: (err as FieldError).message };
     }
-    for (const secret of secretsOf(cmd)) sessionSecrets.add(secret);
+    for (const secret of secretsOf(cmd))
+      if (secret.length >= MIN_SECRET) sessionSecrets.add(secret);
     const id = this.nextId++;
     const seconds = timeoutFor(cmd) / 1000;
     const reply = new Promise<Reply>((resolve) => {
@@ -144,10 +148,14 @@ export class UsbLink implements DeviceLink {
   }
 
   private redact(line: string): string {
+    // Longest first, so a secret that contains another is hidden whole.
+    const forms = [...sessionSecrets].flatMap((secret) => [
+      secret,
+      jsonEscaped(secret),
+    ]);
     let out = line;
-    for (const secret of sessionSecrets)
-      for (const form of new Set([secret, jsonEscaped(secret)]))
-        out = out.split(form).join("••••");
+    for (const form of new Set(forms.sort((a, b) => b.length - a.length)))
+      out = out.split(form).join("••••");
     return out;
   }
 }
