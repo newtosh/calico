@@ -13,7 +13,7 @@ Send `Authorization: Bearer <token>` when `webhook_token` is set. Leave the head
   "type": "agent.launched",
   "agent_id": "scaffold-1",
   "title": "Scaffold",
-  "message": "Building the desk buddy",
+  "message": "Building the ginger firmware",
   "source": "grok-bot"
 }
 ```

@@ -14,5 +14,5 @@ linux:
   executableName: calico
   syncDesktopName: true
   icon: resources/icon.png
-  synopsis: Desktop companion for the grokbot-buddy desk panel
+  synopsis: Desktop companion for the ginger desk panel
   description: Runs the companion server the panel polls, shows agent status, and sets up the panel over USB or Bluetooth.
