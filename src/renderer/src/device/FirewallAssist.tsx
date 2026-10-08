@@ -10,6 +10,16 @@ export function FirewallAssist({ port }: { port: number | null }) {
     void window.calico.firewall().then(setFw);
   }, []);
 
+  if (port === null)
+    return (
+      <section className="border-t border-stroke/40">
+        <h2 className="section-title">Panel cannot reach calico</h2>
+        <p className="max-w-2xl px-4 text-muted">
+          calico is not listening on any port, so a firewall is not the problem.
+          See the notice at the top of the window.
+        </p>
+      </section>
+    );
   if (!fw) return <p className="px-4 text-muted">Checking for a firewall.</p>;
   return (
     <section className="border-t border-stroke/40">

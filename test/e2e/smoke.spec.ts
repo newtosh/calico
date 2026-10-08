@@ -43,6 +43,28 @@ test("launches, serves status, and renders the dashboard", async () => {
     };
     await page.getByRole("button", { name: "Settings" }).click();
     await expect(page.getByText(`Calico ${version}`)).toBeVisible();
+
+    // Saving a new port takes effect on restart. The panel is still pointed at
+    // the port calico is on, so the drift banner must stay away.
+    await page.getByLabel("Port").fill("9001");
+    await page
+      .getByRole("button", { name: "Save", exact: true })
+      .first()
+      .click();
+    await expect(page.getByText(/Saved\. Quit and reopen/)).toBeVisible();
+    // Two polls of the info bridge (2 s each), so a banner would have shown.
+    await page.waitForTimeout(4500);
+    await expect(page.getByText(/The panel is set to port/)).toHaveCount(0);
+
+    // Permission requests are denied unless the app asked for them.
+    const notifications = await page.evaluate(() =>
+      (
+        globalThis as unknown as {
+          Notification: { requestPermission(): Promise<string> };
+        }
+      ).Notification.requestPermission(),
+    );
+    expect(notifications).toBe("denied");
   } finally {
     await app.close();
   }

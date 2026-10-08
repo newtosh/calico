@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   lanUrls,
   listenWithFallback,
+  PanelPort,
   PortsBusyError,
   resolvePort,
 } from "../../src/server/port";
@@ -67,5 +68,21 @@ describe("port selection", () => {
       ],
     } as unknown as NodeJS.Dict<import("node:os").NetworkInterfaceInfo[]>;
     expect(lanUrls(8787, ifaces)).toEqual(["http://192.168.4.20:8787"]);
+  });
+});
+
+describe("PanelPort", () => {
+  it("reports drift only while calico is on a different port than the panel", () => {
+    const panel = new PanelPort(8787);
+    expect(panel.driftFrom(8787)).toBeNull();
+    expect(panel.driftFrom(8788)).toBe(8787);
+    expect(panel.driftFrom(null)).toBeNull();
+  });
+
+  it("stops reporting drift once the panel is re-pointed", () => {
+    const panel = new PanelPort(8787);
+    panel.adopt(8788);
+    expect(panel.expected).toBe(8788);
+    expect(panel.driftFrom(8788)).toBeNull();
   });
 });

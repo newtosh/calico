@@ -72,3 +72,25 @@ export function lanUrls(
     .filter((info) => info.family === "IPv4" && !info.internal)
     .map((info) => `http://${info.address}:${port}`);
 }
+
+/**
+ * The port the panel has been told to poll. It starts as the saved port and
+ * only changes when calico re-points the panel. A port typed into Settings
+ * takes effect on restart, so it must not count as drift.
+ */
+export class PanelPort {
+  constructor(private port: number) {}
+
+  get expected(): number {
+    return this.port;
+  }
+
+  adopt(bound: number): void {
+    this.port = bound;
+  }
+
+  /** The port the panel expects when calico is listening elsewhere, else null. */
+  driftFrom(bound: number | null): number | null {
+    return bound !== null && bound !== this.port ? this.port : null;
+  }
+}

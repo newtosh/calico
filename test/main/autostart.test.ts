@@ -16,4 +16,19 @@ describe("autostart entry", () => {
       "Exec=/usr/bin/calico --hidden\n",
     );
   });
+
+  // Desktop Entry spec: reserved characters force quoting. Inside quotes,
+  // " ` $ and \ get a backslash, and the file format doubles every backslash.
+  const two = "\\".repeat(2);
+  const four = "\\".repeat(4);
+  it.each([
+    ["/opt/a$b/calico", `Exec="/opt/a${two}$b/calico" --hidden`],
+    ['/opt/a"b/calico', `Exec="/opt/a${two}"b/calico" --hidden`],
+    ["/opt/a`b/calico", 'Exec="/opt/a' + two + '`b/calico" --hidden'],
+    ["/opt/a\\b/calico", `Exec="/opt/a${four}b/calico" --hidden`],
+    ["/opt/a&b;c/calico", 'Exec="/opt/a&b;c/calico" --hidden'],
+    ["/opt/100%/calico", "Exec=/opt/100%%/calico --hidden"],
+  ])("quotes %s for the Exec key", (exec, line) => {
+    expect(desktopEntry(exec).split("\n")).toContain(line);
+  });
 });
