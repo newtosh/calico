@@ -18,7 +18,7 @@ function fakeLink(): DeviceLink {
           ok: true,
           info: { name: "desk", fw: "1", ssid: "", url: "", token: "none" },
         };
-      if (cmd.op === "reboot") queueMicrotask(() => dropLink());
+      if (cmd.op === "reboot") setTimeout(() => dropLink(), 1000);
       return { ok: true };
     },
     close() {},
@@ -44,7 +44,34 @@ const info: CalicoInfo = {
   autostart: { enabled: false, available: false },
 };
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
+
+function Harness() {
+  const [link, setLink] = useState<DeviceLink | null>(null);
+  return (
+    <DeviceView
+      info={info}
+      link={link}
+      setLink={setLink}
+      onLog={() => undefined}
+    />
+  );
+}
+
+async function provision() {
+  render(<Harness />);
+  fireEvent.click(screen.getByText("Connect over Bluetooth"));
+  fireEvent.change(await screen.findByLabelText("Or type an SSID"), {
+    target: { value: "home" },
+  });
+  fireEvent.change(screen.getByLabelText("Password"), {
+    target: { value: "hunter22" },
+  });
+  fireEvent.click(screen.getByText("Test and save"));
+}
 
 describe("DeviceView provisioning", () => {
   it("shows Panel online after the reboot drops the link, without a lost-connection error", async () => {
@@ -53,31 +80,23 @@ describe("DeviceView provisioning", () => {
       info: async () => ({ ...info, lastPanelPoll: Date.now() + 60_000 }),
     } as unknown as CalicoApi;
 
-    function Harness() {
-      const [link, setLink] = useState<DeviceLink | null>(null);
-      return (
-        <DeviceView
-          info={info}
-          link={link}
-          setLink={setLink}
-          onLog={() => undefined}
-        />
-      );
-    }
-    render(<Harness />);
-
-    fireEvent.click(screen.getByText("Connect over Bluetooth"));
-    fireEvent.change(await screen.findByLabelText("Or type an SSID"), {
-      target: { value: "home" },
-    });
-    fireEvent.change(screen.getByLabelText("Password"), {
-      target: { value: "hunter22" },
-    });
-    fireEvent.click(screen.getByText("Test and save"));
+    await provision();
 
     expect(
       await screen.findByText("Panel online.", undefined, { timeout: 5000 }),
     ).toBeTruthy();
     expect(screen.queryByText(/Lost the connection/)).toBeNull();
   }, 10_000);
+
+  it("gives up after one 30 s wait, even though the link dropped mid-wait", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    window.calico = {
+      adoptPort: async () => undefined,
+      info: async () => info,
+    } as unknown as CalicoApi;
+    await provision();
+    await screen.findByText(/Waiting up to 30 s/);
+    await vi.advanceTimersByTimeAsync(31_000);
+    expect(await screen.findByText(/has not reached calico/)).toBeTruthy();
+  });
 });

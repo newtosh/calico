@@ -26,6 +26,17 @@ test("launches, serves status, and renders the dashboard", async () => {
       await fetch(`${info.serverUrl}/api/status`)
     ).json()) as { phase: string };
     expect(status.phase).toBe("idle");
+    // The renderer must reach the server itself, not just render its shell.
+    await fetch(`${info.serverUrl}/api/webhook/grok-bot`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "agent.launched",
+        agent_id: "smoke",
+        title: "Smoke agent",
+      }),
+    });
+    await expect(page.getByText("Smoke agent").first()).toBeVisible();
   } finally {
     await app.close();
   }

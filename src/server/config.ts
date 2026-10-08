@@ -41,12 +41,17 @@ function str(data: Record<string, unknown>, key: string): string {
   throw new BadInput(key);
 }
 
-function boundedInt(value: unknown, low: number, high: number): number {
+function boundedInt(
+  value: unknown,
+  low: number,
+  high: number,
+  key: string,
+): number {
   let n: number;
   if (typeof value === "number" && Number.isInteger(value)) n = value;
   else if (typeof value === "string" && /^\d+$/.test(value)) n = Number(value);
-  else throw new BadInput("bad number");
-  if (n < low || n > high) throw new BadInput("bad number");
+  else throw new BadInput(key);
+  if (n < low || n > high) throw new BadInput(key);
   return n;
 }
 
@@ -77,23 +82,26 @@ export function loadConfig(path: string): {
     return {
       existed: true,
       config: {
-        port: "port" in data ? boundedInt(data.port, 1, 65535) : base.port,
+        port:
+          "port" in data ? boundedInt(data.port, 1, 65535, "port") : base.port,
         webhook_token: str(data, "webhook_token"),
         cursor_api_key: str(data, "cursor_api_key"),
         cursor_poll_seconds:
           "cursor_poll_seconds" in data
-            ? boundedInt(data.cursor_poll_seconds, 5, 86400)
+            ? boundedInt(
+                data.cursor_poll_seconds,
+                5,
+                86400,
+                "cursor_poll_seconds",
+              )
             : base.cursor_poll_seconds,
         panel_url: str(data, "panel_url"),
         panel_token: str(data, "panel_token"),
       },
     };
   } catch (err) {
-    const what =
-      err instanceof BadInput && err.message !== "bad number"
-        ? err.message
-        : "port or cursor_poll_seconds";
-    throw new ConfigError(`${path} has an invalid ${what}.`);
+    if (!(err instanceof BadInput)) throw err;
+    throw new ConfigError(`${path} has an invalid ${err.message}.`);
   }
 }
 
@@ -115,12 +123,13 @@ export function mergeConfig(
   patch: Record<string, unknown>,
 ): { config: CalicoConfig; restart: boolean } {
   const merged = { ...current };
-  if ("port" in patch) merged.port = boundedInt(patch.port, 1, 65535);
+  if ("port" in patch) merged.port = boundedInt(patch.port, 1, 65535, "port");
   if ("cursor_poll_seconds" in patch)
     merged.cursor_poll_seconds = boundedInt(
       patch.cursor_poll_seconds,
       5,
       86400,
+      "cursor_poll_seconds",
     );
   if ("webhook_token" in patch)
     merged.webhook_token = String(patch.webhook_token);

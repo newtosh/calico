@@ -35,7 +35,12 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
       manualClose.current = false;
       setRebootAt(null);
       setError(reply.error);
+      return;
     }
+    // If the link survives the reboot, a later drop is a real one again.
+    window.setTimeout(() => {
+      manualClose.current = false;
+    }, 30_000);
   }
 
   async function open(kind: "usb" | "ble") {
@@ -61,72 +66,73 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
     }
   }
 
-  if (!link) {
-    return (
-      <div>
-        <h2 className="section-title">Connect to the desk</h2>
-        <div className="flex gap-3 px-4">
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => void open("usb")}
-          >
-            Connect over USB
-          </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => void open("ble")}
-          >
-            Connect over Bluetooth
-          </button>
-        </div>
-        <p className="max-w-2xl px-4 pt-2 text-muted">
-          USB works with any firmware that has the serial console and is the
-          only way to recover a desk that will not boot. Bluetooth works without
-          a cable once the desk is advertising.
-        </p>
-        {error ? (
-          <p role="alert" className="px-4 pt-2">
-            <ErrorNote>{error}</ErrorNote>
-          </p>
-        ) : null}
-        {rebootAt !== null ? (
-          <RebootWait since={rebootAt} onSilent={showFirewall} />
-        ) : null}
-        {assist === "serial" ? <SerialAssist /> : null}
-        {assist === "firewall" ? <FirewallAssist port={info.port} /> : null}
-      </div>
-    );
-  }
-
+  // One tree for both states: the reboot drops the link, and the wait, the
+  // error, and the assists must stay mounted through that.
   return (
     <div className="pb-6">
-      <div className="flex items-center gap-3 px-4 pt-4">
-        <span className="text-sage">
-          Connected over {link.kind === "usb" ? "USB" : "Bluetooth"}
-        </span>
-        <button
-          type="button"
-          className="btn"
-          onClick={() => {
-            manualClose.current = true;
-            link.close();
-            setLink(null);
-          }}
-        >
-          Disconnect
-        </button>
-      </div>
-      <LinkActions info={info} link={link} onReboot={() => reboot(link)} />
-      <ProvisionFlow info={info} link={link} onReboot={() => reboot(link)} />
-      <button
-        type="button"
-        className="btn mx-4 mt-4"
-        onClick={() => setAssist("firewall")}
-      >
-        Panel not connecting?
-      </button>
+      {link ? (
+        <>
+          <div className="flex items-center gap-3 px-4 pt-4">
+            <span className="text-sage">
+              Connected over {link.kind === "usb" ? "USB" : "Bluetooth"}
+            </span>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                manualClose.current = true;
+                link.close();
+                setLink(null);
+              }}
+            >
+              Disconnect
+            </button>
+          </div>
+          <LinkActions info={info} link={link} onReboot={() => reboot(link)} />
+          <ProvisionFlow
+            info={info}
+            link={link}
+            onReboot={() => reboot(link)}
+          />
+          <button
+            type="button"
+            className="btn mx-4 mt-4"
+            onClick={() => setAssist("firewall")}
+          >
+            Panel not connecting?
+          </button>
+        </>
+      ) : (
+        <>
+          <h2 className="section-title">Connect to the desk</h2>
+          <div className="flex gap-3 px-4">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void open("usb")}
+            >
+              Connect over USB
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => void open("ble")}
+            >
+              Connect over Bluetooth
+            </button>
+          </div>
+          <p className="max-w-2xl px-4 pt-2 text-muted">
+            USB works with any firmware that has the serial console and is the
+            only way to recover a desk that will not boot. Bluetooth works
+            without a cable once the desk is advertising.
+          </p>
+        </>
+      )}
+      {error ? (
+        <p role="alert" className="px-4 pt-2">
+          <ErrorNote>{error}</ErrorNote>
+        </p>
+      ) : null}
       {rebootAt !== null ? (
         <RebootWait since={rebootAt} onSilent={showFirewall} />
       ) : null}

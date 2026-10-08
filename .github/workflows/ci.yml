@@ -52,7 +52,6 @@ jobs:
       - name: deb launches
         run: xvfb-run -a scripts/package-smoke.sh calico
       - name: AppImage launches
-        continue-on-error: true
         run: |
           chmod +x dist/*.AppImage
           xvfb-run -a scripts/package-smoke.sh dist/*.AppImage

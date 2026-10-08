@@ -46,8 +46,9 @@ export function LinkActions({
     await refresh();
   }
 
+  // DeviceView shows the outcome: the wait for the panel, or the error.
   async function reboot() {
-    setNotice("Rebooting the desk.");
+    setNotice("");
     await onReboot();
   }
 
