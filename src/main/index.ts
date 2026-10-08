@@ -20,7 +20,7 @@ import { loadSnapshot, saveSnapshot } from "../server/state-file";
 import { DeskStore } from "../server/store";
 import type { CalicoInfo, ServerErrorInfo } from "../shared/ipc";
 import { execFileP, portHolders } from "./assist";
-import { autostartAvailable, setAutostart } from "./autostart";
+import { initAutostartOnce } from "./autostart";
 import { wireDevicePickers } from "./devices";
 import { autostartState, registerIpc } from "./ipc";
 import { createTray, type TrayActions, updateTray } from "./tray";
@@ -132,7 +132,7 @@ async function start(): Promise<void> {
       holders: await portHolders(err.first, execFileP),
     };
   }
-  if (!loaded.existed && autostartAvailable()) setAutostart(true);
+  initAutostartOnce(userData);
 
   const stopPoll = startCursorPoll(store, () => config, cursorState);
 

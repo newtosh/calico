@@ -57,3 +57,31 @@ export function setAutostart(on: boolean): boolean {
   writeFileSync(path, desktopEntry(process.env.APPIMAGE ?? process.execPath));
   return true;
 }
+
+/**
+ * Turns startup on once, the first time an installed build runs. A marker in
+ * the app's data folder records it, so a dev run cannot use it up and a user
+ * who switched startup off is not overridden on the next launch.
+ */
+export function initAutostartOnce(
+  userData: string,
+  available = autostartAvailable(),
+  enable: () => void = () => void setAutostart(true),
+): boolean {
+  const marker = join(userData, "autostart-initialized");
+  if (!available || existsSync(marker)) return false;
+  // A login item is not worth failing to start over. If enabling fails, leave
+  // no marker so the next launch tries again.
+  try {
+    enable();
+  } catch {
+    return false;
+  }
+  try {
+    mkdirSync(userData, { recursive: true });
+    writeFileSync(marker, "");
+  } catch {
+    // Worst case it is enabled again next launch.
+  }
+  return true;
+}
