@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import header from "../../../../test/parity/ble_desk.h?raw";
+import header from "../../../../firmware/main/ble_desk.h?raw";
 import { BleLink, type Gatt, UUID } from "./ble";
 
 function fakeGatt(
