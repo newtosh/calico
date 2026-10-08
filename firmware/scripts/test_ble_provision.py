@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import os
 from pathlib import Path
 
@@ -300,3 +301,12 @@ def test_finds_a_panel_under_its_new_or_old_name():
     assert tool.is_desk_name("grokbot-buddy")
     assert not tool.is_desk_name("")
     assert not tool.is_desk_name("Bose QC352G")
+
+
+def test_names_match_the_apps_list():
+    tool = load_tool()
+    source = (HEADER.parents[2] / "src/renderer/src/device/ble.ts").read_text(encoding="utf-8")
+    block = re.search(r"BLE_NAMES = \[(.*?)\]", source, re.S)
+    assert block, "BLE_NAMES not found in ble.ts"
+    app_names = set(re.findall(r'"([^"]+)"', block.group(1)))
+    assert app_names == {tool.NAME, *tool.LEGACY_NAMES}

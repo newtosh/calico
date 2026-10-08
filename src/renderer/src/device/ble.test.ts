@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import header from "../../../../firmware/main/ble_desk.h?raw";
 import { BLE_NAMES, BleLink, connectBle, type Gatt, UUID } from "./ble";
 
@@ -23,6 +23,8 @@ function fakeGatt(
 }
 
 const instant = async () => undefined;
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("BleLink", () => {
   it("reads status", async () => {
@@ -134,6 +136,5 @@ describe("BleLink", () => {
         filters: BLE_NAMES.map((name) => ({ name })),
       }),
     );
-    vi.unstubAllGlobals();
   });
 });

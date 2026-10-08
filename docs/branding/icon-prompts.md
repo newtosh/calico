@@ -102,7 +102,7 @@ You can also derive the tray icon from the main art instead of generating it. Ma
 
 ## 4. Ginger icon (1024 by 1024)
 
-For the kit and the panel's identity. Same cat, same outline, ginger coat.
+For the kit and the panel's identity. Same cat, same outline, ginger coat. Two of its colors, apricot `#f2c98f` and burnt orange `#b8741a`, are for the Ginger coat only and are not in DESIGN.md's UI palette.
 
 ```text
 [paste the shared style block]
@@ -129,7 +129,7 @@ To keep Ginger consistent with the Calico icon, finish the Calico one first and 
 
 ## 5. Ginger splash for the panel (480 by 480)
 
-The panel is a 480 by 480 AMOLED with a 24 pixel case line, and the UI background is `#0c0e09`. Pure near-black saves power and burn-in on AMOLED.
+The panel is a 480 by 480 AMOLED. Its outer edge is a 24 pixel case line (a 16 pixel bezel plus an 8 pixel lip), and the UI background is `#0c0e09`. Pure near-black saves power and burn-in on AMOLED.
 
 ```text
 [paste the shared style block]
@@ -158,27 +158,27 @@ apricot #f2c98f at the head, amber orange #e2a23a in the middle, burnt orange
 
 These commands use ImageMagick (`magick`). Work from a copy, not the original.
 
-Remove the magenta background, trim, and square it up:
+Remove the magenta background, trim, shrink to 75 percent so the cat keeps a 12 percent margin, and square it up:
 
 ```bash
 magick generated.png -fuzz 12% -transparent '#ff00ff' -trim +repage \
-  -background none -gravity center -extent 1024x1024 cat.png
+  -resize 768x768 -background none -gravity center -extent 1024x1024 cat.png
 ```
 
-If a pink fringe is left on the edge, raise `-fuzz` a little, or run `-channel A -morphology Erode Disk:1`.
+If a pink fringe is left on the edge, raise `-fuzz` a little (try 18%) and run it again. Avoid a green key, since the Ginger and Calico palettes both sit near warm olive.
 
 Make the sizes and preview how they actually look small:
 
 ```bash
-magick cat.png -resize 512x512 resources/icon.png        # app icon (electron-builder wants 512 or more)
+magick cat.png -resize 512x512 resources/icon.png        # app icon (at least 512 by 512 for Linux; 1024 also works)
 magick tray.png -resize 32x32 resources/tray.png         # tray icon
 for s in 16 22 24 32 48; do magick cat.png -resize ${s}x${s} -filter point -scale 800% preview-$s.png; done
 ```
 
-Check the palette landed close to the tokens:
+Check the palette landed close to the tokens by sampling known points: the head, the middle of the body, and the tail. They should be near cream `#efe7d6`, amber `#e2a23a`, and near-black `#2a2d24` for Calico:
 
 ```bash
-magick icon.png -colors 6 -unique-colors -scale 80x80 palette.png
+magick resources/icon.png -format '%[hex:p{150,300}] %[hex:p{256,300}] %[hex:p{360,300}]\n' info:
 ```
 
 Then check how the real thing looks:
