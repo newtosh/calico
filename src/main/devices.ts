@@ -52,6 +52,10 @@ export function wireDevicePickers(win: BrowserWindow): void {
   session.setPermissionCheckHandler(
     (wc, permission) => wc === contents && allowed.has(permission),
   );
+  // Without a request handler Electron grants every permission request.
+  session.setPermissionRequestHandler((wc, permission, callback) =>
+    callback(wc === contents && allowed.has(permission)),
+  );
   session.setDevicePermissionHandler(
     (details) => details.deviceType === "serial",
   );
