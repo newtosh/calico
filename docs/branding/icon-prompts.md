@@ -8,10 +8,40 @@ One cat, drawn once, used everywhere:
 
 - **Pose:** lying down in profile. The head is on the left, low, with the chin resting down. The body runs to the right. The tail curls around the feet and its tip comes back toward the head, so the whole shape reads as one calm closed loop.
 - **Style:** a clean outline and flat color. No inner details at all: no eyes, nose, mouth, whiskers, ear interiors, paw lines, or fur strokes. Color is the only variation inside the shape.
-- **Calico:** a smooth left-to-right color blend, built from the app's own palette so it matches the UI. Warm white (cream `#efe7d6`) at the head, amber orange (`#e2a23a`) through the middle, near-black (`#2a2d24`) at the rump and tail.
-- **Ginger:** the same pose and outline, with a solid orange tabby coat instead. Same cat family, different coat, so the two read as a pair.
+- **Calico:** three color regions from left to right, meeting along organic, wavy, feathered edges like fur growing across a boundary, not a smooth gradient. Pale warm sand (`#e3c898`) at the head, amber orange (`#e2a23a`) through the middle, near-black (`#2a2d24`) at the rump and tail. The amber, near-black, and outline cream (`#efe7d6`) are the app's own palette. The sand is a little darker than the outline on purpose, so the outline still reads against the head.
+- **Ginger:** the same pose and outline, with an orange tabby coat instead, using the same fur-edged transitions at gentler contrast. Same cat family, different coat, so the two read as a pair.
 
 The shape is deliberately simple. A silhouette that survives at 22 pixels is worth more than a detailed one.
+
+## What the first result taught us
+
+The first Calico attempt (a smooth cream, amber, and near-black gradient) got the pose, the outline, and the empty interior right. Two things to carry forward:
+
+- **Keep the head fill darker than the outline.** With cream fill and a cream outline, the head's edge dissolves. Use a warmer sand for the head, as above.
+- **Watch the tail band.** A tail that runs as a thick strip along the bottom can merge with the body at 24 pixels. Ask for a visible gap, or a slightly thinner tail.
+
+## Refining a result you already have
+
+Upload the image you want to keep to the same conversation and send this. It changes only the color transitions and leaves the shape alone.
+
+```text
+Keep the cat's silhouette, outline weight, pose, tile, and margins exactly as they
+are. Change only the coat.
+
+Replace the smooth gradient with three color regions in the same left-to-right
+order: pale warm sand #e3c898 over the head and front, amber orange #e2a23a across
+the middle, and near-black #2a2d24 over the rump and tail. Where one color meets
+the next, use an organic wavy edge with 3 to 5 soft undulations, feathered over a
+narrow soft blend (about 3 to 4 percent of the width), with a few small tapering
+tongues of the darker color reaching back into the lighter one in the direction the
+fur grows, from the head toward the tail, like fur growing across the boundary. The
+two boundaries are not parallel. The edges are soft, not hairy: no individual hair
+strokes and no texture lines.
+
+The head fill must be visibly darker than the cream outline so the outline stays
+clear against it. Give me 3 variations that differ only in how the two wavy
+boundaries are shaped.
+```
 
 ## How to get good results
 
@@ -55,15 +85,19 @@ about 22 percent. The cat is centered with 14 percent empty margin on every side
 
 Outline: cream #efe7d6, uniform width about 3 percent of the canvas.
 
-Fill: a calico coat as ONE smooth horizontal gradient from left to right. Warm white
-#efe7d6 at the head, blending through amber orange #e2a23a across the middle of the
-body, and ending in near-black #2a2d24 at the rump and the tail. The blend is soft
-and gradual with no hard patch edges.
+Fill: a calico coat of three color regions in this order from left to right: pale
+warm sand #e3c898 over the head and front, amber orange #e2a23a across the middle of
+the body, and near-black #2a2d24 over the rump and the tail. Where one color meets
+the next, do NOT use a smooth linear gradient and do NOT use a straight line. Each
+boundary is an organic wavy edge with 3 to 5 soft undulations, feathered over a
+narrow soft blend (about 3 to 4 percent of the width), with a few small tapering
+tongues of the darker color reaching back into the lighter one in the direction the
+fur grows, from the head toward the tail, like fur growing across the boundary. The
+two boundaries are not parallel to each other. The edges are soft, not hairy: no
+individual hair strokes and no texture lines.
 
 Give me 3 variations that differ only in how the tail loops around the feet.
 ```
-
-If you want a variation with real calico patches instead of a pure gradient, add: "Instead of one gradient, use 3 large soft-edged patches in the same order and colors, with generous blending where they meet."
 
 ## 2. Calico art with a removable background
 
@@ -77,9 +111,16 @@ nothing else on it, so it can be removed. The cat is centered with 12 percent ma
 
 Outline: cream #efe7d6, uniform width about 3 percent of the canvas.
 
-Fill: calico coat as one smooth horizontal gradient from left to right: warm white
-#efe7d6 at the head, amber orange #e2a23a in the middle, near-black #2a2d24 at the
-rump and tail. Soft gradual blend, no hard patch edges.
+Fill: a calico coat of three color regions in this order from left to right: pale
+warm sand #e3c898 over the head and front, amber orange #e2a23a across the middle of
+the body, and near-black #2a2d24 over the rump and the tail. Where one color meets
+the next, do NOT use a smooth linear gradient and do NOT use a straight line. Each
+boundary is an organic wavy edge with 3 to 5 soft undulations, feathered over a
+narrow soft blend (about 3 to 4 percent of the width), with a few small tapering
+tongues of the darker color reaching back into the lighter one in the direction the
+fur grows, from the head toward the tail, like fur growing across the boundary. The
+two boundaries are not parallel to each other. The edges are soft, not hairy: no
+individual hair strokes and no texture lines.
 ```
 
 ## 3. Tray icon (becomes `resources/tray.png`, shown at about 22 to 24 pixels)
@@ -114,10 +155,16 @@ about 22 percent. The cat is centered with 14 percent empty margin on every side
 
 Outline: cream #efe7d6, uniform width about 3 percent of the canvas.
 
-Fill: a solid ginger tabby coat as ONE smooth horizontal gradient from left to right.
-Light apricot #f2c98f at the head, amber orange #e2a23a through the middle, and a
-deeper burnt orange #b8741a at the rump and the tail. No stripes, no patches, no
-inner details. Soft gradual blend.
+Fill: a ginger tabby coat of three color regions in this order from left to right:
+light apricot #f2c98f over the head and front, amber orange #e2a23a across the middle
+of the body, and deeper burnt orange #b8741a over the rump and the tail. Where one
+color meets the next, do NOT use a smooth linear gradient and do NOT use a straight
+line. Each boundary is an organic wavy edge with 3 to 5 soft undulations, feathered
+over a narrow soft blend (about 3 to 4 percent of the width), with a few small
+tapering tongues of the darker color reaching back into the lighter one in the
+direction the fur grows, from the head toward the tail. The two boundaries are not
+parallel. The contrast between regions is gentler than on the calico. The edges are
+soft, not hairy: no individual hair strokes, no stripes, and no texture lines.
 
 The pose, outline, and proportions must match the calico icon exactly, so the two
 read as a pair.
@@ -140,9 +187,16 @@ pixels of empty space on every side.
 
 Outline: cream #efe7d6, uniform width about 3 percent of the canvas.
 
-Fill: ginger tabby coat as one smooth horizontal gradient from left to right: light
-apricot #f2c98f at the head, amber orange #e2a23a in the middle, burnt orange
-#b8741a at the rump and tail. Soft gradual blend, no inner details.
+Fill: a ginger tabby coat of three color regions in this order from left to right:
+light apricot #f2c98f over the head and front, amber orange #e2a23a across the middle
+of the body, and deeper burnt orange #b8741a over the rump and the tail. Where one
+color meets the next, do NOT use a smooth linear gradient and do NOT use a straight
+line. Each boundary is an organic wavy edge with 3 to 5 soft undulations, feathered
+over a narrow soft blend (about 3 to 4 percent of the width), with a few small
+tapering tongues of the darker color reaching back into the lighter one in the
+direction the fur grows, from the head toward the tail. The two boundaries are not
+parallel. The contrast between regions is gentler than on the calico. The edges are
+soft, not hairy: no individual hair strokes, no stripes, and no texture lines.
 ```
 
 ## Checks before you accept a result
