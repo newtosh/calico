@@ -8,8 +8,23 @@ export function autostartPath(): string {
   return join(base, "autostart", "calico.desktop");
 }
 
+// Desktop Entry spec, Exec key: these characters need the argument quoted.
+const RESERVED = /[\s"'\\<>~|&;$*?#()`]/;
+
+function execArg(arg: string): string {
+  // % starts a field code, so a literal one is doubled even when unquoted.
+  const text = arg.replace(/%/g, "%%");
+  if (!RESERVED.test(arg)) return text;
+  // Inside quotes " ` $ and \ take a backslash, and the file format then
+  // doubles every backslash.
+  const escaped = text.replace(/[\\"`$]/g, (c) =>
+    c === "\\" ? "\\\\\\\\" : `\\\\${c}`,
+  );
+  return `"${escaped}"`;
+}
+
 export function desktopEntry(exec: string): string {
-  const quoted = /\s/.test(exec) ? `"${exec}"` : exec;
+  const quoted = execArg(exec);
   return [
     "[Desktop Entry]",
     "Type=Application",
