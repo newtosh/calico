@@ -13,7 +13,11 @@ export function matchesFilter(source: string, filter: SourceFilter): boolean {
   return filter === "combined" || sourceOf(source) === filter;
 }
 
-/** The agent's own source, else its latest event's, else Grok Bot. */
+/**
+ * The agent's own source, else its latest event's, else Grok Bot. State saved
+ * before agents carried a source has none, and events are capped at 50, so an
+ * old Cursor agent can count as Grok Bot until its next poll sets it.
+ */
 export function agentSource(agent: DeskAgent, events: DeskEvent[]): string {
   if (agent.source) return agent.source;
   return events.find((e) => e.agent_id === agent.id)?.source || "grok-bot";

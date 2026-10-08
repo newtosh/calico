@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { CalicoInfo } from "../../../shared/ipc";
-import { configureApi, putConfig, putPanel } from "../lib/api";
+import { configureApi, fetchPanel, putConfig, putPanel } from "../lib/api";
 import { newWebhookToken } from "../lib/token";
 import { webhookUrl } from "../lib/webhook";
 import { ErrorNote } from "../shell/ErrorNote";
@@ -8,20 +8,31 @@ import { ErrorNote } from "../shell/ErrorNote";
 type Step = "idle" | "confirm" | "working";
 
 function Copy({ label, text }: { label: string; text: string }) {
-  const [copied, setCopied] = useState(false);
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+
+  useEffect(() => {
+    if (state === "idle") return;
+    const id = window.setTimeout(() => setState("idle"), 1500);
+    return () => window.clearTimeout(id);
+  }, [state]);
+
   return (
     <button
       type="button"
       className="btn"
       aria-label={label}
       onClick={() => {
-        void navigator.clipboard.writeText(text).then(() => {
-          setCopied(true);
-          window.setTimeout(() => setCopied(false), 1500);
-        });
+        navigator.clipboard
+          .writeText(text)
+          .then(() => setState("copied"))
+          .catch(() => setState("failed"));
       }}
     >
-      {copied ? "Copied" : "Copy"}
+      {state === "copied"
+        ? "Copied"
+        : state === "failed"
+          ? "Copy failed"
+          : "Copy"}
     </button>
   );
 }
@@ -61,18 +72,30 @@ export function AgentUpdatesSection({ info }: { info: CalicoInfo }) {
     // calico now requires the new token on every write, including the next call.
     configureApi(info.serverUrl, next);
     setToken(next);
-    setStep("idle");
-    // The panel reads the same token for its dismiss taps.
+    // The panel reads the same token for its dismiss taps. Keep its working URL.
     const lan = info.lanUrls[0];
-    if (!lan)
-      return setNote("Saved. No LAN address, so the panel was not updated.");
     try {
-      await putPanel({ url: lan, token: next });
-      setNote("Saved, and sent to the panel on its next poll.");
+      const current = await fetchPanel();
+      const patch = current.url
+        ? { token: next }
+        : lan
+          ? { url: lan, token: next }
+          : null;
+      if (!patch)
+        setNote(
+          "Saved. The panel has no URL and calico has no LAN address, so the panel was not updated.",
+        );
+      else {
+        // A stale info poll can put the old token back, so send the new one explicitly.
+        await putPanel(patch, next);
+        setNote("Saved, and sent to the panel on its next poll.");
+      }
     } catch (err) {
       setNote(
         `Saved, but the panel was not updated: ${err instanceof Error ? err.message : "failed"}. Push it from Panel push below.`,
       );
+    } finally {
+      setStep("idle");
     }
   }
 

@@ -152,4 +152,38 @@ describe("Dashboard sources", () => {
     expect(screen.getByText(/No Grok Bot agents yet/)).toBeTruthy();
     expect(screen.getByText(WEBHOOK)).toBeTruthy();
   });
+
+  it("does not flash an empty state before the first status arrives", async () => {
+    configureApi("http://127.0.0.1:1", "");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>(() => undefined)),
+    );
+    render(
+      <Dashboard
+        serverUrl="http://127.0.0.1:1"
+        webhookUrl={WEBHOOK}
+        onSetup={() => undefined}
+      />,
+    );
+    expect(screen.queryByText(/No agents yet/)).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Set up agent updates" }),
+    ).toBeNull();
+  });
+
+  it("does not claim a key is missing in the Cursor view", async () => {
+    serve([mixed[0] as Record<string, unknown>]);
+    render(
+      <Dashboard
+        serverUrl="http://127.0.0.1:1"
+        webhookUrl={WEBHOOK}
+        onSetup={() => undefined}
+      />,
+    );
+    await screen.findAllByText("Desky");
+    fireEvent.click(screen.getByRole("radio", { name: /^Cursor/ }));
+    expect(screen.queryByText(/Add a Cursor API key/)).toBeNull();
+    expect(screen.getByText(/No Cursor agents yet/)).toBeTruthy();
+  });
 });

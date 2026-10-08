@@ -89,7 +89,7 @@ export function Dashboard({
         }}
       />
       <h2 className="section-title">Agents</h2>
-      {agents.length === 0 ? (
+      {status === null ? null : agents.length === 0 ? (
         <EmptyAgents
           filter={filter}
           webhookUrl={webhookUrl}

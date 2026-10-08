@@ -85,10 +85,10 @@ export function configureApi(serverUrl: string, webhookToken: string): void {
   token = webhookToken;
 }
 
-function headers(json = true): Record<string, string> {
+function headers(json = true, bearer = token): Record<string, string> {
   return {
     ...(json ? { "Content-Type": "application/json" } : {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
   };
 }
 
@@ -259,12 +259,16 @@ export async function fetchPanel(): Promise<PanelPush> {
   return panelFrom(await (await call("/api/panel")).json());
 }
 
-export async function putPanel(patch: PanelPatch): Promise<PanelPush> {
+/** `bearer` overrides the shared token, for a call made right after the token changed. */
+export async function putPanel(
+  patch: PanelPatch,
+  bearer?: string,
+): Promise<PanelPush> {
   return panelFrom(
     await (
       await call("/api/panel", {
         method: "PUT",
-        headers: headers(),
+        headers: headers(true, bearer),
         body: JSON.stringify(patch),
       })
     ).json(),
