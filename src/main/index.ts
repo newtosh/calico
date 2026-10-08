@@ -6,6 +6,7 @@ import {
   loadConfig,
   saveConfig,
 } from "../server/config";
+import { version } from "../../package.json";
 import { startCursorPoll } from "../server/cursor-poll";
 import { createCompanionServer } from "../server/http";
 import {
@@ -138,6 +139,8 @@ async function start(): Promise<void> {
     webhookToken: config.webhook_token,
     serverError,
     autostart: autostartState(),
+    // app.getVersion() returns Electron's version when launched from the entry file.
+    version,
   });
 
   registerIpc({
