@@ -26,6 +26,8 @@ Planned: firmware flashing and a first-run wizard, a screen simulator built from
 | `tools/python-companion/` | The original Python companion and web UI, kept as the reference implementation the app's contract tests are captured from.                                     |
 | `docs/`                   | Protocol docs and design history.                                                                                                                              |
 
+The firmware, kit, and legacy companion arrived with their git history from the old grokbot-buddy repository. That history is not in `main` (the import was squash-merged), but it is kept at the tag [`grokbot-buddy-history`](https://github.com/newtosh/calico/tree/grokbot-buddy-history). Check it out to run `git log` or `git blame` on the original commits.
+
 ## Install
 
 Linux packages (AppImage, deb, pacman) are attached to each [release](https://github.com/newtosh/calico/releases). Each release lists SHA-256 checksums and a build provenance attestation:
