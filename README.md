@@ -27,6 +27,8 @@ gh attestation verify Calico-*.AppImage --repo newtosh/calico
 
 The tray icon needs a StatusNotifier host. KDE and most panels have one. GNOME needs the AppIndicator extension.
 
+On Ubuntu 24.04 and later, install the deb. It adds an AppArmor profile so Chromium's sandbox works. The AppImage still runs there, but its launcher turns the sandbox off because Ubuntu blocks the user namespaces it needs, and it needs `libfuse2t64` installed. CI launches both on stock Ubuntu 24.04.
+
 ## Develop
 
 Requires Node 22.12+ and pnpm 11.
