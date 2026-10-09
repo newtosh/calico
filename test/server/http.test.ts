@@ -311,6 +311,19 @@ describe("webhook activity", () => {
     expect(stats.webhook.refused.count).toBe(0);
   });
 
+  it("does not count a bad frame upload, which is not a refused update", async () => {
+    const { base, stats } = await start();
+    const frame = (type: string, body: string) =>
+      fetch(`${base}/api/frame`, {
+        method: "POST",
+        headers: { "Content-Type": type },
+        body,
+      });
+    expect((await frame("text/plain", "x")).status).toBe(415);
+    expect((await frame("image/bmp", "not a bitmap")).status).toBe(400);
+    expect(stats.webhook.refused.count).toBe(0);
+  });
+
   it("keeps request bodies and tokens out of what it remembers", async () => {
     const { base, stats } = await start({ webhook_token: "s3cret" });
     await post(base, '{"secret":"hunter2"}', { Authorization: "Bearer guess" });
