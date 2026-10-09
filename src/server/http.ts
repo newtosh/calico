@@ -9,6 +9,7 @@ import {
   panelStatusField,
   publicView,
 } from "./config";
+import type { RefusalReason, WebhookActivity } from "../shared/ipc";
 import { type CursorStatus, EMPTY_CURSOR_STATUS } from "./cursor-poll";
 import {
   COLOR_LIMIT,
@@ -42,6 +43,7 @@ export interface ServerDeps {
 
 export interface ServerStats {
   lastPanelPoll: number | null;
+  webhook: WebhookActivity;
 }
 
 /** JSON with non-ASCII escaped as \uXXXX, matching Python's json.dumps. The firmware decodes these. */
@@ -155,8 +157,29 @@ export function createCompanionServer(deps: ServerDeps): {
   server: http.Server;
   stats: ServerStats;
 } {
-  const stats: ServerStats = { lastPanelPoll: null };
+  const stats: ServerStats = {
+    lastPanelPoll: null,
+    webhook: { accepted: null, refused: { count: 0, last: null } },
+  };
   const { store } = deps;
+
+  const remote = (req: http.IncomingMessage): string => {
+    const address = req.socket.remoteAddress ?? "";
+    return address.startsWith("::ffff:") ? address.slice(7) : address;
+  };
+
+  function refuse(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+    status: number,
+    error: string,
+    reason: RefusalReason,
+  ): void {
+    const { refused } = stats.webhook;
+    refused.count += 1;
+    refused.last = { at: Date.now(), reason, from: remote(req) };
+    json(res, status, { error });
+  }
 
   function allowed(req: http.IncomingMessage): boolean {
     const expected = deps.getConfig().webhook_token;
@@ -178,7 +201,7 @@ export function createCompanionServer(deps: ServerDeps): {
     // the panel token or re-pointing the panel.
     const origin = req.headers.origin;
     if (origin !== undefined && !deps.allowedOrigins?.includes(origin))
-      return json(res, 403, { error: "forbidden origin" });
+      return refuse(req, res, 403, "forbidden origin", "forbidden_origin");
 
     if (method === "OPTIONS") return empty(res);
 
@@ -217,24 +240,26 @@ export function createCompanionServer(deps: ServerDeps): {
 
     if (method === "POST") {
       if (!POST_PATHS.has(path)) return json(res, 404, { error: "not found" });
-      if (!allowed(req)) return json(res, 401, { error: "unauthorized" });
+      if (!allowed(req))
+        return refuse(req, res, 401, "unauthorized", "unauthorized");
       if (path === "/api/dismiss") {
         const raw = await readBody(req, JSON_MAX);
-        if (raw === "too_big") return json(res, 413, { error: "too large" });
+        if (raw === "too_big")
+          return refuse(req, res, 413, "too large", "too_large");
         let agentId = "";
         if (raw.length) {
           let payload: unknown;
           try {
             payload = JSON.parse(raw.toString("utf8"));
           } catch {
-            return json(res, 400, { error: "bad json" });
+            return refuse(req, res, 400, "bad json", "bad_json");
           }
           if (
             !payload ||
             typeof payload !== "object" ||
             Array.isArray(payload)
           ) {
-            return json(res, 400, { error: "bad json" });
+            return refuse(req, res, 400, "bad json", "bad_json");
           }
           const id = (payload as Record<string, unknown>).agent_id;
           agentId = typeof id === "string" ? id : "";
@@ -258,20 +283,26 @@ export function createCompanionServer(deps: ServerDeps): {
         if (kind !== "image/bmp")
           return json(res, 415, { error: "bmp required" });
         const raw = await readBody(req, FRAME_MAX);
-        if (raw === "too_big") return json(res, 413, { error: "too large" });
+        if (raw === "too_big")
+          return refuse(req, res, 413, "too large", "too_large");
         const saved = store.saveFrame(raw);
-        if (saved === "too_big") return json(res, 413, { error: "too large" });
+        if (saved === "too_big")
+          return refuse(req, res, 413, "too large", "too_large");
         if (saved !== "ok") return json(res, 400, { error: "bad bmp" });
         return empty(res);
       }
       const payload = await readJson(req);
-      if (payload === "too_big") return json(res, 413, { error: "too large" });
-      if (payload === null) return json(res, 400, { error: "bad json" });
+      if (payload === "too_big")
+        return refuse(req, res, 413, "too large", "too_large");
+      if (payload === null)
+        return refuse(req, res, 400, "bad json", "bad_json");
       try {
-        return json(res, 201, store.applyEvent(eventIn(payload)));
+        const stored = store.applyEvent(eventIn(payload));
+        stats.webhook.accepted = { at: Date.now(), from: remote(req) };
+        return json(res, 201, stored);
       } catch (err) {
         if (err instanceof StoreError)
-          return json(res, 400, { error: "bad event" });
+          return refuse(req, res, 400, "bad event", "bad_event");
         throw err;
       }
     }
@@ -279,10 +310,13 @@ export function createCompanionServer(deps: ServerDeps): {
     if (method === "PUT") {
       if (path !== "/api/config" && path !== "/api/panel")
         return json(res, 404, { error: "not found" });
-      if (!allowed(req)) return json(res, 401, { error: "unauthorized" });
+      if (!allowed(req))
+        return refuse(req, res, 401, "unauthorized", "unauthorized");
       const payload = await readJson(req);
-      if (payload === "too_big") return json(res, 413, { error: "too large" });
-      if (payload === null) return json(res, 400, { error: "bad json" });
+      if (payload === "too_big")
+        return refuse(req, res, 413, "too large", "too_large");
+      if (payload === null)
+        return refuse(req, res, 400, "bad json", "bad_json");
       if (path === "/api/panel") {
         try {
           deps.setConfig(mergePanel(deps.getConfig(), payload));

@@ -9,6 +9,19 @@ export interface ServerErrorInfo {
   holders: string[];
 }
 
+/** Why the server turned a request away. A short code, never the request. */
+export type RefusalReason =
+  "unauthorized" | "forbidden_origin" | "bad_json" | "bad_event" | "too_large";
+
+/** What the server has seen since calico started. Epoch ms. In memory only. */
+export interface WebhookActivity {
+  accepted: { at: number; from: string } | null;
+  refused: {
+    count: number;
+    last: { at: number; reason: RefusalReason; from: string } | null;
+  };
+}
+
 export interface CalicoInfo {
   /** http://127.0.0.1:<port>, null if the server could not bind. */
   serverUrl: string | null;
@@ -20,6 +33,7 @@ export interface CalicoInfo {
   /** Epoch ms of the last non-loopback GET /api/status. */
   lastPanelPoll: number | null;
   webhookToken: string;
+  webhook: WebhookActivity;
   serverError: ServerErrorInfo | null;
   autostart: { enabled: boolean; available: boolean };
   /** Release version from package.json. */

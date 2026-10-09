@@ -7,6 +7,7 @@ import {
   saveFilter,
   type SourceFilter,
 } from "../lib/sources";
+import { staleUpdateText } from "../lib/stale";
 import { AgentRows } from "./AgentRows";
 import { EmptyAgents } from "./EmptyAgents";
 import { EventRows } from "./EventRows";
@@ -59,6 +60,8 @@ export function Dashboard({
       .length,
   };
   const running = agents.filter((a) => a.status !== "idle").length;
+  // Hidden while updates are fresh; not shown until the first status has loaded.
+  const stale = status === null ? "" : staleUpdateText(events);
   return (
     <div className="flex flex-col">
       {status ? (
@@ -74,6 +77,7 @@ export function Dashboard({
         <span className="text-muted">
           {running}/{agents.length} active
         </span>
+        {stale ? <span className="text-xs text-muted">{stale}</span> : null}
         {error ? (
           <span role="alert">
             <ErrorNote>{error}</ErrorNote>

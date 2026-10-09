@@ -187,3 +187,43 @@ describe("Dashboard sources", () => {
     expect(screen.getByText(/No Cursor agents yet/)).toBeTruthy();
   });
 });
+
+describe("Dashboard staleness", () => {
+  const render1 = () =>
+    render(
+      <Dashboard
+        serverUrl="http://127.0.0.1:1"
+        webhookUrl={WEBHOOK}
+        onSetup={() => undefined}
+      />,
+    );
+
+  it("says nothing while updates are fresh", async () => {
+    serve(mixed);
+    render1();
+    await screen.findAllByText("Desky");
+    expect(screen.queryByText(/Last update/)).toBeNull();
+    expect(screen.queryByText("No updates yet")).toBeNull();
+  });
+
+  it("says how long it has been when the newest update is old", async () => {
+    serve([
+      {
+        id: "g1",
+        title: "Desky",
+        status: "idle",
+        source: "grok-bot",
+        updated_at: ago(5 * 60),
+      },
+    ]);
+    render1();
+    expect(await screen.findByText("Last update 5 h ago")).toBeTruthy();
+  });
+
+  it("says no updates yet when the store is empty, but not before it loads", async () => {
+    serve([]);
+    render1();
+    expect(screen.queryByText("No updates yet")).toBeNull();
+    expect(await screen.findByText("No updates yet")).toBeTruthy();
+  });
+});

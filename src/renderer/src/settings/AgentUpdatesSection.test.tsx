@@ -17,6 +17,7 @@ const info: CalicoInfo = {
   lanUrls: ["http://192.168.4.30:8787"],
   lastPanelPoll: null,
   webhookToken: "",
+  webhook: { accepted: null, refused: { count: 0, last: null } },
   serverError: null,
   autostart: { enabled: false, available: true },
   version: "0.1.1",
@@ -188,5 +189,57 @@ describe("AgentUpdatesSection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate and apply" }));
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.queryByTestId("new-token")).toBeNull();
+  });
+
+  it("says when the last update arrived, and that none were refused", () => {
+    const at = Date.now() - 3 * 60_000;
+    render(
+      <AgentUpdatesSection
+        info={{
+          ...info,
+          webhook: {
+            accepted: { at, from: "192.168.4.30" },
+            refused: { count: 0, last: null },
+          },
+        }}
+      />,
+    );
+    expect(
+      screen.getByText("Last update received 3 min ago, from 192.168.4.30."),
+    ).toBeTruthy();
+    expect(screen.queryByText(/refused/)).toBeNull();
+  });
+
+  it("says plainly when nothing has arrived", () => {
+    render(<AgentUpdatesSection info={info} />);
+    expect(
+      screen.getByText("No updates received since calico started."),
+    ).toBeTruthy();
+  });
+
+  it("shows refused requests and why", () => {
+    render(
+      <AgentUpdatesSection
+        info={{
+          ...info,
+          webhook: {
+            accepted: null,
+            refused: {
+              count: 2,
+              last: {
+                at: Date.now() - 60_000,
+                reason: "unauthorized",
+                from: "10.0.10.9",
+              },
+            },
+          },
+        }}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "2 requests refused since calico started. Last: wrong or missing token, 1 min ago, from 10.0.10.9.",
+      ),
+    ).toBeTruthy();
   });
 });

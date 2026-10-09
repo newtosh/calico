@@ -146,6 +146,7 @@ async function start(): Promise<void> {
     lanUrls: bound ? lanUrls(bound) : [],
     lastPanelPoll: stats.lastPanelPoll,
     webhookToken: config.webhook_token,
+    webhook: stats.webhook,
     serverError,
     autostart: autostartState(),
     // app.getVersion() returns Electron's version when launched from the entry file.

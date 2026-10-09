@@ -237,3 +237,86 @@ describe("running timeout over HTTP", () => {
     expect((await put({ running_timeout_seconds: 5 })).status).toBe(400);
   });
 });
+
+describe("webhook activity", () => {
+  const post = (
+    base: string,
+    body: string,
+    headers: Record<string, string> = {},
+  ) =>
+    fetch(`${base}/api/webhook/grok-bot`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...headers },
+      body,
+    });
+
+  it("starts with nothing received and nothing refused", async () => {
+    const { stats } = await start();
+    expect(stats.webhook.accepted).toBeNull();
+    expect(stats.webhook.refused).toEqual({ count: 0, last: null });
+  });
+
+  it("remembers when and from where the last event was accepted", async () => {
+    const { base, stats } = await start();
+    const before = Date.now();
+    expect(
+      (await post(base, '{"type":"agent.launched","agent_id":"a1"}')).status,
+    ).toBe(201);
+    expect(stats.webhook.accepted?.from).toBe("127.0.0.1");
+    expect(stats.webhook.accepted?.at).toBeGreaterThanOrEqual(before);
+    expect(stats.webhook.refused.count).toBe(0);
+  });
+
+  it("counts a wrong or missing token as unauthorized", async () => {
+    const { base, stats } = await start({ webhook_token: "s3cret" });
+    expect((await post(base, "{}")).status).toBe(401);
+    expect(
+      (await post(base, "{}", { Authorization: "Bearer nope" })).status,
+    ).toBe(401);
+    expect(stats.webhook.refused.count).toBe(2);
+    expect(stats.webhook.refused.last).toMatchObject({
+      reason: "unauthorized",
+      from: "127.0.0.1",
+    });
+    expect(stats.webhook.accepted).toBeNull();
+  });
+
+  it("counts a bad body, a bad event, and an oversized body", async () => {
+    const { base, stats } = await start();
+    expect((await post(base, "not json")).status).toBe(400);
+    expect(stats.webhook.refused.last?.reason).toBe("bad_json");
+    expect((await post(base, '{"type":"nope","agent_id":"a1"}')).status).toBe(
+      400,
+    );
+    expect(stats.webhook.refused.last?.reason).toBe("bad_event");
+    expect((await post(base, "x".repeat(1024 * 1024 + 10))).status).toBe(413);
+    expect(stats.webhook.refused.last?.reason).toBe("too_large");
+    expect(stats.webhook.refused.count).toBe(3);
+  });
+
+  it("counts a request that carries a browser origin", async () => {
+    const { base, stats } = await start();
+    expect(
+      await withOrigin(`${base}/api/status`, "GET", "https://evil.example"),
+    ).toBe(403);
+    expect(stats.webhook.refused.count).toBe(1);
+    expect(stats.webhook.refused.last?.reason).toBe("forbidden_origin");
+  });
+
+  it("does not count ordinary reads or a missing path", async () => {
+    const { base, stats } = await start();
+    await fetch(`${base}/api/status`);
+    await fetch(`${base}/api/config`);
+    expect((await fetch(`${base}/api/nope`)).status).toBe(404);
+    expect(stats.webhook.refused.count).toBe(0);
+  });
+
+  it("keeps request bodies and tokens out of what it remembers", async () => {
+    const { base, stats } = await start({ webhook_token: "s3cret" });
+    await post(base, '{"secret":"hunter2"}', { Authorization: "Bearer guess" });
+    const kept = JSON.stringify(stats.webhook);
+    expect(kept).not.toContain("hunter2");
+    expect(kept).not.toContain("guess");
+    expect(kept).not.toContain("s3cret");
+  });
+});

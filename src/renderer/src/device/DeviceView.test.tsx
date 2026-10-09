@@ -40,6 +40,7 @@ const info: CalicoInfo = {
   lanUrls: ["http://192.168.1.2:8787"],
   lastPanelPoll: null,
   webhookToken: "",
+  webhook: { accepted: null, refused: { count: 0, last: null } },
   serverError: null,
   autostart: { enabled: false, available: false },
   version: "0.0.0-test",

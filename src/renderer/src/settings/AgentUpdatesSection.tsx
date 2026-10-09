@@ -3,6 +3,7 @@ import type { CalicoInfo } from "../../../shared/ipc";
 import { configureApi, fetchPanel, putConfig, putPanel } from "../lib/api";
 import { newWebhookToken } from "../lib/token";
 import { webhookUrl } from "../lib/webhook";
+import { activityLines } from "../lib/webhook-activity";
 import { ErrorNote } from "../shell/ErrorNote";
 
 type Step = "idle" | "confirm" | "working";
@@ -54,6 +55,7 @@ export function AgentUpdatesSection({ info }: { info: CalicoInfo }) {
         </p>
       </section>
     );
+  const lines = activityLines(info.webhook);
   const auth = info.webhookToken ? ' -H "Authorization: Bearer <token>"' : "";
   const example = `curl -X POST ${webhook} -H "Content-Type: application/json"${auth} -d '{"type":"agent.launched","agent_id":"desky","title":"Desky","message":"hello"}'`;
 
@@ -118,6 +120,10 @@ export function AgentUpdatesSection({ info }: { info: CalicoInfo }) {
           ? "A token is set. Posts must send it as a Bearer header."
           : "No token is set, so anyone on your network can post events."}
       </p>
+      <p className="max-w-2xl px-4 pt-2 text-muted">{lines.received}</p>
+      {lines.refused ? (
+        <p className="max-w-2xl px-4 pt-1 text-amber">{lines.refused}</p>
+      ) : null}
       <pre className="mx-4 mt-2 max-w-2xl overflow-x-auto border border-stroke bg-field px-3 py-2 font-mono text-xs whitespace-pre-wrap">
         {example}
       </pre>
