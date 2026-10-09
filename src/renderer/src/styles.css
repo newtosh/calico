@@ -69,6 +69,12 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   }
+  @media (forced-colors: active) {
+    .wordmark {
+      background: none;
+      -webkit-text-fill-color: currentColor;
+    }
+  }
   .row {
     @apply flex items-center gap-3 border-b border-stroke/30 px-4 py-2;
   }
