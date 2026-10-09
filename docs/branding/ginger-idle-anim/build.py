@@ -140,37 +140,126 @@ def smooth(p, k=3, passes=2):
 paths = [smooth(p) for p in paths]
 
 
-def bump(pt, cx, cy, sigma, dx, dy):
-    g = math.exp(-((pt[0] - cx) ** 2 + (pt[1] - cy) ** 2) / (2 * sigma**2))
-    return (pt[0] + dx * g, pt[1] + dy * g)
+def smoothstep(t):
+    t = max(0.0, min(1.0, t))
+    return t * t * (3 - 2 * t)
 
 
-def svg(moves):
-    body = []
-    for p in paths:
-        q = p
-        for m in moves:
-            q = [bump(pt, *m) for pt in q]
-        d = "M" + " L".join(f"{x + .5:.2f},{y + .5:.2f}" for x, y in q)
-        body.append(f'<path d="{d}"/>')
+outline = max(paths, key=len)
+tail_line = next(p for p in paths if abs(p[0][0] - 363) < 3 or abs(p[-1][0] - 363) < 3)
+if tail_line[0][0] < tail_line[-1][0]:
+    tail_line = tail_line[::-1]  # runs tip first
+
+EAR_BASE = (150.0, 157.0)  # the ear turns as one piece about the middle of its base
+TAIL_PIVOT, TAIL_TIP, TAIL_END = 285.0, 363.0, 405.0
+
+
+def ear(pt, deg):
+    """Turn the ear rigidly. Only the ear's own line moves, fading out toward the head."""
+    x, y = pt
+    if x > 200 or y > EAR_BASE[1]:
+        return pt
+    w = smoothstep((EAR_BASE[1] - y) / 40.0)
+    a = math.radians(deg) * w
+    dx, dy = x - EAR_BASE[0], y - EAR_BASE[1]
     return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{SIZE}" height="{SIZE}" '
-        f'viewBox="0 0 {SIZE} {SIZE}"><g fill="none" stroke="#fff" stroke-width="{W}" '
-        'stroke-linecap="round" stroke-linejoin="round">' + "".join(body) + "</g></svg>"
+        EAR_BASE[0] + dx * math.cos(a) - dy * math.sin(a),
+        EAR_BASE[1] + dx * math.sin(a) + dy * math.cos(a),
     )
 
 
-EAR = (118, 112, 16)  # tip of the ear, and how wide the move reaches
-TAIL = (360, 292, 14)  # free tip of the tail
-frames = {
-    "rest": [],
-    "ear1": [(*EAR, 2, 8)],
-    "ear2": [(*EAR, 4, 15)],
-    "tail1": [(*TAIL, 0, -7)],
-    "tail2": [(*TAIL, 0, -13)],
+def _nearest(path, target):
+    return min(range(len(path)), key=lambda i: (path[i][0] - target[0]) ** 2 + (path[i][1] - target[1]) ** 2)
+
+
+# The tail's lower edge is part of the outline, from under the pivot to where it
+# meets the rump. Weight its points by how far along that stretch they are.
+_i0, _i1 = sorted((_nearest(outline, (TAIL_PIVOT, 358)), _nearest(outline, (407, 289))))
+_run = [0.0]
+for _a, _b in zip(outline[_i0:_i1], outline[_i0 + 1 : _i1 + 1]):
+    _run.append(_run[-1] + math.dist(_a, _b))
+LOWER_EDGE = {
+    id(outline[_i0 + k]): _run[k] / _run[-1] for k in range(len(_run))
 }
-for name, moves in frames.items():
+
+
+def tail(pt, on_tail_line, sx, sy):
+    """Move the tail's free end away from the body, easing to nothing at the pivot."""
+    x, y = pt
+    if on_tail_line:
+        w = smoothstep((x - TAIL_PIVOT) / (TAIL_TIP - TAIL_PIVOT))
+    else:
+        s = LOWER_EDGE.get(id(pt))
+        if s is None:
+            return pt
+        w = 0.5 * math.sin(math.pi * s)
+    return (x + sx * w, y + sy * w)
+
+
+BELLY_DEPTH = 0.0  # how far inside the tail the body's underside sits at rest
+
+
+def belly():
+    """The body's underside. It sits inside the tail, so it stays hidden until the tail moves."""
+    start = TAIL_PIVOT - 30
+    run = [p for p in tail_line if start <= p[0] <= 332][::-1]  # start to the bend
+    behind = [
+        (x, y + BELLY_DEPTH * smoothstep((x - start) / 40.0)) for x, y in run
+    ]
+    p0, c, p2 = behind[-1], (378.0, 318.0), (404.0, 296.0)
+    for i in range(1, 13):
+        t = i / 12
+        behind.append(
+            tuple(
+                (1 - t) ** 2 * p0[k] + 2 * (1 - t) * t * c[k] + t * t * p2[k]
+                for k in (0, 1)
+            )
+        )
+    return behind
+
+
+def d_of(q):
+    return "M" + " L".join(f"{x + .5:.2f},{y + .5:.2f}" for x, y in q)
+
+
+def svg(ear_deg=0.0, shift=(0.0, 0.0)):
+    drawn = []
+    tail_q = outline_q = None
+    for p in paths:
+        q = p
+        if p is tail_line:
+            q = tail_q = [tail(pt, True, *shift) for pt in q]
+        elif p is outline:
+            outline_q = [tail(pt, False, *shift) for pt in q]
+            q = [ear(pt, ear_deg) for pt in outline_q]
+        drawn.append(q)
+    defs = under = ""
+    if False:  # the tail lifts toward the body, so nothing behind it is uncovered
+        # The tail is opaque: the underside only shows where the tail no longer covers it.
+        band = tail_q + outline_q[_i0:][::-1]
+        defs = (
+            '<defs><mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" '
+            f'width="{SIZE}" height="{SIZE}"><rect width="{SIZE}" height="{SIZE}" fill="#fff"/>'
+            f'<path d="{d_of(band)} Z" fill="#000" stroke="#000"/></mask></defs>'
+        )
+        under = f'<path mask="url(#m)" d="{d_of(belly())}"/>'
+    body = "".join(f'<path d="{d_of(q)}"/>' for q in drawn)
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{SIZE}" height="{SIZE}" '
+        f'viewBox="0 0 {SIZE} {SIZE}">{defs}<g fill="none" stroke="#fff" stroke-width="{W}" '
+        f'stroke-linecap="round" stroke-linejoin="round">{under}{body}</g></svg>'
+    )
+
+
+frames = {
+    "rest": {},
+    "ear1": {"ear_deg": -4.0},
+    "ear2": {"ear_deg": 6.0},
+    "tail1": {"shift": (0.0, -6.0)},
+    "tail2": {"shift": (1.0, -11.0)},
+}
+for name, kw in frames.items():
     f = out / f"{name}.svg"
-    f.write_text(svg(moves))
+    f.write_text(svg(**kw))
     subprocess.run(["rsvg-convert", "-o", str(out / f"{name}.png"), str(f)], check=True)
 print(len(paths), "paths", sum(len(p) for p in paths), "points")
