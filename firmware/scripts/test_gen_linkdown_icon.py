@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -47,8 +48,20 @@ def test_the_slash_runs_corner_to_corner_and_the_cat_is_cut_around_it():
     assert px[mid - w // 10, mid + w // 10] < 32
 
 
-def test_the_committed_file_is_what_the_generator_writes():
-    assert tool.MAIN.joinpath("linkdown_icon.c").read_text() == tool.source(icon)
+def committed_pixels() -> bytes:
+    text = tool.MAIN.joinpath("linkdown_icon.c").read_text()
+    body = text.split("s_linkdown_px[", 1)[1].split("= {", 1)[1].split("};", 1)[0]
+    return bytes(int(h, 16) for h in re.findall(r"0x([0-9a-f]{2})", body))
+
+
+def test_the_committed_file_matches_the_svg():
+    # Anti-aliasing differs a little between librsvg versions, so compare the pixels with a
+    # tolerance. A real change to the SVG moves whole strokes, far past this.
+    committed = committed_pixels()
+    fresh = icon.tobytes()
+    assert len(committed) == len(fresh) == icon.size[0] * icon.size[1]
+    off = sum(1 for a, b in zip(committed, fresh) if abs(a - b) > 48)
+    assert off <= len(fresh) * 0.002, f"{off} pixels differ; run gen_linkdown_icon.py"
 
 
 def test_the_line_is_about_ten_pixels_thick():

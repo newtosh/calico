@@ -1680,13 +1680,14 @@ static void linkdown_hide(void) {
 static void face_idle_stop(void) {
     sleep_stop();
     linkdown_hide();
+    s_face_mode = -1; /* the next sync repaints the band whatever it shows */
 }
 
 static void sync_sleep(const desk_view_t *view, int failures, int lamp) {
     int listed = view && view->known_count > 0;
-    int open = lv_obj_is_hidden(s_settings);
-    int asleep = open && desk_show_sleep(view, failures) && lamp != DESK_LAMP_RED;
-    int down = open && lamp == DESK_LAMP_RED && desk_roster_empty(view);
+    int closed = lv_obj_is_hidden(s_settings);
+    int asleep = closed && desk_show_sleep(view, failures) && lamp != DESK_LAMP_RED;
+    int down = closed && lamp == DESK_LAMP_RED && desk_roster_empty(view);
     int mode = asleep ? 1 : (down ? 2 : 0);
     if (asleep) {
         cover_agents(0);
@@ -1734,6 +1735,7 @@ static void build_linkdown(lv_obj_t *screen) {
     cat_piece(s_linkdown, &desk_icon_linkdown, (FACE_LINKDOWN_W - FACE_LINKDOWN_ICON) / 2, 0);
     s_linkdown_caption = lv_label_create(s_linkdown);
     lv_obj_set_width(s_linkdown_caption, FACE_LINKDOWN_W);
+    lv_label_set_long_mode(s_linkdown_caption, LV_LABEL_LONG_CLIP);
     lv_obj_set_pos(s_linkdown_caption, 0, FACE_LINKDOWN_ICON + FACE_LINKDOWN_GAP);
     lv_obj_set_style_text_font(s_linkdown_caption, &lv_font_montserrat_24, 0);
     lv_obj_set_style_text_align(s_linkdown_caption, LV_TEXT_ALIGN_CENTER, 0);
