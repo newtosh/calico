@@ -149,7 +149,12 @@ def smoothstep(t):
 
 
 outline = max(paths, key=len)
-tail_line = next(p for p in paths if abs(p[0][0] - 363) < 3 or abs(p[-1][0] - 363) < 3)
+# The numbers below are read off the 480 px mask (tail tip, pivot, ear base). If the
+# drawing is redrawn, re-measure them; the assert catches a tip that has moved.
+tail_line = next(
+    (p for p in paths if abs(p[0][0] - 363) < 3 or abs(p[-1][0] - 363) < 3), None
+)
+assert tail_line is not None, "no stroke ends at the tail tip (363, 289): re-measure"
 if tail_line[0][0] < tail_line[-1][0]:
     tail_line = tail_line[::-1]  # runs tip first
 
@@ -195,7 +200,7 @@ CURL_WEIGHT = [smoothstep(d / _back[-1]) for d in _back]
 CHIN_ON = [(142.0, 297.0), (165.0, 299.0), (192.0, 304.0)]  # hidden at rest
 
 
-def tail(pt, on_tail_line, sx, sy, w=None):
+def tail(pt, sx, sy, w=None):
     """Lift the tail's head-side end toward the body."""
     x, y = pt
     if w is None:
@@ -209,8 +214,8 @@ def d_of(q):
 
 def svg(ear_deg=0.0, shift=(0.0, 0.0)):
     drawn = []
-    tail_q = [tail(pt, True, *shift) for pt in tail_line]
-    curl_q = [tail(pt, False, *shift, w=w) for pt, w in zip(CURL, CURL_WEIGHT)]
+    tail_q = [tail(pt, *shift) for pt in tail_line]
+    curl_q = [tail(pt, *shift, w=w) for pt, w in zip(CURL, CURL_WEIGHT)]
     for p in paths:
         if p is tail_line:
             drawn.append(tail_q)
