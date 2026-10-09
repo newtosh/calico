@@ -224,7 +224,6 @@ static int s_face_mode = -1;
 static int s_list_cover;
 static lv_obj_t *s_bar;
 static lv_obj_t *s_lamp;
-static lv_obj_t *s_bar_title;
 static lv_obj_t *s_wifi_bars[3];
 static lv_obj_t *s_bt_icon;
 static int s_bt_state;
@@ -2309,6 +2308,7 @@ static void paint_bars(int bars) {
 
 static int present_status(const char *phase, int failures) {
     desk_glance_t glance;
+    const char *trouble;
     uint32_t color = LAMP_AMBER;
     if (!s_lamp) {
         return DESK_LAMP_AMBER;
@@ -2324,16 +2324,15 @@ static int present_status(const char *phase, int failures) {
     lv_obj_set_style_bg_color(s_lamp, lv_color_hex(color), 0);
     paint_bars(desk_wifi_bars(s_wifi_ip, s_wifi_rssi));
     s_last_lamp = glance.lamp;
-    {
-        const char *trouble = desk_footer_status(&glance);
-        copy_text(s_footer_status, sizeof(s_footer_status), trouble ? trouble : "");
-        paint_footer();
-    }
+    trouble = desk_footer_status(&glance);
+    copy_text(s_footer_status, sizeof(s_footer_status), trouble ? trouble : "");
+    paint_footer();
     return glance.lamp;
 }
 
 /* BT starts as the dim rune. ui_set_bt swaps in the dotted mark once the radio is up. */
 static void build_status_bar(lv_obj_t *screen) {
+    lv_obj_t *title;
     lv_obj_t *cluster;
     lv_obj_t *wifi;
     int i;
@@ -2364,15 +2363,15 @@ static void build_status_bar(lv_obj_t *screen) {
     lv_obj_set_style_shadow_width(s_lamp, 0, 0);
     lv_obj_clear_flag(s_lamp, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
-    s_bar_title = lv_label_create(bar);
-    lv_obj_set_width(s_bar_title, 168);
-    lv_label_set_long_mode(s_bar_title, LV_LABEL_LONG_DOT);
-    lv_obj_set_style_text_font(s_bar_title, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_color(s_bar_title, lv_color_hex(INK), 0);
-    lv_obj_set_style_text_align(s_bar_title, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(s_bar_title, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_clear_flag(s_bar_title, LV_OBJ_FLAG_CLICKABLE);
-    lv_label_set_text_static(s_bar_title, "ginger");
+    title = lv_label_create(bar);
+    lv_obj_set_width(title, 168);
+    lv_label_set_long_mode(title, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(INK), 0);
+    lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_clear_flag(title, LV_OBJ_FLAG_CLICKABLE);
+    lv_label_set_text_static(title, "ginger");
 
     cluster = lv_obj_create(bar);
     lv_obj_set_height(cluster, BAR_H);
