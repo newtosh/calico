@@ -49,6 +49,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm dist
       - run: sudo apt-get install -y ./dist/*.deb
+      - name: tray and window icons ship
+        # The main process loads these by path. They once shipped missing, so the installed
+        # app had no tray icon even though dev builds did.
+        run: |
+          for f in tray.png icon.png; do
+            test -s "/opt/Calico/resources/app.asar.unpacked/resources/$f"
+          done
       - name: deb launches
         run: xvfb-run -a scripts/package-smoke.sh calico
       - name: AppImage launches

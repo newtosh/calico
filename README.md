@@ -50,7 +50,7 @@ sudo pacman-key --lsign-key A9F9FE8D26B68DD421EE52C8C491E349184FA884
 The fingerprint line must read `A9F9 FE8D 26B6 8DD4 21EE  52C8 C491 E349 184F A884`. Stop if it does not. Then install or upgrade with:
 
 ```bash
-sudo pacman -U https://github.com/newtosh/calico/releases/download/app-v0.1.5/Calico-0.1.5-x64.pacman
+sudo pacman -U https://github.com/newtosh/calico/releases/download/app-v0.1.6/Calico-0.1.6-x64.pacman
 ```
 
 Replace the version in both places. pacman fetches the `.sig` next to the package by itself. Signatures start with 0.1.4. The key expires on 2029-10-08.

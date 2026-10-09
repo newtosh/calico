@@ -6,6 +6,12 @@ directories:
 files:
   - out/**
   - package.json
+  # The main process loads these by path (the tray image, the window icon), so they ship
+  # with the app. electron-vite's ?asset import points at resources/, not out/.
+  - resources/icon.png
+  - resources/tray.png
+asarUnpack:
+  - resources/**
 artifactName: ${productName}-${version}-${arch}.${ext}
 publish: null
 linux:
