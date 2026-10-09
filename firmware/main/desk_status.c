@@ -2,21 +2,6 @@
 
 #include <string.h>
 
-static void copy_text(char *dest, size_t dest_len, const char *src) {
-    size_t i;
-    if (dest_len == 0) {
-        return;
-    }
-    if (!src) {
-        dest[0] = '\0';
-        return;
-    }
-    for (i = 0; i + 1 < dest_len && src[i]; i++) {
-        dest[i] = src[i];
-    }
-    dest[i] = '\0';
-}
-
 static int same_text(const char *a, const char *b) {
     if (!a || !b) {
         return 0;
@@ -72,80 +57,15 @@ int desk_wifi_bars(int wifi_has_ip, int rssi) {
     return 1;
 }
 
-void desk_toast_init(desk_toast_t *toast) {
-    memset(toast, 0, sizeof(*toast));
-}
-
-int desk_toast_push(desk_toast_t *toast, const char *text) {
-    if (!text || !text[0]) {
-        return 0;
+const char *desk_footer_status(const desk_glance_t *glance) {
+    if (!glance || !glance->text) {
+        return NULL;
     }
-    if (toast->stage == DESK_TOAST_HIDDEN) {
-        copy_text(toast->showing, sizeof(toast->showing), text);
-        toast->waiting[0] = '\0';
-        toast->stage = DESK_TOAST_IN;
-        toast->elapsed_ms = 0;
-        return 1;
+    if (glance->lamp == DESK_LAMP_RED) {
+        return glance->text;
     }
-    if (same_text(toast->showing, text)) {
-        if (!toast->waiting[0]) {
-            return 0;
-        }
-        toast->waiting[0] = '\0';
-        return 1;
+    if (glance->lamp == DESK_LAMP_AMBER && same_text(glance->text, "reconnecting")) {
+        return glance->text;
     }
-    if (toast->waiting[0] && same_text(toast->waiting, text)) {
-        return 0;
-    }
-    copy_text(toast->waiting, sizeof(toast->waiting), text);
-    return 1;
-}
-
-int desk_toast_tick(desk_toast_t *toast, int dt_ms, int *opacity, int *shift_px) {
-    int opa = 0;
-    int shift = 0;
-    int elapsed;
-    if (dt_ms < 0) {
-        dt_ms = 0;
-    }
-    if (toast->stage == DESK_TOAST_HIDDEN) {
-        toast->elapsed_ms = 0;
-    } else {
-        toast->elapsed_ms += dt_ms;
-        if (toast->stage == DESK_TOAST_IN && toast->elapsed_ms >= DESK_TOAST_IN_MS) {
-            toast->stage = DESK_TOAST_HOLD;
-            toast->elapsed_ms = 0;
-        } else if (toast->stage == DESK_TOAST_HOLD && toast->elapsed_ms >= DESK_TOAST_HOLD_MS) {
-            if (toast->waiting[0]) {
-                copy_text(toast->showing, sizeof(toast->showing), toast->waiting);
-                toast->waiting[0] = '\0';
-                toast->stage = DESK_TOAST_IN;
-                toast->elapsed_ms = 0;
-            } else {
-                toast->stage = DESK_TOAST_OUT;
-                toast->elapsed_ms = 0;
-            }
-        } else if (toast->stage == DESK_TOAST_OUT && toast->elapsed_ms >= DESK_TOAST_OUT_MS) {
-            toast->stage = DESK_TOAST_HIDDEN;
-            toast->elapsed_ms = 0;
-            toast->showing[0] = '\0';
-        }
-    }
-    elapsed = toast->elapsed_ms;
-    if (toast->stage == DESK_TOAST_IN) {
-        opa = elapsed * 255 / DESK_TOAST_IN_MS;
-        shift = -12 + (12 * elapsed / DESK_TOAST_IN_MS);
-    } else if (toast->stage == DESK_TOAST_HOLD) {
-        opa = 255;
-    } else if (toast->stage == DESK_TOAST_OUT) {
-        opa = 255 - (elapsed * 255 / DESK_TOAST_OUT_MS);
-        shift = -(8 * elapsed / DESK_TOAST_OUT_MS);
-    }
-    if (opacity) {
-        *opacity = opa;
-    }
-    if (shift_px) {
-        *shift_px = shift;
-    }
-    return toast->stage;
+    return NULL;
 }
