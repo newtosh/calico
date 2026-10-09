@@ -30,7 +30,7 @@ export function Sidebar({
       className="flex w-48 shrink-0 flex-col border-r border-stroke/40 bg-surface"
     >
       <p className="flex items-center gap-2 px-4 pt-4 pb-3 text-base font-medium">
-        <img src={logo} alt="" className="h-7 w-auto" />
+        <img src={logo} alt="" className="h-6 w-auto" />
         Calico
       </p>
       <ul>
