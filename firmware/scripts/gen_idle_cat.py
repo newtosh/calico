@@ -29,6 +29,8 @@ POSES = {
 }
 CANVAS_PAD = 4
 PATCH_PAD = 2
+# The frames are drawn on a 480 px canvas at full size. The panel shows the cat smaller.
+SCALE = 0.7
 
 
 @dataclass(frozen=True)
@@ -40,7 +42,9 @@ class Box:
 
 
 def load_alpha(name: str) -> Image.Image:
-    return Image.open(FRAMES / f"{name}.png").convert("RGBA").split()[-1]
+    alpha = Image.open(FRAMES / f"{name}.png").convert("RGBA").split()[-1]
+    side = round(alpha.width * SCALE)
+    return alpha.resize((side, side), Image.LANCZOS)
 
 
 def even_box(x0: int, y0: int, x1: int, y1: int) -> Box:

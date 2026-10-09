@@ -73,3 +73,12 @@ def test_the_committed_files_are_what_the_generator_writes():
     # Regenerate after changing a frame: python3 firmware/scripts/gen_idle_cat.py
     assert tool.MAIN.joinpath("idle_cat_geom.h").read_text() == tool.geom_header(cat)
     assert tool.MAIN.joinpath("idle_cat.c").read_text() == tool.source(cat)
+
+
+def test_the_cat_is_seventy_percent_of_the_drawing():
+    names = sorted({n for poses in tool.POSES.values() for n in poses})
+    full = [Image.open(tool.FRAMES / f"{n}.png").convert("RGBA").split()[-1] for n in names]
+    x0, y0, x1, y1 = tool.union_bbox(full)
+    shown = tool.union_bbox([tool.crop(tool.load_alpha(n), cat.canvas) for n in names])
+    assert 0.68 <= (shown[2] - shown[0]) / (x1 - x0) <= 0.72
+    assert 0.68 <= (shown[3] - shown[1]) / (y1 - y0) <= 0.72
