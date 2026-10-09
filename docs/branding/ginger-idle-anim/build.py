@@ -1,21 +1,24 @@
-"""Trace the idle cat's centerlines, move points, and re-stroke at constant width.
+"""Build the idle cat's frames from the approved drawing.
 
-Reads sk.png (1px skeleton of the approved drawing), writes frames/*.svg and the
-rendered white-on-transparent masks, so the stroke never thins or bunches.
+Traces the centerlines of ../ginger-idle-cat-mask-480.png, moves the ear and the
+tail's head-side end as paths, and strokes every frame at one width, so the line
+never thins or bunches. The chin line is its own stroke: it stays fixed and runs on
+behind the tail, which hides it with a mask.
+
+Usage: python3 -I build.py   (needs rsvg-convert; writes the frames beside this file)
 """
 import math
 import subprocess
-import sys
 from pathlib import Path
 
 from PIL import Image
 
 W = 9.0
 SIZE = 480
-out = Path(sys.argv[1])
+out = Path(__file__).resolve().parent
 out.mkdir(parents=True, exist_ok=True)
 
-im = Image.open("m.png").convert("L")
+im = Image.open(out / "../ginger-idle-cat-mask-480.png").split()[-1]
 px = im.load()
 pts = {(x, y) for y in range(SIZE) for x in range(SIZE) if px[x, y] > 128}
 
@@ -198,25 +201,6 @@ def tail(pt, on_tail_line, sx, sy, w=None):
     if w is None:
         w = smoothstep((TAIL_PIVOT - x) / (TAIL_PIVOT - 160.0))
     return (x + sx * w, y + sy * w)
-
-
-def belly():
-    """The body's underside. It sits inside the tail, so it stays hidden until the tail moves."""
-    start = TAIL_PIVOT - 30
-    run = [p for p in tail_line if start <= p[0] <= 332][::-1]  # start to the bend
-    behind = [
-        (x, y + BELLY_DEPTH * smoothstep((x - start) / 40.0)) for x, y in run
-    ]
-    p0, c, p2 = behind[-1], (378.0, 318.0), (404.0, 296.0)
-    for i in range(1, 13):
-        t = i / 12
-        behind.append(
-            tuple(
-                (1 - t) ** 2 * p0[k] + 2 * (1 - t) * t * c[k] + t * t * p2[k]
-                for k in (0, 1)
-            )
-        )
-    return behind
 
 
 def d_of(q):
