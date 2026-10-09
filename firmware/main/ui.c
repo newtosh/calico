@@ -136,6 +136,7 @@ _Static_assert(SHEET_INNER_NEAR_OPA > SHEET_INNER_FAR_OPA, "inner highlight is s
 _Static_assert(SHEET_MARK == MARK_PX * 5, "sheet mark is five times the list mark");
 _Static_assert(SHEET_OPA >= 248, "sheet stays opaque enough to hide roster type");
 _Static_assert((int)MESSAGE_Y == (int)FACE_MESSAGE_Y, "sleep origin");
+_Static_assert(DESK_LINKDOWN_PX == FACE_LINKDOWN_ICON, "the link-down icon fills the space the layout reserves");
 _Static_assert((int)CC_DOCK_TOP == (int)DOCK_TOP, "control center dock line");
 _Static_assert((int)CC_OPEN_Y + (int)CC_PANEL_H == (int)SCREEN_PX, "control center meets the bottom edge");
 _Static_assert((int)CC_GRAB == (int)EDGE_PX + (int)BAR_H, "grab is the status strip");
@@ -215,7 +216,11 @@ static lv_obj_t *s_cat_tail;
 static lv_timer_t *s_cat_timer;
 static idle_cat_t s_cat;
 static int s_asleep;
-static int s_face_asleep = -1;
+static lv_obj_t *s_linkdown;
+static lv_obj_t *s_linkdown_caption;
+static const char *s_linkdown_text;
+/* What the face band shows: 0 the list, 1 the sleeping cat, 2 the link-down screen. */
+static int s_face_mode = -1;
 static int s_list_cover;
 static lv_obj_t *s_bar;
 static lv_obj_t *s_lamp;
@@ -1648,9 +1653,41 @@ static void cover_agents(int on) {
     lv_obj_set_style_bg_opa(s_agent_box, on ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
 }
 
+/* Link down with nothing listed: a cat-off icon and one line saying why. The caption
+ * is set only when the reason changes, so a repeat apply does not redraw it. */
+static void linkdown_show(void) {
+    face_box_t box;
+    const char *text = s_wifi_ip ? "Can't reach Calico" : "No Wi-Fi";
+    if (lv_obj_is_hidden(s_linkdown)) {
+        face_linkdown_widget(&box);
+        lv_obj_set_size(s_linkdown, box.w, box.h);
+        lv_obj_set_pos(s_linkdown, box.x, box.y);
+        lv_obj_set_hidden(s_linkdown, false);
+    }
+    if (s_linkdown_text != text) {
+        s_linkdown_text = text;
+        lv_label_set_text_static(s_linkdown_caption, text);
+    }
+}
+
+static void linkdown_hide(void) {
+    if (s_linkdown && !lv_obj_is_hidden(s_linkdown)) {
+        lv_obj_set_hidden(s_linkdown, true);
+    }
+}
+
+/* Whatever the idle face is showing goes away: settings or a note takes the screen. */
+static void face_idle_stop(void) {
+    sleep_stop();
+    linkdown_hide();
+}
+
 static void sync_sleep(const desk_view_t *view, int failures, int lamp) {
     int listed = view && view->known_count > 0;
-    int asleep = lv_obj_is_hidden(s_settings) && desk_show_sleep(view, failures) && lamp != DESK_LAMP_RED;
+    int open = lv_obj_is_hidden(s_settings);
+    int asleep = open && desk_show_sleep(view, failures) && lamp != DESK_LAMP_RED;
+    int down = open && lamp == DESK_LAMP_RED && desk_roster_empty(view);
+    int mode = asleep ? 1 : (down ? 2 : 0);
     if (asleep) {
         cover_agents(0);
         sleep_show();
@@ -1658,8 +1695,13 @@ static void sync_sleep(const desk_view_t *view, int failures, int lamp) {
         sleep_stop();
         cover_agents(listed);
     }
-    if (s_face_asleep != asleep) {
-        s_face_asleep = asleep;
+    if (down) {
+        linkdown_show();
+    } else {
+        linkdown_hide();
+    }
+    if (s_face_mode != mode) {
+        s_face_mode = mode;
         paint_face_band();
     }
 }
@@ -1683,6 +1725,21 @@ static void build_sleep(lv_obj_t *screen) {
     s_cat_ear = cat_piece(s_sleep, &idle_cat_ear_img[0], IDLE_CAT_EAR_X, IDLE_CAT_EAR_Y);
     s_cat_tail = cat_piece(s_sleep, &idle_cat_tail_img[0], IDLE_CAT_TAIL_X, IDLE_CAT_TAIL_Y);
     lv_obj_set_hidden(s_sleep, true);
+}
+
+static void build_linkdown(lv_obj_t *screen) {
+    s_linkdown = lv_obj_create(screen);
+    flatten(s_linkdown);
+    lv_obj_clear_flag(s_linkdown, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    cat_piece(s_linkdown, &desk_icon_linkdown, (FACE_LINKDOWN_W - FACE_LINKDOWN_ICON) / 2, 0);
+    s_linkdown_caption = lv_label_create(s_linkdown);
+    lv_obj_set_width(s_linkdown_caption, FACE_LINKDOWN_W);
+    lv_obj_set_pos(s_linkdown_caption, 0, FACE_LINKDOWN_ICON + FACE_LINKDOWN_GAP);
+    lv_obj_set_style_text_font(s_linkdown_caption, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_align(s_linkdown_caption, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(s_linkdown_caption, lv_color_hex(INK_DIM), 0);
+    lv_obj_clear_flag(s_linkdown_caption, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_hidden(s_linkdown, true);
 }
 
 static void paint_tile(lv_obj_t *tile, int on) {
@@ -2515,6 +2572,7 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     lv_obj_align(s_message, LV_ALIGN_TOP_MID, 0, MESSAGE_Y);
     /* Sleeper under the list. */
     build_sleep(screen);
+    build_linkdown(screen);
     build_agent_rows(screen);
     dock = lv_obj_create(screen);
     lv_obj_set_size(dock, SCREEN_PX, BTN_H + EDGE_PX + DOCK_INSET + DOCK_GAP);
@@ -2827,7 +2885,7 @@ int ui_settings_is_open(void) {
 
 void ui_open_settings(void) {
     cc_close_now();
-    sleep_stop();
+    face_idle_stop();
     lv_obj_set_hidden(s_settings, false);
     lv_obj_move_foreground(s_settings);
     if (!lv_obj_is_hidden(s_keyboard)) {
@@ -2876,7 +2934,7 @@ void ui_set_settings_status(const char *text) {
 }
 
 void ui_show_panel_note(const char *phase, const char *message) {
-    sleep_stop();
+    face_idle_stop();
     if (!s_message) {
         return;
     }

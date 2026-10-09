@@ -16,7 +16,13 @@ enum {
     /* Dock chrome above the buttons, so the list band does not sit on their tops. */
     FACE_DOCK_GAP = 16,
     FACE_DOCK_TOP = FACE_SCREEN - FACE_EDGE - FACE_DOCK_INSET - FACE_DOCK_GAP - FACE_BTN_H,
-    FACE_MESSAGE_Y = 74
+    FACE_MESSAGE_Y = 74,
+    /* The link-down screen: a cat-off icon, a gap, and one line of caption. */
+    FACE_LINKDOWN_ICON = 168,
+    FACE_LINKDOWN_W = 280,
+    FACE_LINKDOWN_GAP = 20,
+    /* lv_font_montserrat_24 line_height is 27. */
+    FACE_LINKDOWN_CAPTION_H = 30
 };
 
 typedef struct {
@@ -40,3 +46,6 @@ void face_cover_band(face_rect_t *out);
 /* Where the sleeping cat sits: centered across the panel and between the message
  * line and the dock. Starts on even pixels, and so do its patch boxes. */
 void face_sleep_widget(face_box_t *out);
+
+/* Where the link-down screen sits: the same centering as the cat, even pixels. */
+void face_linkdown_widget(face_box_t *out);

@@ -82,6 +82,8 @@ int main(void) {
     check(desk_quiet_idle(NULL, 0) == 0, "null view is not quiet");
     check(desk_show_sleep(NULL, 0) == 0, "null view hides sleep");
     check(desk_view_from_json(NULL, &view) == -1, "null json");
+    check(desk_roster_empty(&view) == 1, "empty desk has an empty roster");
+    check(desk_roster_empty(NULL) == 1, "no data yet counts as empty");
 
     const char *napping =
         "{\"phase\":\"idle\",\"needs_you\":false,\"agents\":[{\"id\":\"a1\",\"status\":\"idle\"}]}";
@@ -89,6 +91,7 @@ int main(void) {
     check(view.running_count == 0 && view.agent_count == 1 && view.known_count == 1, "idle agent");
     check(desk_quiet_idle(&view, 0) == 1, "idle agent still quiet");
     check(desk_show_sleep(&view, 0) == 0, "idle agent hides sleep");
+    check(desk_roster_empty(&view) == 0, "a known agent is not an empty roster");
     desk_count_text(&view, label, sizeof(label));
     check(strcmp(label, "idle") == 0, "idle agent count stays idle");
 

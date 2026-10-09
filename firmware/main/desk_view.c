@@ -1020,6 +1020,10 @@ int desk_show_sleep(const desk_view_t *view, int consecutive_failures) {
     return desk_quiet_idle(view, consecutive_failures) && view->known_count == 0;
 }
 
+int desk_roster_empty(const desk_view_t *view) {
+    return !view || (view->known_count == 0 && view->running_count == 0 && !view->needs_you);
+}
+
 int desk_poll_ms(const desk_view_t *view, int consecutive_failures, int link_ok) {
     if (link_ok && consecutive_failures == 0 && desk_quiet_idle(view, consecutive_failures)) {
         return 10000;

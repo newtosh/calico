@@ -19,6 +19,7 @@ static int inside_band(const face_rect_t *band, const face_box_t *box) {
 int main(void) {
     face_rect_t band;
     face_box_t cat;
+    face_box_t down;
     int width;
     int height;
     face_cover_band(&band);
@@ -51,6 +52,16 @@ int main(void) {
           "the ear patch starts on an even panel pixel");
     check(((cat.x + IDLE_CAT_TAIL_X) % 2) == 0 && ((cat.y + IDLE_CAT_TAIL_Y) % 2) == 0,
           "the tail patch starts on an even panel pixel");
+    face_linkdown_widget(&down);
+    check(inside_band(&band, &down), "the link-down screen is inside the band");
+    check(down.w == FACE_LINKDOWN_W && down.h == FACE_LINKDOWN_ICON + FACE_LINKDOWN_GAP + FACE_LINKDOWN_CAPTION_H,
+          "the widget holds the icon, a gap, and one caption line");
+    check((down.x % 2) == 0 && (down.y % 2) == 0 && (down.w % 2) == 0 && (down.h % 2) == 0,
+          "the link-down box is even in position and size");
+    check(down.x + down.w / 2 == FACE_SCREEN / 2, "the link-down screen is centered across the panel");
+    check(down.y >= FACE_MESSAGE_Y + 28 && down.y + down.h <= FACE_DOCK_TOP,
+          "the link-down screen sits between the message line and the dock");
+    check(FACE_LINKDOWN_ICON <= FACE_LINKDOWN_W, "the icon fits the widget width");
     if (g_failed) {
         return 1;
     }
