@@ -31,7 +31,7 @@ export function Sidebar({
     >
       <p className="flex items-center gap-2 px-4 pt-4 pb-3 text-base font-medium">
         <img src={logo} alt="" className="h-6 w-auto" />
-        Calico
+        <span className="wordmark">Calico</span>
       </p>
       <ul>
         {ITEMS.map(({ view: v, label, Icon }) => (
