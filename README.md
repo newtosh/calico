@@ -37,6 +37,23 @@ sha256sum -c SHA256SUMS
 gh attestation verify Calico-*.AppImage --repo newtosh/calico
 ```
 
+### Arch and derivatives, straight from the URL
+
+Each release also carries a detached signature, so pacman can install the package without a separate download. Trust the release key once:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/newtosh/calico/main/packaging/calico-release.asc | sudo pacman-key --add -
+sudo pacman-key --lsign-key A9F9FE8D26B68DD421EE52C8C491E349184FA884
+```
+
+Check that the fingerprint pacman-key prints is `A9F9 FE8D 26B6 8DD4 21EE  52C8 C491 E349 184F A884`. Then install or upgrade with:
+
+```bash
+sudo pacman -U https://github.com/newtosh/calico/releases/download/app-v0.1.4/Calico-0.1.4-x64.pacman
+```
+
+Replace the version in both places. pacman fetches the `.sig` next to the package by itself. Signatures start with 0.1.4. The key expires on 2029-10-08.
+
 The tray icon needs a StatusNotifier host. KDE and most panels have one. GNOME needs the AppIndicator extension.
 
 On Ubuntu 24.04 and later, install the deb. It adds an AppArmor profile so Chromium's sandbox works. The AppImage still runs there, but its launcher turns the sandbox off because Ubuntu blocks the user namespaces it needs, and it needs `libfuse2t64` installed. CI launches both on stock Ubuntu 24.04.

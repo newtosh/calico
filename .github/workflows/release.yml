@@ -34,6 +34,22 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm dist
+      - name: Sign the pacman package
+        # `pacman -U <url>` needs a detached signature from a key in the user's
+        # keyring (RemoteFileSigLevel defaults to Required). Fail loudly rather than
+        # ship a pacman package nobody can install from a URL.
+        env:
+          RELEASE_GPG_KEY: ${{ secrets.RELEASE_GPG_KEY }}
+        run: |
+          test -n "$RELEASE_GPG_KEY" || { echo "::error::RELEASE_GPG_KEY is not set"; exit 1; }
+          export GNUPGHOME="$(mktemp -d)"
+          printf '%s\n' "$RELEASE_GPG_KEY" | gpg --batch --quiet --import
+          for f in dist/*.pacman; do gpg --batch --detach-sign --output "$f.sig" "$f"; done
+          # Check the signature against only the public key committed in the repo,
+          # which is what users trust, so a stale or wrong secret fails here.
+          export GNUPGHOME="$(mktemp -d)"
+          gpg --batch --quiet --import packaging/calico-release.asc
+          for f in dist/*.pacman; do gpg --batch --verify "$f.sig" "$f"; done
       - run: cd dist && sha256sum *.AppImage *.deb *.pacman > SHA256SUMS
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
@@ -41,6 +57,6 @@ jobs:
             dist/*.AppImage
             dist/*.deb
             dist/*.pacman
-      - run: gh release create "$GITHUB_REF_NAME" --draft --generate-notes --verify-tag dist/*.AppImage dist/*.deb dist/*.pacman dist/SHA256SUMS
+      - run: gh release create "$GITHUB_REF_NAME" --draft --generate-notes --verify-tag dist/*.AppImage dist/*.deb dist/*.pacman dist/*.pacman.sig dist/SHA256SUMS
         env:
           GH_TOKEN: ${{ github.token }}
