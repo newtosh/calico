@@ -49,3 +49,14 @@ def test_the_slash_runs_corner_to_corner_and_the_cat_is_cut_around_it():
 
 def test_the_committed_file_is_what_the_generator_writes():
     assert tool.MAIN.joinpath("linkdown_icon.c").read_text() == tool.source(icon)
+
+
+def test_the_line_is_about_ten_pixels_thick():
+    # Row 40% down crosses the cat's left cheek, away from the slash and the eyes.
+    w, h = icon.size
+    row = [icon.getpixel((x, int(h * 0.4))) > 128 for x in range(w)]
+    start = row.index(True)
+    run = 0
+    while row[start + run]:
+        run += 1
+    assert 8 <= run <= 12, f"the cheek line is {run} px"

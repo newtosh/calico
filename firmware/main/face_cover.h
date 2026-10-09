@@ -18,7 +18,7 @@ enum {
     FACE_DOCK_TOP = FACE_SCREEN - FACE_EDGE - FACE_DOCK_INSET - FACE_DOCK_GAP - FACE_BTN_H,
     FACE_MESSAGE_Y = 74,
     /* The link-down screen: a cat-off icon, a gap, and one line of caption. */
-    FACE_LINKDOWN_ICON = 168,
+    FACE_LINKDOWN_ICON = 152,
     FACE_LINKDOWN_W = 280,
     FACE_LINKDOWN_GAP = 20,
     /* lv_font_montserrat_24 line_height is 27. */

@@ -10,8 +10,8 @@
 /* Heroicons arrow-path, stroke 1.5 in a 24 viewBox. */
 #define DESK_ROT_PX 24
 
-/* Lucide cat with the wifi-off slash, 168px alpha. Shown when the link is down and nothing is listed. */
-#define DESK_LINKDOWN_PX 168
+/* Lucide cat with the wifi-off slash, 152px alpha. Shown when the link is down and nothing is listed. */
+#define DESK_LINKDOWN_PX 152
 
 extern const lv_image_dsc_t desk_icon_mic;
 extern const lv_image_dsc_t desk_icon_settings;
