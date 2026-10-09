@@ -24,6 +24,7 @@ import { initAutostartOnce } from "./autostart";
 import { wireDevicePickers } from "./devices";
 import { autostartState, registerIpc } from "./ipc";
 import { createTray, type TrayActions, updateTray } from "./tray";
+import appIcon from "../../resources/icon.png?asset";
 
 if (process.env.CALICO_USER_DATA)
   app.setPath("userData", process.env.CALICO_USER_DATA);
@@ -51,6 +52,7 @@ function createWindow(): BrowserWindow {
     autoHideMenuBar: true,
     backgroundColor: "#0c0e09",
     title: "Calico",
+    icon: appIcon,
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
       contextIsolation: true,
