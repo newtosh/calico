@@ -52,8 +52,7 @@
       #lamp.red {
         background: #c4544a;
       }
-      #brand,
-      #toast {
+      #brand {
         position: absolute;
         left: 50%;
         top: 0;
@@ -67,33 +66,6 @@
         text-align: center;
         pointer-events: none;
         transform: translateX(-50%);
-      }
-      #toast {
-        opacity: 0;
-      }
-      #toast.show {
-        animation: toast 3.2s ease forwards;
-      }
-      #bar:has(#toast.show) #brand {
-        visibility: hidden;
-      }
-      @keyframes toast {
-        0% {
-          opacity: 0;
-          transform: translate(-50%, -10px);
-        }
-        8% {
-          opacity: 1;
-          transform: translate(-50%, 0);
-        }
-        82% {
-          opacity: 1;
-          transform: translate(-50%, 0);
-        }
-        100% {
-          opacity: 0;
-          transform: translate(-50%, -6px);
-        }
       }
       #glance {
         display: flex;
@@ -528,6 +500,12 @@
       #count.idle {
         color: #a39b88;
       }
+      #count.amber {
+        color: #e2a23a;
+      }
+      #count.red {
+        color: #c4544a;
+      }
       #newjump {
         position: absolute;
         top: 86px;
@@ -956,7 +934,6 @@
       <div id="bar">
         <i id="lamp" class="amber"></i>
         <div id="brand">ginger</div>
-        <div id="toast"></div>
         <div id="glance">
           <span id="wifi" data-bars="0" title="Wi-Fi"><i></i><i></i><i></i></span>
           <span id="bt" data-state="adv" title="Bluetooth advertising">
@@ -1074,7 +1051,6 @@
       const count = document.getElementById("count");
       const agents = document.getElementById("agents");
       const lamp = document.getElementById("lamp");
-      const toast = document.getElementById("toast");
       const wifi = document.getElementById("wifi");
       const rot = document.getElementById("rot");
       const ccScrim = document.getElementById("cc-scrim");
@@ -1082,7 +1058,20 @@
       let staOn = true;
       const neutral = "#a39b88";
       let failures = 0;
-      let statusSeen = "IDLE";
+      /* The footer says what is wrong with the link, else the count (firmware paint_footer). */
+      let countLine = "idle";
+      let countRunning = false;
+      let linkTrouble = "";
+      let linkLamp = "green";
+      function paintFooter() {
+        if (linkTrouble) {
+          count.textContent = linkTrouble;
+          count.className = linkLamp === "red" ? "red" : "amber";
+          return;
+        }
+        count.textContent = countLine;
+        count.className = countRunning ? "" : "idle";
+      }
       let face = "IDLE";
       let drag = null;
       let marquee = { id: "", text: "", until: 0, ready: false };
@@ -1160,24 +1149,15 @@
         return phaseLabel || "IDLE";
       }
 
-      function showToast(text) {
-        if (!text || text === statusSeen) return;
-        statusSeen = text;
-        toast.textContent = text;
-        toast.classList.remove("show");
-        void toast.offsetWidth;
-        toast.classList.add("show");
-      }
-
-      toast.addEventListener("animationend", () => toast.classList.remove("show"));
-
       function paintLink(phaseLabel, fail) {
         const text = statusText(phaseLabel, fail);
         const down = text === "link down" || text === "NO NETWORK" || text === "SCAN FAILED";
         const degraded = !down && (fail > 0 || text === "reconnecting");
         lamp.className = down ? "red" : degraded ? "amber" : "green";
         wifi.dataset.bars = !staOn || down ? "0" : degraded ? "1" : "3";
-        showToast(text);
+        linkLamp = lamp.className;
+        linkTrouble = down || text === "reconnecting" ? text : "";
+        paintFooter();
       }
 
       function markColor(value) {
@@ -1407,8 +1387,9 @@
           const running = list.filter((agent) => agent.status === "running").length;
           const quiet = label(status) === "IDLE" && running === 0;
           pollMs = quiet ? 10000 : 2000;
-          count.textContent = running === 0 ? "idle" : running + "/" + list.length + " running";
-          count.classList.toggle("idle", running === 0);
+          countLine = running === 0 ? "idle" : running + "/" + list.length + " running";
+          countRunning = running > 0;
+          paintFooter();
           panel.classList.toggle("asleep", quiet && list.length === 0);
           panel.classList.remove("down");
           const top = list[0];

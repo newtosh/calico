@@ -224,7 +224,6 @@ static int s_face_mode = -1;
 static int s_list_cover;
 static lv_obj_t *s_bar;
 static lv_obj_t *s_lamp;
-static lv_obj_t *s_toast_label;
 static lv_obj_t *s_wifi_bars[3];
 static lv_obj_t *s_bt_icon;
 static int s_bt_state;
@@ -256,8 +255,10 @@ static int s_mic_mute;
 static int s_spk_mute;
 static ui_toggle_fn s_on_sta;
 static ui_toggle_fn s_on_bt;
-static lv_timer_t *s_toast_timer;
-static desk_toast_t s_toast_state;
+/* The footer's centre label: the count, or what is wrong with the link. */
+static char s_count_text[32] = "idle";
+static int s_count_running;
+static char s_footer_status[24];
 static ui_rotlock_fn s_on_rotlock;
 static int s_rot_locked;
 static int s_wifi_ip;
@@ -269,9 +270,7 @@ static int s_applied;
 static int s_applied_failures;
 static desk_view_t s_applied_view;
 static int s_last_lamp = DESK_LAMP_AMBER;
-static int s_status_seen_ok;
 static char s_phase_text[24];
-static char s_status_seen[24];
 static lv_obj_t *s_new_btn;
 static lv_obj_t *s_new_label;
 static int s_unseen;
@@ -2265,45 +2264,19 @@ static void build_control_center(lv_obj_t *screen) {
     cc_front();
 }
 
-static void toast_apply(int opacity, int shift) {
-    if (!s_toast_label) {
+/* The count in the footer, unless the link is in trouble: then it says so, in the lamp's color. */
+static void paint_footer(void) {
+    if (!s_count) {
         return;
     }
-    if (s_toast_state.stage == DESK_TOAST_HIDDEN) {
-        lv_label_set_text(s_toast_label, "ginger");
-        lv_obj_set_style_opa(s_toast_label, LV_OPA_COVER, 0);
-        lv_obj_set_style_translate_y(s_toast_label, 0, 0);
-        lv_obj_set_hidden(s_toast_label, false);
+    if (s_footer_status[0]) {
+        lv_label_set_text(s_count, s_footer_status);
+        lv_obj_set_style_text_color(
+            s_count, lv_color_hex(s_last_lamp == DESK_LAMP_RED ? LAMP_RED : LAMP_AMBER), 0);
         return;
     }
-    lv_label_set_text(s_toast_label, s_toast_state.showing);
-    lv_obj_set_style_opa(s_toast_label, (lv_opa_t)opacity, 0);
-    lv_obj_set_style_translate_y(s_toast_label, shift, 0);
-    lv_obj_set_hidden(s_toast_label, opacity <= 0);
-}
-
-static void toast_cb(lv_timer_t *timer) {
-    int opacity = 0;
-    int shift = 0;
-    int stage;
-    (void)timer;
-    stage = desk_toast_tick(&s_toast_state, 50, &opacity, &shift);
-    toast_apply(opacity, shift);
-    if (stage == DESK_TOAST_HIDDEN && s_toast_timer) {
-        lv_timer_t *done = s_toast_timer;
-        s_toast_timer = NULL;
-#if LVGL_VERSION_MAJOR == 9 && LVGL_VERSION_MINOR < 3
-        lv_timer_del(done);
-#else
-        lv_timer_delete(done);
-#endif
-    }
-}
-
-static void toast_kick(void) {
-    if (!s_toast_timer) {
-        s_toast_timer = lv_timer_create(toast_cb, 50, NULL);
-    }
+    lv_label_set_text(s_count, s_count_text);
+    lv_obj_set_style_text_color(s_count, lv_color_hex(s_count_running ? ROW_MARK : INK_DIM), 0);
 }
 
 static void paint_bt(void) {
@@ -2335,7 +2308,7 @@ static void paint_bars(int bars) {
 
 static int present_status(const char *phase, int failures) {
     desk_glance_t glance;
-    const char *text;
+    const char *trouble;
     uint32_t color = LAMP_AMBER;
     if (!s_lamp) {
         return DESK_LAMP_AMBER;
@@ -2351,23 +2324,15 @@ static int present_status(const char *phase, int failures) {
     lv_obj_set_style_bg_color(s_lamp, lv_color_hex(color), 0);
     paint_bars(desk_wifi_bars(s_wifi_ip, s_wifi_rssi));
     s_last_lamp = glance.lamp;
-    text = glance.text ? glance.text : "IDLE";
-    if (!s_status_seen_ok) {
-        copy_text(s_status_seen, sizeof(s_status_seen), text);
-        s_status_seen_ok = 1;
-        return glance.lamp;
-    }
-    if (strcmp(s_status_seen, text) != 0) {
-        copy_text(s_status_seen, sizeof(s_status_seen), text);
-        if (desk_toast_push(&s_toast_state, text)) {
-            toast_kick();
-        }
-    }
+    trouble = desk_footer_status(&glance);
+    copy_text(s_footer_status, sizeof(s_footer_status), trouble ? trouble : "");
+    paint_footer();
     return glance.lamp;
 }
 
 /* BT starts as the dim rune. ui_set_bt swaps in the dotted mark once the radio is up. */
 static void build_status_bar(lv_obj_t *screen) {
+    lv_obj_t *title;
     lv_obj_t *cluster;
     lv_obj_t *wifi;
     int i;
@@ -2398,15 +2363,15 @@ static void build_status_bar(lv_obj_t *screen) {
     lv_obj_set_style_shadow_width(s_lamp, 0, 0);
     lv_obj_clear_flag(s_lamp, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
-    s_toast_label = lv_label_create(bar);
-    lv_obj_set_width(s_toast_label, 168);
-    lv_label_set_long_mode(s_toast_label, LV_LABEL_LONG_DOT);
-    lv_obj_set_style_text_font(s_toast_label, &lv_font_montserrat_16, 0);
-    lv_obj_set_style_text_color(s_toast_label, lv_color_hex(INK), 0);
-    lv_obj_set_style_text_align(s_toast_label, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_align(s_toast_label, LV_ALIGN_CENTER, 0, 0);
-    lv_obj_clear_flag(s_toast_label, LV_OBJ_FLAG_CLICKABLE);
-    toast_apply(0, 0);
+    title = lv_label_create(bar);
+    lv_obj_set_width(title, 168);
+    lv_label_set_long_mode(title, LV_LABEL_LONG_DOT);
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(INK), 0);
+    lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(title, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_clear_flag(title, LV_OBJ_FLAG_CLICKABLE);
+    lv_label_set_text_static(title, "ginger");
 
     cluster = lv_obj_create(bar);
     lv_obj_set_height(cluster, BAR_H);
@@ -2547,7 +2512,6 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     lv_obj_set_scrollable(screen, false);
     lv_obj_set_style_bg_color(screen, lv_color_hex(BG), 0);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
-    desk_toast_init(&s_toast_state);
     build_status_bar(screen);
     s_title = lv_label_create(screen);
     lv_obj_set_size(s_title, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
@@ -2592,6 +2556,7 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     mic = icon_button(dock, &desk_icon_mic, on_mic, 1);
     lv_obj_set_size(mic, BTN_W, BTN_H);
     s_count = lv_label_create(dock);
+    lv_label_set_text(s_count, s_count_text);
     lv_obj_set_style_text_font(s_count, &lv_font_montserrat_28, 0);
     lv_obj_set_style_text_color(s_count, lv_color_hex(INK_DIM), 0);
     settings_btn = icon_button(dock, &desk_icon_settings, on_open_settings, 0);
@@ -3158,9 +3123,9 @@ void ui_apply(const desk_view_t *view, int failures) {
             }
         }
         desk_count_text(view, count, sizeof(count));
-        lv_label_set_text(s_count, count);
-        lv_obj_set_style_text_color(
-            s_count, lv_color_hex(view->running_count > 0 ? ROW_MARK : INK_DIM), 0);
+        copy_text(s_count_text, sizeof(s_count_text), count);
+        s_count_running = view->running_count > 0;
+        paint_footer();
         if (!agent_scrolled()) {
             s_unseen = 0;
         }
