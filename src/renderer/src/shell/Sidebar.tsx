@@ -1,5 +1,6 @@
 import { Cpu, LayoutList, Settings, SquareTerminal } from "lucide-react";
 import type { ComponentType } from "react";
+import logo from "../assets/calico.png";
 
 export type View = "dashboard" | "device" | "console" | "settings";
 
@@ -28,7 +29,10 @@ export function Sidebar({
       aria-label="Views"
       className="flex w-48 shrink-0 flex-col border-r border-stroke/40 bg-surface"
     >
-      <p className="px-4 pt-4 pb-3 text-base font-medium">Calico</p>
+      <p className="flex items-center gap-2 px-4 pt-4 pb-3 text-base font-medium">
+        <img src={logo} alt="" className="h-6 w-auto" />
+        <span className="wordmark">Calico</span>
+      </p>
       <ul>
         {ITEMS.map(({ view: v, label, Icon }) => (
           <li key={v}>

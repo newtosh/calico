@@ -225,7 +225,7 @@ Make the sizes and preview how they actually look small:
 
 ```bash
 magick cat.png -resize 512x512 resources/icon.png        # app icon (at least 512 by 512 for Linux; 1024 also works)
-magick tray.png -resize 32x32 resources/tray.png         # tray icon
+python3 -I docs/branding/ginger-idle-anim/build_tray.py   # tray icon, 64 px, from the idle cat line art
 for s in 16 22 24 32 48; do magick cat.png -resize ${s}x${s} -filter point -scale 800% preview-$s.png; done
 ```
 
