@@ -64,6 +64,15 @@ def test_the_sizes_and_positions_match_the_firmware_layout():
     assert art["linkdown"]["icon"] == int(face.split("FACE_LINKDOWN_ICON =")[1].split(",")[0])
 
 
+def test_both_screens_are_centered_between_the_message_line_and_the_dock():
+    art = committed()
+    top, bottom = 74 + 28, 382  # FACE_MESSAGE_Y + 28, FACE_DOCK_TOP in face_cover.h
+    for box in (art["cat"], art["linkdown"]):
+        assert box["y"] >= top and box["y"] + box["h"] <= bottom
+        assert abs(box["y"] + box["h"] / 2 - (top + bottom) / 2) <= 2
+        assert box["x"] + box["w"] / 2 == 240
+
+
 def test_the_linkdown_icon_matches_the_firmware_icon_closely():
     art = committed()
     fresh = sim.linkdown_tool.render()
