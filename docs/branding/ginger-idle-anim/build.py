@@ -182,20 +182,23 @@ def _runs(path, i, j):
     return run
 
 
+def _hinge(u):
+    """0 at both ends, so the end lifts while staying joined at the junction."""
+    return smoothstep(u / 0.6) * (1 - smoothstep((u - 0.6) / 0.4))
+
+
 # The tail's head-side end is the outline from under the pivot round the curl to the
-# junction, plus the paw line leading away from the junction on the other side.
+# junction. The paw line past the junction is the cat's face and stays put.
 _ia = _nearest(outline, (TAIL_PIVOT, 361), lo=600)
 _back = _runs(outline, _ia, len(outline) - 1)
-_paw = _runs(outline, 0, 80)
-END_WEIGHT = {id(outline[_ia + k]): smoothstep(_back[k] / _back[-1]) for k in range(len(_back))}
-END_WEIGHT.update({id(outline[k]): 1 - smoothstep(_paw[k] / _paw[-1]) for k in range(len(_paw))})
+END_WEIGHT = {id(outline[_ia + k]): _hinge(_back[k] / _back[-1]) for k in range(len(_back))}
 
 
 def tail(pt, on_tail_line, sx, sy):
-    """Lift the tail's head-side end toward the body, easing to nothing at the pivot."""
+    """Lift the tail's head-side end toward the body. Both ends of it stay fixed."""
     x, y = pt
     if on_tail_line:
-        w = smoothstep((TAIL_PIVOT - x) / (TAIL_PIVOT - TAIL_END_X))
+        w = _hinge((TAIL_PIVOT - x) / (TAIL_PIVOT - 142.0))
     else:
         w = END_WEIGHT.get(id(pt), 0.0)
     return (x + sx * w, y + sy * w)
@@ -257,8 +260,8 @@ frames = {
     "rest": {},
     "ear1": {"ear_deg": -4.0},
     "ear2": {"ear_deg": 6.0},
-    "tail1": {"shift": (1.0, -5.0)},
-    "tail2": {"shift": (2.0, -9.0)},
+    "tail1": {"shift": (1.0, -6.0)},
+    "tail2": {"shift": (2.0, -11.0)},
 }
 for name, kw in frames.items():
     f = out / f"{name}.svg"
