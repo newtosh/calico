@@ -36,7 +36,7 @@ int main(void) {
     n = ble_desk_format_status(body, sizeof(body), "886dd11", "", "http://192.168.4.30:8787", 0);
     check(n > 0, "status length");
     check(strcmp(body,
-                 "name=grokbot-buddy\n"
+                 "name=ginger\n"
                  "fw=886dd11\n"
                  "ssid=none\n"
                  "url=http://192.168.4.30:8787\n"

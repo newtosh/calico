@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Provision the desk over BLE. No USB cable and no joined Wi-Fi required.
 
-The board advertises as ``grokbot-buddy``. URL, token, and a verified
+The board advertises as ``ginger`` (``grokbot-buddy`` before the rename). URL, token, and a verified
 Wi-Fi network land in NVS namespace ``desk``. ``reboot`` soft-resets the
 board. The link is GATT. The OS pairing dialog does not connect.
 
@@ -29,7 +29,9 @@ import sys
 import time
 from getpass import getpass
 
-NAME = "grokbot-buddy"
+NAME = "ginger"
+# A panel flashed before the rename still advertises this name.
+LEGACY_NAMES = ("grokbot-buddy",)
 
 # Canonical text is firmware/main/ble_desk.h. Keep these identical.
 UUID_SVC = "8d7c4b10-6e2a-4f91-a3c5-67726f6b6465"
@@ -347,6 +349,10 @@ def _bleak():
     return bleak
 
 
+def is_desk_name(name: str) -> bool:
+    return name == NAME or name in LEGACY_NAMES
+
+
 def _desk_name(device, adv) -> str:
     local = getattr(adv, "local_name", None) if adv is not None else None
     return local or getattr(device, "name", None) or ""
@@ -363,7 +369,7 @@ def print_text(text: str) -> None:
 
 
 async def scan_desks(timeout: float = 5.0):
-    """Return (device, advertised name) pairs for grokbot-buddy."""
+    """Return (device, advertised name) pairs for a panel, under its new or old name."""
     bleak = _bleak()
     try:
         found = await bleak.BleakScanner.discover(timeout=timeout, return_adv=True)
@@ -376,7 +382,7 @@ async def scan_desks(timeout: float = 5.0):
     desks = []
     for device, adv in pairs:
         name = _desk_name(device, adv)
-        if name == NAME:
+        if is_desk_name(name):
             desks.append((device, name))
     return desks
 
@@ -621,7 +627,7 @@ def build_parser() -> argparse.ArgumentParser:
         choices=COMMANDS,
         help="Default opens the menu. The other commands stay for scripts.",
     )
-    parser.add_argument("--address", default="", help="BLE address. Default: the one grokbot-buddy found.")
+    parser.add_argument("--address", default="", help="BLE address. Default: the one panel found.")
     return parser
 
 

@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import header from "../../../../firmware/main/ble_desk.h?raw";
-import { BleLink, type Gatt, UUID } from "./ble";
+import { BLE_NAMES, BleLink, connectBle, type Gatt, UUID } from "./ble";
 
 function fakeGatt(
   reads: Record<string, string[]>,
@@ -24,17 +24,17 @@ function fakeGatt(
 
 const instant = async () => undefined;
 
+afterEach(() => vi.unstubAllGlobals());
+
 describe("BleLink", () => {
   it("reads status", async () => {
     const { gatt } = fakeGatt({
-      [UUID.status]: [
-        "name=grokbot-buddy\nfw=1\nssid=home\nurl=none\ntoken=none\n",
-      ],
+      [UUID.status]: ["name=ginger\nfw=1\nssid=home\nurl=none\ntoken=none\n"],
     });
     expect(await new BleLink(gatt, instant).send({ op: "status" })).toEqual({
       ok: true,
       info: {
-        name: "grokbot-buddy",
+        name: "ginger",
         fw: "1",
         ssid: "home",
         url: "",
@@ -117,5 +117,24 @@ describe("BleLink", () => {
       const name = key === "svc" ? "SVC" : key.toUpperCase();
       expect(header).toContain(`#define BLE_DESK_UUID_${name} "${uuid}"`);
     }
+  });
+
+  it("advertises under the firmware's name and still finds the old one", () => {
+    const firmware = /#define BLE_DESK_NAME "([^"]+)"/.exec(header)?.[1];
+    expect(BLE_NAMES[0]).toBe(firmware);
+    expect(BLE_NAMES).toContain("grokbot-buddy");
+  });
+
+  it("asks the browser for a panel under either name", async () => {
+    const requestDevice = vi.fn(async () => {
+      throw Object.assign(new Error("none"), { name: "NotFoundError" });
+    });
+    vi.stubGlobal("navigator", { bluetooth: { requestDevice } });
+    await expect(connectBle(() => undefined)).rejects.toThrow("none");
+    expect(requestDevice).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filters: BLE_NAMES.map((name) => ({ name })),
+      }),
+    );
   });
 });

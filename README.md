@@ -1,6 +1,6 @@
 # Calico
 
-Desktop companion and developer kit for the grokbot-buddy desk panel, an ESP32-S3 AMOLED display that shows what your coding agents are doing. This repository holds the app, the panel firmware, and the agent kits.
+Desktop companion and developer kit for ginger, an ESP32-S3 AMOLED desk panel that shows what your coding agents are doing. This repository holds the app, the panel firmware, and the agent kits.
 
 > Status: alpha. v0.1 targets Linux.
 

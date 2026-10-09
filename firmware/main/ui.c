@@ -2246,7 +2246,7 @@ static void toast_apply(int opacity, int shift) {
         return;
     }
     if (s_toast_state.stage == DESK_TOAST_HIDDEN) {
-        lv_label_set_text(s_toast_label, "grokbot-buddy");
+        lv_label_set_text(s_toast_label, "ginger");
         lv_obj_set_style_opa(s_toast_label, LV_OPA_COVER, 0);
         lv_obj_set_style_translate_y(s_toast_label, 0, 0);
         lv_obj_set_hidden(s_toast_label, false);

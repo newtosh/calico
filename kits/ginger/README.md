@@ -1,6 +1,6 @@
-# Grok desk buddy
+# Ginger
 
-> **Ginger, the Grok kit.** This is the original grokbot-buddy README, kept for reference. The desktop companion described below is now [calico](../../README.md), which replaces the Python process. The Python companion and its web UI remain in [`tools/python-companion`](../../tools/python-companion) as the reference implementation that calico's contract tests are captured from. Firmware lives in [`firmware/`](../../firmware).
+> **Ginger, the Grok kit.** Formerly grokbot-buddy. This is the original README, kept for reference. The desktop companion described below is now [calico](../../README.md), which replaces the Python process. The Python companion and its web UI remain in [`tools/python-companion`](../../tools/python-companion) as the reference implementation that calico's contract tests are captured from. Firmware lives in [`firmware/`](../../firmware).
 
 A LAN desk companion for Jon’s Waveshare ESP32-S3-Touch-AMOLED-2.16. The panel shows whether Grok Bot or Cursor agents are running, idle, or blocked. A small Python process on the LAN is the bridge, because Grok Bot has no device SDK. The browser UI configures that bridge and can inject demo events without the board.
 

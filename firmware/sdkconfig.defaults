@@ -76,7 +76,7 @@ CONFIG_BT_NIMBLE_TRANSPORT_ACL_FROM_LL_COUNT=4
 CONFIG_BT_NIMBLE_TRANSPORT_EVT_COUNT=8
 CONFIG_BT_NIMBLE_TRANSPORT_EVT_DISCARD_COUNT=1
 CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=6144
-CONFIG_BT_NIMBLE_SVC_GAP_DEVICE_NAME="grokbot-buddy"
+CONFIG_BT_NIMBLE_SVC_GAP_DEVICE_NAME="ginger"
 # One advertiser plus one connection. A third activity is 828 bytes of
 # internal DMA the STA does not get back. Scan is off, so the extended
 # duplicate filter is unused; the minimum legal length is 1.
