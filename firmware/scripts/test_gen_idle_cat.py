@@ -28,12 +28,7 @@ cat = tool.build()
 
 
 def composed(part: str, pose: int) -> Image.Image:
-    """The canvas as the panel shows it: the still cat with one patch laid in each hole."""
-    img = cat.base.copy()
-    for p, hole in cat.holes.items():
-        patch = cat.patches[p][pose if p == part else 0]
-        img.paste(patch, (hole.x, hole.y))
-    return img
+    return tool.compose(cat, ear=pose if part == "ear" else 0, tail=pose if part == "tail" else 0)
 
 
 @pytest.mark.parametrize("part,names", tool.POSES.items())

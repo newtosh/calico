@@ -542,67 +542,29 @@
         color: #efe7d6;
         font-size: 16px;
       }
-      #sleeper {
+      /* The idle face and the link-down screen sit where the firmware puts them
+         (face_cover.c), and are tinted from white masks made by gen_simulator_assets.py. */
+      #sleeper,
+      #linkdown {
         display: none;
-        align-items: flex-end;
-        gap: 10px;
-        margin-top: 36px;
+        position: absolute;
         color: #a39b88;
         pointer-events: none;
       }
-      #panel.asleep #sleeper {
-        display: flex;
+      #panel.asleep #sleeper,
+      #panel.down #linkdown {
+        display: block;
       }
-      #sleeper .face {
-        width: 96px;
-        height: 96px;
-        box-sizing: border-box;
-        border: 3px solid #a39b88;
-        border-radius: 50%;
-        background: #a39b8833;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 16px;
-        animation: bob 4.4s ease-in-out infinite;
-      }
-      #sleeper .face i {
-        width: 22px;
-        height: 4px;
-        border-radius: 2px;
+      .art {
         background: #a39b88;
+        -webkit-mask: center / 100% 100% no-repeat;
+        mask: center / 100% 100% no-repeat;
       }
-      #sleeper b {
+      #linkdown p {
+        margin: 0;
+        text-align: center;
         font-size: 24px;
-        font-weight: 500;
-        animation: zzz 4.2s linear infinite;
-      }
-      @keyframes bob {
-        0%,
-        100% {
-          transform: translateY(0);
-        }
-        50% {
-          transform: translateY(10px);
-        }
-      }
-      @keyframes zzz {
-        0% {
-          opacity: 0;
-          transform: translateY(4px);
-        }
-        20% {
-          opacity: 0.9;
-          transform: translateY(4px);
-        }
-        80% {
-          opacity: 0.9;
-          transform: translateY(-12px);
-        }
-        100% {
-          opacity: 0;
-          transform: translateY(-12px);
-        }
+        line-height: 30px;
       }
       button {
         background: #2a2d24;
@@ -1018,10 +980,8 @@
       <div id="face">
       <p id="title"></p>
       <p id="message"></p>
-      <div id="sleeper" aria-hidden="true">
-        <div class="face"><i></i><i></i></div>
-        <b>Zzz</b>
-      </div>
+      <div id="sleeper" aria-hidden="true"><div class="art"></div></div>
+      <div id="linkdown" aria-hidden="true"><div class="art"></div><p>Can't reach Calico</p></div>
       <div id="agents"></div>
       <button id="newjump" type="button" hidden>1 new</button>
       </div>
@@ -1105,6 +1065,7 @@
         </div>
       </div>
     </div>
+    <script src="idle_art.js"></script>
     <script>
       const base = new URLSearchParams(location.search).get("base") || "http://127.0.0.1:8787";
       const panel = document.getElementById("panel");
@@ -1359,6 +1320,77 @@
 
       let pollMs = 2000;
 
+      /* The idle face and the link-down screen, as the firmware draws them. */
+      const sleeper = document.getElementById("sleeper");
+      const linkdown = document.getElementById("linkdown");
+      function mask(el, uri) {
+        el.style.webkitMaskImage = 'url("' + uri + '")';
+        el.style.maskImage = 'url("' + uri + '")';
+      }
+      function place(el, x, y, w, h) {
+        el.style.left = x + "px";
+        el.style.top = y + "px";
+        el.style.width = w + "px";
+        el.style.height = h + "px";
+      }
+      const catArt = sleeper.firstElementChild;
+      place(sleeper, IDLE_ART.cat.x, IDLE_ART.cat.y, IDLE_ART.cat.w, IDLE_ART.cat.h);
+      catArt.style.width = IDLE_ART.cat.w + "px";
+      catArt.style.height = IDLE_ART.cat.h + "px";
+      const down = IDLE_ART.linkdown;
+      place(linkdown, down.x, down.y, down.w, down.h);
+      const iconArt = linkdown.firstElementChild;
+      iconArt.style.width = down.icon + "px";
+      iconArt.style.height = down.icon + "px";
+      iconArt.style.marginLeft = (down.w - down.icon) / 2 + "px";
+      linkdown.lastElementChild.style.marginTop = down.gap + "px";
+      mask(iconArt, down.image);
+      let catPose = "";
+      function showPose(name) {
+        if (name === catPose) return;
+        catPose = name;
+        mask(catArt, IDLE_ART.frames[name]);
+      }
+      showPose("rest");
+      /* Matches firmware/main/idle_cat_anim.c: rest 3 to 8 s, then an ear flick or a tail
+         lift, taking turns. */
+      const GESTURES = [
+        { prefix: "ear", ms: [120, 150, 120] },
+        { prefix: "tail", ms: [450, 700, 450] },
+      ];
+      let gesture = 0;
+      let step = 0;
+      function catNext() {
+        if (!panel.classList.contains("asleep")) {
+          step = 0;
+          showPose("rest");
+          return setTimeout(catNext, 500);
+        }
+        if (step === 0) {
+          showPose("rest");
+          step = 1;
+          return setTimeout(catNext, 3000 + Math.random() * 5000);
+        }
+        const g = GESTURES[gesture];
+        showPose(g.prefix + [1, 2, 1][step - 1]);
+        const wait = g.ms[step - 1];
+        if (step === 3) {
+          step = 0;
+          gesture = 1 - gesture;
+        } else {
+          step++;
+        }
+        setTimeout(catNext, wait);
+      }
+      catNext();
+      /* Link down with nothing listed. A roster keeps its list. */
+      function rosterEmpty() {
+        const s = prevStatus;
+        if (!s) return true;
+        const list = s.agents || [];
+        return list.length === 0 && s.phase !== "running" && !s.needs_you;
+      }
+
       async function tick() {
         try {
           const response = await fetch(base + "/api/status");
@@ -1378,6 +1410,7 @@
           count.textContent = running === 0 ? "idle" : running + "/" + list.length + " running";
           count.classList.toggle("idle", running === 0);
           panel.classList.toggle("asleep", quiet && list.length === 0);
+          panel.classList.remove("down");
           const top = list[0];
           const topAside = top ? rowAside(top, status) : "";
           const keep = agents.scrollTop;
@@ -1418,6 +1451,7 @@
           paintLink(face, failures);
           if (failures >= 3) {
             panel.classList.remove("asleep");
+            panel.classList.toggle("down", rosterEmpty());
           }
         }
       }

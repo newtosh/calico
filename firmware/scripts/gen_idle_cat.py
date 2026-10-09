@@ -107,6 +107,15 @@ def build() -> Cat:
     return Cat(canvas, base, holes, patches)
 
 
+def compose(cat: Cat, ear: int = 0, tail: int = 0) -> Image.Image:
+    """The canvas as the panel shows it: the still cat with one patch laid in each hole."""
+    img = cat.base.copy()
+    for part, pose in (("ear", ear), ("tail", tail)):
+        hole = cat.holes[part]
+        img.paste(cat.patches[part][pose], (hole.x, hole.y))
+    return img
+
+
 def c_array(name: str, img: Image.Image) -> str:
     data = img.tobytes()
     rows = []
