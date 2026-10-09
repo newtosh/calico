@@ -53,7 +53,7 @@
   .section-title {
     @apply px-4 pt-4 pb-2 text-xs font-medium tracking-wide text-muted uppercase;
   }
-  /* The app name wears the calico coat: sand, amber, then a darker ochre. The last
+  /* The app name wears the calico coat: sand, amber, then a warm gray. The last
      stop stays light enough to read on the sidebar, so it is not the icon's near-black. */
   .wordmark {
     color: #e3c898;
@@ -63,7 +63,7 @@
       #e3c898 24%,
       #e2a23a 54%,
       #e2a23a 64%,
-      #a8803c 100%
+      #8a8578 100%
     );
     background-clip: text;
     -webkit-background-clip: text;
