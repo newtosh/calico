@@ -151,7 +151,7 @@ if tail_line[0][0] < tail_line[-1][0]:
     tail_line = tail_line[::-1]  # runs tip first
 
 EAR_BASE = (150.0, 157.0)  # the ear turns as one piece about the middle of its base
-TAIL_PIVOT, TAIL_TIP, TAIL_END = 285.0, 363.0, 405.0
+TAIL_PIVOT, TAIL_END_X = 255.0, 160.0  # the tail's head-side end moves; it is still by x=255
 
 
 def ear(pt, deg):
@@ -168,35 +168,37 @@ def ear(pt, deg):
     )
 
 
-def _nearest(path, target):
-    return min(range(len(path)), key=lambda i: (path[i][0] - target[0]) ** 2 + (path[i][1] - target[1]) ** 2)
+def _nearest(path, target, lo=0):
+    return min(
+        range(lo, len(path)),
+        key=lambda i: (path[i][0] - target[0]) ** 2 + (path[i][1] - target[1]) ** 2,
+    )
 
 
-# The tail's lower edge is part of the outline, from under the pivot to where it
-# meets the rump. Weight its points by how far along that stretch they are.
-_i0, _i1 = sorted((_nearest(outline, (TAIL_PIVOT, 358)), _nearest(outline, (407, 289))))
-_run = [0.0]
-for _a, _b in zip(outline[_i0:_i1], outline[_i0 + 1 : _i1 + 1]):
-    _run.append(_run[-1] + math.dist(_a, _b))
-LOWER_EDGE = {
-    id(outline[_i0 + k]): _run[k] / _run[-1] for k in range(len(_run))
-}
+def _runs(path, i, j):
+    run = [0.0]
+    for a, b in zip(path[i:j], path[i + 1 : j + 1]):
+        run.append(run[-1] + math.dist(a, b))
+    return run
+
+
+# The tail's head-side end is the outline from under the pivot round the curl to the
+# junction, plus the paw line leading away from the junction on the other side.
+_ia = _nearest(outline, (TAIL_PIVOT, 361), lo=600)
+_back = _runs(outline, _ia, len(outline) - 1)
+_paw = _runs(outline, 0, 80)
+END_WEIGHT = {id(outline[_ia + k]): smoothstep(_back[k] / _back[-1]) for k in range(len(_back))}
+END_WEIGHT.update({id(outline[k]): 1 - smoothstep(_paw[k] / _paw[-1]) for k in range(len(_paw))})
 
 
 def tail(pt, on_tail_line, sx, sy):
-    """Move the tail's free end away from the body, easing to nothing at the pivot."""
+    """Lift the tail's head-side end toward the body, easing to nothing at the pivot."""
     x, y = pt
     if on_tail_line:
-        w = smoothstep((x - TAIL_PIVOT) / (TAIL_TIP - TAIL_PIVOT))
+        w = smoothstep((TAIL_PIVOT - x) / (TAIL_PIVOT - TAIL_END_X))
     else:
-        s = LOWER_EDGE.get(id(pt))
-        if s is None:
-            return pt
-        w = 0.5 * math.sin(math.pi * s)
+        w = END_WEIGHT.get(id(pt), 0.0)
     return (x + sx * w, y + sy * w)
-
-
-BELLY_DEPTH = 0.0  # how far inside the tail the body's underside sits at rest
 
 
 def belly():
@@ -255,8 +257,8 @@ frames = {
     "rest": {},
     "ear1": {"ear_deg": -4.0},
     "ear2": {"ear_deg": 6.0},
-    "tail1": {"shift": (0.0, -6.0)},
-    "tail2": {"shift": (1.0, -11.0)},
+    "tail1": {"shift": (1.0, -5.0)},
+    "tail2": {"shift": (2.0, -9.0)},
 }
 for name, kw in frames.items():
     f = out / f"{name}.svg"
