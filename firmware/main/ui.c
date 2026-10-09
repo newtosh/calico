@@ -4,10 +4,13 @@
 #include "desk_status.h"
 #include "face_cover.h"
 #include "icons.h"
+#include "idle_cat.h"
+#include "idle_cat_anim.h"
 #include "lvgl.h"
 #include "settings_layout.h"
 
 #include "esp_heap_caps.h"
+#include "esp_random.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -207,10 +210,10 @@ static int s_known_count;
 static char s_global_url[128];
 static char s_global_token[128];
 static lv_obj_t *s_sleep;
-static lv_obj_t *s_head;
-static lv_obj_t *s_eye_l;
-static lv_obj_t *s_eye_r;
-static lv_obj_t *s_zzz;
+static lv_obj_t *s_cat_ear;
+static lv_obj_t *s_cat_tail;
+static lv_timer_t *s_cat_timer;
+static idle_cat_t s_cat;
 static int s_asleep;
 static int s_face_asleep = -1;
 static int s_list_cover;
@@ -1564,59 +1567,35 @@ static void anim_delete(void *var) {
 #endif
 }
 
-static void sleep_bob(void *obj, int32_t v) {
-    face_box_t box;
-    face_sleep_widget((int)v, &box);
-    lv_obj_set_pos(obj, box.x, box.y);
+/* Shows the next pose and asks again when its wait is over. Only the ear or the tail
+ * changes, so the panel rewrites one small patch box, never the whole cat. */
+static void cat_tick(lv_timer_t *timer) {
+    idle_cat_pose_t pose = idle_cat_next(&s_cat, esp_random());
+    lv_image_set_src(s_cat_ear, &idle_cat_ear_img[pose.ear]);
+    lv_image_set_src(s_cat_tail, &idle_cat_tail_img[pose.tail]);
+    lv_timer_set_period(timer, pose.wait_ms);
 }
 
-/* v is 0..100. Opacity is 0 at both ends so the repeat does not pop. */
-static void sleep_zzz(void *obj, int32_t v) {
-    int opa = LV_OPA_COVER;
-    int rise = 0;
-    if (v < 20) {
-        opa = v * LV_OPA_COVER / 20;
-    } else if (v > 80) {
-        opa = (100 - v) * LV_OPA_COVER / 20;
-        rise = 12;
-    } else {
-        rise = ((v - 20) * 12) / 60;
+static void cat_timer_drop(void) {
+    lv_timer_t *timer = s_cat_timer;
+    if (!timer) {
+        return;
     }
-    lv_obj_set_y(obj, face_zzz_y(rise));
-    lv_obj_set_style_opa(obj, (lv_opa_t)opa, 0);
+    s_cat_timer = NULL;
+#if LVGL_VERSION_MAJOR == 9 && LVGL_VERSION_MINOR < 3
+    lv_timer_del(timer);
+#else
+    lv_timer_delete(timer);
+#endif
 }
 
-static void start_anim(lv_obj_t *obj, lv_anim_exec_xcb_t exec, int32_t from, int32_t to, uint32_t time,
-                       int playback) {
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, obj);
-    lv_anim_set_exec_cb(&a, exec);
-    lv_anim_set_values(&a, from, to);
-    lv_anim_set_duration(&a, time);
-    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
-    if (playback) {
-        lv_anim_set_playback_duration(&a, time);
-        lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
-    }
-    lv_anim_start(&a);
-}
-
-/* Large face in the empty middle of the 480 panel. 16px bezel stays.
- * The bob and the Zzz stay inside the widget, so hide dirties every pixel. */
+/* The sleeping cat in the empty middle of the 480 panel. 16px bezel stays.
+ * It is one fixed box, so hide dirties every pixel of it. */
 static void place_sleep(void) {
     face_box_t box;
-    face_sleep_widget(0, &box);
+    face_sleep_widget(&box);
     lv_obj_set_size(s_sleep, box.w, box.h);
     lv_obj_set_pos(s_sleep, box.x, box.y);
-    lv_obj_set_size(s_head, FACE_SLEEP_HEAD, FACE_SLEEP_HEAD);
-    lv_obj_set_size(s_eye_l, 22, 4);
-    lv_obj_set_size(s_eye_r, 22, 4);
-    lv_obj_align(s_eye_l, LV_ALIGN_CENTER, -16, 3);
-    lv_obj_align(s_eye_r, LV_ALIGN_CENTER, 16, 3);
-    lv_obj_set_style_text_font(s_zzz, &lv_font_montserrat_24, 0);
-    lv_obj_align(s_head, LV_ALIGN_BOTTOM_LEFT, 0, 0);
-    lv_obj_set_pos(s_zzz, FACE_SLEEP_HEAD - 4, face_zzz_y(0));
 }
 
 static void sleep_stop(void) {
@@ -1626,8 +1605,7 @@ static void sleep_stop(void) {
     if (!s_asleep && lv_obj_has_flag(s_sleep, LV_OBJ_FLAG_HIDDEN)) {
         return;
     }
-    anim_delete(s_sleep);
-    anim_delete(s_zzz);
+    cat_timer_drop();
     s_asleep = 0;
     lv_obj_set_hidden(s_sleep, true);
 }
@@ -1639,9 +1617,9 @@ static void sleep_show(void) {
     place_sleep();
     lv_obj_set_hidden(s_sleep, false);
     s_asleep = 1;
-    lv_obj_set_style_opa(s_zzz, LV_OPA_TRANSP, 0);
-    start_anim(s_sleep, sleep_bob, 0, FACE_SLEEP_BOB, 2200, 1);
-    start_anim(s_zzz, sleep_zzz, 0, 100, 4200, 0);
+    idle_cat_init(&s_cat);
+    s_cat_timer = lv_timer_create(cat_tick, IDLE_CAT_REST_MIN_MS, NULL);
+    cat_tick(s_cat_timer);
 }
 
 /* The CO5300 rewrites the dirty window. A narrow one can miss the ring.
@@ -1686,37 +1664,24 @@ static void sync_sleep(const desk_view_t *view, int failures, int lamp) {
     }
 }
 
-static lv_obj_t *sleep_eye(lv_obj_t *parent) {
-    lv_obj_t *bar = lv_obj_create(parent);
-    lv_obj_set_style_bg_color(bar, lv_color_hex(INK_DIM), 0);
-    lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(bar, 0, 0);
-    lv_obj_set_style_radius(bar, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_pad_all(bar, 0, 0);
-    lv_obj_set_style_shadow_width(bar, 0, 0);
-    lv_obj_clear_flag(bar, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    return bar;
+/* One piece of the cat: an A8 mask tinted the dim ink, so the idle screen stays quiet. */
+static lv_obj_t *cat_piece(lv_obj_t *parent, const lv_image_dsc_t *img, int x, int y) {
+    lv_obj_t *piece = lv_image_create(parent);
+    lv_image_set_src(piece, img);
+    lv_obj_set_pos(piece, x, y);
+    lv_obj_set_style_image_recolor(piece, lv_color_hex(INK_DIM), 0);
+    lv_obj_set_style_image_recolor_opa(piece, LV_OPA_COVER, 0);
+    lv_obj_clear_flag(piece, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    return piece;
 }
 
 static void build_sleep(lv_obj_t *screen) {
     s_sleep = lv_obj_create(screen);
-    s_head = lv_obj_create(s_sleep);
-    s_eye_l = sleep_eye(s_head);
-    s_eye_r = sleep_eye(s_head);
-    s_zzz = lv_label_create(s_sleep);
     flatten(s_sleep);
     lv_obj_clear_flag(s_sleep, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_style_radius(s_head, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(s_head, lv_color_hex(INK_DIM), 0);
-    lv_obj_set_style_bg_opa(s_head, LV_OPA_20, 0);
-    lv_obj_set_style_border_color(s_head, lv_color_hex(INK_DIM), 0);
-    lv_obj_set_style_border_width(s_head, 3, 0);
-    lv_obj_set_style_pad_all(s_head, 0, 0);
-    lv_obj_set_style_shadow_width(s_head, 0, 0);
-    lv_obj_clear_flag(s_head, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    lv_label_set_text(s_zzz, "Zzz");
-    lv_obj_set_style_text_color(s_zzz, lv_color_hex(INK_DIM), 0);
-    lv_obj_clear_flag(s_zzz, LV_OBJ_FLAG_CLICKABLE);
+    cat_piece(s_sleep, &idle_cat_base_img, 0, 0);
+    s_cat_ear = cat_piece(s_sleep, &idle_cat_ear_img[0], IDLE_CAT_EAR_X, IDLE_CAT_EAR_Y);
+    s_cat_tail = cat_piece(s_sleep, &idle_cat_tail_img[0], IDLE_CAT_TAIL_X, IDLE_CAT_TAIL_Y);
     lv_obj_set_hidden(s_sleep, true);
 }
 

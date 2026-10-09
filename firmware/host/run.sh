@@ -24,6 +24,7 @@ run test_desk_status firmware/main/desk_status.c
 run test_desk_view firmware/main/desk_view.c
 run test_dma_stripe
 run test_face_cover firmware/main/face_cover.c
+run test_idle_cat_anim firmware/main/idle_cat_anim.c
 run test_orient firmware/main/orient.c
 run test_settings_layout
 run test_wifi_store firmware/main/wifi_store.c
