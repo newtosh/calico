@@ -182,25 +182,21 @@ def _runs(path, i, j):
     return run
 
 
-def _hinge(u):
-    """0 at both ends, so the end lifts while staying joined at the junction."""
-    return smoothstep(u / 0.6) * (1 - smoothstep((u - 0.6) / 0.4))
-
-
 # The tail's head-side end is the outline from under the pivot round the curl to the
-# junction. The paw line past the junction is the cat's face and stays put.
+# junction. It is its own stroke: the cat's chin line is cut loose from it and stays
+# put, running on under the tail where the tail hides it.
 _ia = _nearest(outline, (TAIL_PIVOT, 361), lo=600)
 _back = _runs(outline, _ia, len(outline) - 1)
-END_WEIGHT = {id(outline[_ia + k]): _hinge(_back[k] / _back[-1]) for k in range(len(_back))}
+CURL = outline[_ia:]
+CURL_WEIGHT = [smoothstep(d / _back[-1]) for d in _back]
+CHIN_ON = [(142.0, 297.0), (165.0, 299.0), (192.0, 304.0)]  # hidden at rest
 
 
-def tail(pt, on_tail_line, sx, sy):
-    """Lift the tail's head-side end toward the body. Both ends of it stay fixed."""
+def tail(pt, on_tail_line, sx, sy, w=None):
+    """Lift the tail's head-side end toward the body."""
     x, y = pt
-    if on_tail_line:
-        w = _hinge((TAIL_PIVOT - x) / (TAIL_PIVOT - 142.0))
-    else:
-        w = END_WEIGHT.get(id(pt), 0.0)
+    if w is None:
+        w = smoothstep((TAIL_PIVOT - x) / (TAIL_PIVOT - 160.0))
     return (x + sx * w, y + sy * w)
 
 
@@ -229,26 +225,25 @@ def d_of(q):
 
 def svg(ear_deg=0.0, shift=(0.0, 0.0)):
     drawn = []
-    tail_q = outline_q = None
+    tail_q = [tail(pt, True, *shift) for pt in tail_line]
+    curl_q = [tail(pt, False, *shift, w=w) for pt, w in zip(CURL, CURL_WEIGHT)]
     for p in paths:
-        q = p
         if p is tail_line:
-            q = tail_q = [tail(pt, True, *shift) for pt in q]
+            drawn.append(tail_q)
         elif p is outline:
-            outline_q = [tail(pt, False, *shift) for pt in q]
-            q = [ear(pt, ear_deg) for pt in outline_q]
-        drawn.append(q)
-    defs = under = ""
-    if False:  # the tail lifts toward the body, so nothing behind it is uncovered
-        # The tail is opaque: the underside only shows where the tail no longer covers it.
-        band = tail_q + outline_q[_i0:][::-1]
-        defs = (
-            '<defs><mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" '
-            f'width="{SIZE}" height="{SIZE}"><rect width="{SIZE}" height="{SIZE}" fill="#fff"/>'
-            f'<path d="{d_of(band)} Z" fill="#000" stroke="#000"/></mask></defs>'
-        )
-        under = f'<path mask="url(#m)" d="{d_of(belly())}"/>'
-    body = "".join(f'<path d="{d_of(q)}"/>' for q in drawn)
+            drawn.append([ear(pt, ear_deg) for pt in outline[: _ia + 1]])
+            drawn.append(curl_q)
+    # The tail is opaque: it hides the chin line where it passes behind.
+    band = tail_q + curl_q[::-1]
+    defs = (
+        '<defs><mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" '
+        f'width="{SIZE}" height="{SIZE}"><rect width="{SIZE}" height="{SIZE}" fill="#fff"/>'
+        f'<path d="{d_of(band)} Z" fill="#000" stroke="#000"/></mask></defs>'
+    )
+    under = f'<path mask="url(#m)" d="{d_of(CHIN_ON)}"/>'
+    body = "".join(f'<path d="{d_of(q)}"/>' for q in drawn if len(q) > 1) + "".join(
+        f'<path d="{d_of(p)}"/>' for p in paths if p is not tail_line and p is not outline
+    )
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{SIZE}" height="{SIZE}" '
         f'viewBox="0 0 {SIZE} {SIZE}">{defs}<g fill="none" stroke="#fff" stroke-width="{W}" '
