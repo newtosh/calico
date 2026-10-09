@@ -7,27 +7,19 @@ void face_cover_band(face_rect_t *out) {
     out->y2 = FACE_DOCK_TOP - 1;
 }
 
-void face_sleep_widget(int bob, face_box_t *out) {
-    int rest;
-    if (bob < 0) {
-        bob = 0;
-    }
-    if (bob > FACE_SLEEP_BOB) {
-        bob = FACE_SLEEP_BOB;
-    }
-    rest = (FACE_MESSAGE_Y + 28 + FACE_DOCK_TOP - FACE_SLEEP_SPAN) / 2;
-    out->w = FACE_SLEEP_W;
-    out->h = FACE_SLEEP_RISE + FACE_SLEEP_SPAN;
-    out->x = (FACE_SCREEN - out->w) / 2;
-    out->y = rest - FACE_SLEEP_RISE + bob;
+void face_sleep_widget(face_box_t *out) {
+    int y = (FACE_MESSAGE_Y + 28 + FACE_DOCK_TOP - IDLE_CAT_H) / 2;
+    out->w = IDLE_CAT_W;
+    out->h = IDLE_CAT_H;
+    out->x = (FACE_SCREEN - IDLE_CAT_W) / 2;
+    out->y = y - (y % 2);
 }
 
-int face_zzz_y(int rise) {
-    if (rise < 0) {
-        rise = 0;
-    }
-    if (rise > FACE_SLEEP_RISE) {
-        rise = FACE_SLEEP_RISE;
-    }
-    return (FACE_SLEEP_RISE + 4) - rise;
+void face_linkdown_widget(face_box_t *out) {
+    int h = FACE_LINKDOWN_ICON + FACE_LINKDOWN_GAP + FACE_LINKDOWN_CAPTION_H;
+    int y = (FACE_MESSAGE_Y + 28 + FACE_DOCK_TOP - h) / 2;
+    out->w = FACE_LINKDOWN_W;
+    out->h = h;
+    out->x = (FACE_SCREEN - FACE_LINKDOWN_W) / 2;
+    out->y = y - (y % 2);
 }

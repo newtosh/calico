@@ -18,13 +18,10 @@ static int inside_band(const face_rect_t *band, const face_box_t *box) {
 
 int main(void) {
     face_rect_t band;
-    face_box_t rest;
-    face_box_t bobbed;
+    face_box_t cat;
+    face_box_t down;
     int width;
     int height;
-    int rise;
-    /* lv_font_montserrat_24 line_height. The label has to clear the head. */
-    enum { ZZZ_LINE = 27 };
     face_cover_band(&band);
     width = band.x2 - band.x1 + 1;
     height = band.y2 - band.y1 + 1;
@@ -39,19 +36,32 @@ int main(void) {
     check((band.x1 % 2) == 0 && (band.y1 % 2) == 0, "band start is even");
     check((band.x2 % 2) == 1 && (band.y2 % 2) == 1, "band end is odd");
     check((width % 2) == 0 && (height % 2) == 0, "band size is even");
-    face_sleep_widget(0, &rest);
-    face_sleep_widget(FACE_SLEEP_BOB, &bobbed);
-    check(inside_band(&band, &rest), "resting glyph is inside the band");
-    check(inside_band(&band, &bobbed), "bobbed glyph is inside the band");
-    check(bobbed.y == rest.y + FACE_SLEEP_BOB, "bob moves the widget down");
-    check(rest.h == FACE_SLEEP_RISE + FACE_SLEEP_SPAN, "widget includes the Zzz rise");
-    for (rise = 0; rise <= FACE_SLEEP_RISE; rise++) {
-        int y = face_zzz_y(rise);
-        int x = FACE_SLEEP_HEAD - 4;
-        check(y >= 0 && y + ZZZ_LINE <= rest.h - FACE_SLEEP_HEAD, "Zzz line stays above the head");
-        check(x >= 0 && x < rest.w, "Zzz x stays inside the widget");
-    }
-    check(face_zzz_y(FACE_SLEEP_RISE) < face_zzz_y(0), "Zzz rises");
+    face_sleep_widget(&cat);
+    check(inside_band(&band, &cat), "the cat is inside the band");
+    check(cat.w == IDLE_CAT_W && cat.h == IDLE_CAT_H, "the widget is exactly the cat's canvas");
+    check((cat.x % 2) == 0 && (cat.y % 2) == 0, "the cat starts on an even pixel");
+    check(cat.x + cat.w / 2 == FACE_SCREEN / 2, "the cat is centered across the panel");
+    check(cat.y >= FACE_MESSAGE_Y + 28, "the cat clears the message line");
+    check(cat.y + cat.h <= FACE_DOCK_TOP, "the cat clears the dock chrome");
+    check(IDLE_CAT_W <= FACE_SCREEN - 2 * FACE_EDGE, "the cat clears the bezel");
+    check(IDLE_CAT_EAR_X + IDLE_CAT_EAR_W <= IDLE_CAT_W && IDLE_CAT_EAR_Y + IDLE_CAT_EAR_H <= IDLE_CAT_H,
+          "the ear patch is inside the cat");
+    check(IDLE_CAT_TAIL_X + IDLE_CAT_TAIL_W <= IDLE_CAT_W && IDLE_CAT_TAIL_Y + IDLE_CAT_TAIL_H <= IDLE_CAT_H,
+          "the tail patch is inside the cat");
+    check(((cat.x + IDLE_CAT_EAR_X) % 2) == 0 && ((cat.y + IDLE_CAT_EAR_Y) % 2) == 0,
+          "the ear patch starts on an even panel pixel");
+    check(((cat.x + IDLE_CAT_TAIL_X) % 2) == 0 && ((cat.y + IDLE_CAT_TAIL_Y) % 2) == 0,
+          "the tail patch starts on an even panel pixel");
+    face_linkdown_widget(&down);
+    check(inside_band(&band, &down), "the link-down screen is inside the band");
+    check(down.w == FACE_LINKDOWN_W && down.h == FACE_LINKDOWN_ICON + FACE_LINKDOWN_GAP + FACE_LINKDOWN_CAPTION_H,
+          "the widget holds the icon, a gap, and one caption line");
+    check((down.x % 2) == 0 && (down.y % 2) == 0 && (down.w % 2) == 0 && (down.h % 2) == 0,
+          "the link-down box is even in position and size");
+    check(down.x + down.w / 2 == FACE_SCREEN / 2, "the link-down screen is centered across the panel");
+    check(down.y >= FACE_MESSAGE_Y + 28 && down.y + down.h <= FACE_DOCK_TOP,
+          "the link-down screen sits between the message line and the dock");
+    check(FACE_LINKDOWN_ICON <= FACE_LINKDOWN_W, "the icon fits the widget width");
     if (g_failed) {
         return 1;
     }

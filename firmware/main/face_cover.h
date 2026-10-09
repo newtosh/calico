@@ -1,7 +1,9 @@
 #pragma once
 
+#include "idle_cat_geom.h"
+
 /* Layout numbers shared with ui.c. The face band is the region that has to
- * be rewritten when the desk switches between the sleep glyph and the list. */
+ * be rewritten when the desk switches between the sleeping cat and the list. */
 
 enum {
     FACE_SCREEN = 480,
@@ -15,12 +17,12 @@ enum {
     FACE_DOCK_GAP = 16,
     FACE_DOCK_TOP = FACE_SCREEN - FACE_EDGE - FACE_DOCK_INSET - FACE_DOCK_GAP - FACE_BTN_H,
     FACE_MESSAGE_Y = 74,
-    FACE_SLEEP_HEAD = 96,
-    /* Head plus the gap the Zzz used to occupy above it. */
-    FACE_SLEEP_SPAN = 96 + 36,
-    FACE_SLEEP_W = 96 + 56,
-    FACE_SLEEP_BOB = 10,
-    FACE_SLEEP_RISE = 12
+    /* The link-down screen: a cat-off icon, a gap, and one line of caption. */
+    FACE_LINKDOWN_ICON = 152,
+    FACE_LINKDOWN_W = 280,
+    FACE_LINKDOWN_GAP = 20,
+    /* lv_font_montserrat_24 line_height is 27. */
+    FACE_LINKDOWN_CAPTION_H = 30
 };
 
 typedef struct {
@@ -41,9 +43,9 @@ typedef struct {
  * the dock. Start is even and end is odd so a CO5300 window (even size) fits. */
 void face_cover_band(face_rect_t *out);
 
-/* Widget box at this bob (0..FACE_SLEEP_BOB). The rise pad is inside the box,
- * so the Zzz never draws outside it. */
-void face_sleep_widget(int bob, face_box_t *out);
+/* Where the sleeping cat sits: centered across the panel and between the message
+ * line and the dock. Starts on even pixels, and so do its patch boxes. */
+void face_sleep_widget(face_box_t *out);
 
-/* Y of the Zzz inside the widget at this rise (0..FACE_SLEEP_RISE). */
-int face_zzz_y(int rise);
+/* Where the link-down screen sits: the same centering as the cat, even pixels. */
+void face_linkdown_widget(face_box_t *out);

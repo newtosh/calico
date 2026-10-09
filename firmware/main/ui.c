@@ -4,10 +4,13 @@
 #include "desk_status.h"
 #include "face_cover.h"
 #include "icons.h"
+#include "idle_cat.h"
+#include "idle_cat_anim.h"
 #include "lvgl.h"
 #include "settings_layout.h"
 
 #include "esp_heap_caps.h"
+#include "esp_random.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -133,6 +136,7 @@ _Static_assert(SHEET_INNER_NEAR_OPA > SHEET_INNER_FAR_OPA, "inner highlight is s
 _Static_assert(SHEET_MARK == MARK_PX * 5, "sheet mark is five times the list mark");
 _Static_assert(SHEET_OPA >= 248, "sheet stays opaque enough to hide roster type");
 _Static_assert((int)MESSAGE_Y == (int)FACE_MESSAGE_Y, "sleep origin");
+_Static_assert(DESK_LINKDOWN_PX == FACE_LINKDOWN_ICON, "the link-down icon fills the space the layout reserves");
 _Static_assert((int)CC_DOCK_TOP == (int)DOCK_TOP, "control center dock line");
 _Static_assert((int)CC_OPEN_Y + (int)CC_PANEL_H == (int)SCREEN_PX, "control center meets the bottom edge");
 _Static_assert((int)CC_GRAB == (int)EDGE_PX + (int)BAR_H, "grab is the status strip");
@@ -207,12 +211,16 @@ static int s_known_count;
 static char s_global_url[128];
 static char s_global_token[128];
 static lv_obj_t *s_sleep;
-static lv_obj_t *s_head;
-static lv_obj_t *s_eye_l;
-static lv_obj_t *s_eye_r;
-static lv_obj_t *s_zzz;
+static lv_obj_t *s_cat_ear;
+static lv_obj_t *s_cat_tail;
+static lv_timer_t *s_cat_timer;
+static idle_cat_t s_cat;
 static int s_asleep;
-static int s_face_asleep = -1;
+static lv_obj_t *s_linkdown;
+static lv_obj_t *s_linkdown_caption;
+static const char *s_linkdown_text;
+/* What the face band shows: 0 the list, 1 the sleeping cat, 2 the link-down screen. */
+static int s_face_mode = -1;
 static int s_list_cover;
 static lv_obj_t *s_bar;
 static lv_obj_t *s_lamp;
@@ -1564,59 +1572,35 @@ static void anim_delete(void *var) {
 #endif
 }
 
-static void sleep_bob(void *obj, int32_t v) {
-    face_box_t box;
-    face_sleep_widget((int)v, &box);
-    lv_obj_set_pos(obj, box.x, box.y);
+/* Shows the next pose and asks again when its wait is over. Only the ear or the tail
+ * changes, so the panel rewrites one small patch box, never the whole cat. */
+static void cat_tick(lv_timer_t *timer) {
+    idle_cat_pose_t pose = idle_cat_next(&s_cat, esp_random());
+    lv_image_set_src(s_cat_ear, &idle_cat_ear_img[pose.ear]);
+    lv_image_set_src(s_cat_tail, &idle_cat_tail_img[pose.tail]);
+    lv_timer_set_period(timer, pose.wait_ms);
 }
 
-/* v is 0..100. Opacity is 0 at both ends so the repeat does not pop. */
-static void sleep_zzz(void *obj, int32_t v) {
-    int opa = LV_OPA_COVER;
-    int rise = 0;
-    if (v < 20) {
-        opa = v * LV_OPA_COVER / 20;
-    } else if (v > 80) {
-        opa = (100 - v) * LV_OPA_COVER / 20;
-        rise = 12;
-    } else {
-        rise = ((v - 20) * 12) / 60;
+static void cat_timer_drop(void) {
+    lv_timer_t *timer = s_cat_timer;
+    if (!timer) {
+        return;
     }
-    lv_obj_set_y(obj, face_zzz_y(rise));
-    lv_obj_set_style_opa(obj, (lv_opa_t)opa, 0);
+    s_cat_timer = NULL;
+#if LVGL_VERSION_MAJOR == 9 && LVGL_VERSION_MINOR < 3
+    lv_timer_del(timer);
+#else
+    lv_timer_delete(timer);
+#endif
 }
 
-static void start_anim(lv_obj_t *obj, lv_anim_exec_xcb_t exec, int32_t from, int32_t to, uint32_t time,
-                       int playback) {
-    lv_anim_t a;
-    lv_anim_init(&a);
-    lv_anim_set_var(&a, obj);
-    lv_anim_set_exec_cb(&a, exec);
-    lv_anim_set_values(&a, from, to);
-    lv_anim_set_duration(&a, time);
-    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
-    if (playback) {
-        lv_anim_set_playback_duration(&a, time);
-        lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
-    }
-    lv_anim_start(&a);
-}
-
-/* Large face in the empty middle of the 480 panel. 16px bezel stays.
- * The bob and the Zzz stay inside the widget, so hide dirties every pixel. */
+/* The sleeping cat in the empty middle of the 480 panel. 16px bezel stays.
+ * It is one fixed box, so hide dirties every pixel of it. */
 static void place_sleep(void) {
     face_box_t box;
-    face_sleep_widget(0, &box);
+    face_sleep_widget(&box);
     lv_obj_set_size(s_sleep, box.w, box.h);
     lv_obj_set_pos(s_sleep, box.x, box.y);
-    lv_obj_set_size(s_head, FACE_SLEEP_HEAD, FACE_SLEEP_HEAD);
-    lv_obj_set_size(s_eye_l, 22, 4);
-    lv_obj_set_size(s_eye_r, 22, 4);
-    lv_obj_align(s_eye_l, LV_ALIGN_CENTER, -16, 3);
-    lv_obj_align(s_eye_r, LV_ALIGN_CENTER, 16, 3);
-    lv_obj_set_style_text_font(s_zzz, &lv_font_montserrat_24, 0);
-    lv_obj_align(s_head, LV_ALIGN_BOTTOM_LEFT, 0, 0);
-    lv_obj_set_pos(s_zzz, FACE_SLEEP_HEAD - 4, face_zzz_y(0));
 }
 
 static void sleep_stop(void) {
@@ -1626,8 +1610,7 @@ static void sleep_stop(void) {
     if (!s_asleep && lv_obj_has_flag(s_sleep, LV_OBJ_FLAG_HIDDEN)) {
         return;
     }
-    anim_delete(s_sleep);
-    anim_delete(s_zzz);
+    cat_timer_drop();
     s_asleep = 0;
     lv_obj_set_hidden(s_sleep, true);
 }
@@ -1639,9 +1622,9 @@ static void sleep_show(void) {
     place_sleep();
     lv_obj_set_hidden(s_sleep, false);
     s_asleep = 1;
-    lv_obj_set_style_opa(s_zzz, LV_OPA_TRANSP, 0);
-    start_anim(s_sleep, sleep_bob, 0, FACE_SLEEP_BOB, 2200, 1);
-    start_anim(s_zzz, sleep_zzz, 0, 100, 4200, 0);
+    idle_cat_init(&s_cat);
+    s_cat_timer = lv_timer_create(cat_tick, IDLE_CAT_REST_MIN_MS, NULL);
+    cat_tick(s_cat_timer);
 }
 
 /* The CO5300 rewrites the dirty window. A narrow one can miss the ring.
@@ -1670,9 +1653,42 @@ static void cover_agents(int on) {
     lv_obj_set_style_bg_opa(s_agent_box, on ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
 }
 
+/* Link down with nothing listed: a cat-off icon and one line saying why. The caption
+ * is set only when the reason changes, so a repeat apply does not redraw it. */
+static void linkdown_show(void) {
+    face_box_t box;
+    const char *text = s_wifi_ip ? "Can't reach Calico" : "No Wi-Fi";
+    if (lv_obj_is_hidden(s_linkdown)) {
+        face_linkdown_widget(&box);
+        lv_obj_set_size(s_linkdown, box.w, box.h);
+        lv_obj_set_pos(s_linkdown, box.x, box.y);
+        lv_obj_set_hidden(s_linkdown, false);
+    }
+    if (s_linkdown_text != text) {
+        s_linkdown_text = text;
+        lv_label_set_text_static(s_linkdown_caption, text);
+    }
+}
+
+static void linkdown_hide(void) {
+    if (s_linkdown && !lv_obj_is_hidden(s_linkdown)) {
+        lv_obj_set_hidden(s_linkdown, true);
+    }
+}
+
+/* Whatever the idle face is showing goes away: settings or a note takes the screen. */
+static void face_idle_stop(void) {
+    sleep_stop();
+    linkdown_hide();
+    s_face_mode = -1; /* the next sync repaints the band whatever it shows */
+}
+
 static void sync_sleep(const desk_view_t *view, int failures, int lamp) {
     int listed = view && view->known_count > 0;
-    int asleep = lv_obj_is_hidden(s_settings) && desk_show_sleep(view, failures) && lamp != DESK_LAMP_RED;
+    int closed = lv_obj_is_hidden(s_settings);
+    int asleep = closed && desk_show_sleep(view, failures) && lamp != DESK_LAMP_RED;
+    int down = closed && lamp == DESK_LAMP_RED && desk_roster_empty(view);
+    int mode = asleep ? 1 : (down ? 2 : 0);
     if (asleep) {
         cover_agents(0);
         sleep_show();
@@ -1680,44 +1696,52 @@ static void sync_sleep(const desk_view_t *view, int failures, int lamp) {
         sleep_stop();
         cover_agents(listed);
     }
-    if (s_face_asleep != asleep) {
-        s_face_asleep = asleep;
+    if (down) {
+        linkdown_show();
+    } else {
+        linkdown_hide();
+    }
+    if (s_face_mode != mode) {
+        s_face_mode = mode;
         paint_face_band();
     }
 }
 
-static lv_obj_t *sleep_eye(lv_obj_t *parent) {
-    lv_obj_t *bar = lv_obj_create(parent);
-    lv_obj_set_style_bg_color(bar, lv_color_hex(INK_DIM), 0);
-    lv_obj_set_style_bg_opa(bar, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(bar, 0, 0);
-    lv_obj_set_style_radius(bar, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_pad_all(bar, 0, 0);
-    lv_obj_set_style_shadow_width(bar, 0, 0);
-    lv_obj_clear_flag(bar, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    return bar;
+/* One piece of the cat: an A8 mask tinted the dim ink, so the idle screen stays quiet. */
+static lv_obj_t *cat_piece(lv_obj_t *parent, const lv_image_dsc_t *img, int x, int y) {
+    lv_obj_t *piece = lv_image_create(parent);
+    lv_image_set_src(piece, img);
+    lv_obj_set_pos(piece, x, y);
+    lv_obj_set_style_image_recolor(piece, lv_color_hex(INK_DIM), 0);
+    lv_obj_set_style_image_recolor_opa(piece, LV_OPA_COVER, 0);
+    lv_obj_clear_flag(piece, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    return piece;
 }
 
 static void build_sleep(lv_obj_t *screen) {
     s_sleep = lv_obj_create(screen);
-    s_head = lv_obj_create(s_sleep);
-    s_eye_l = sleep_eye(s_head);
-    s_eye_r = sleep_eye(s_head);
-    s_zzz = lv_label_create(s_sleep);
     flatten(s_sleep);
     lv_obj_clear_flag(s_sleep, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_set_style_radius(s_head, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(s_head, lv_color_hex(INK_DIM), 0);
-    lv_obj_set_style_bg_opa(s_head, LV_OPA_20, 0);
-    lv_obj_set_style_border_color(s_head, lv_color_hex(INK_DIM), 0);
-    lv_obj_set_style_border_width(s_head, 3, 0);
-    lv_obj_set_style_pad_all(s_head, 0, 0);
-    lv_obj_set_style_shadow_width(s_head, 0, 0);
-    lv_obj_clear_flag(s_head, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
-    lv_label_set_text(s_zzz, "Zzz");
-    lv_obj_set_style_text_color(s_zzz, lv_color_hex(INK_DIM), 0);
-    lv_obj_clear_flag(s_zzz, LV_OBJ_FLAG_CLICKABLE);
+    cat_piece(s_sleep, &idle_cat_base_img, 0, 0);
+    s_cat_ear = cat_piece(s_sleep, &idle_cat_ear_img[0], IDLE_CAT_EAR_X, IDLE_CAT_EAR_Y);
+    s_cat_tail = cat_piece(s_sleep, &idle_cat_tail_img[0], IDLE_CAT_TAIL_X, IDLE_CAT_TAIL_Y);
     lv_obj_set_hidden(s_sleep, true);
+}
+
+static void build_linkdown(lv_obj_t *screen) {
+    s_linkdown = lv_obj_create(screen);
+    flatten(s_linkdown);
+    lv_obj_clear_flag(s_linkdown, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    cat_piece(s_linkdown, &desk_icon_linkdown, (FACE_LINKDOWN_W - FACE_LINKDOWN_ICON) / 2, 0);
+    s_linkdown_caption = lv_label_create(s_linkdown);
+    lv_obj_set_width(s_linkdown_caption, FACE_LINKDOWN_W);
+    lv_label_set_long_mode(s_linkdown_caption, LV_LABEL_LONG_CLIP);
+    lv_obj_set_pos(s_linkdown_caption, 0, FACE_LINKDOWN_ICON + FACE_LINKDOWN_GAP);
+    lv_obj_set_style_text_font(s_linkdown_caption, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_align(s_linkdown_caption, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_style_text_color(s_linkdown_caption, lv_color_hex(INK_DIM), 0);
+    lv_obj_clear_flag(s_linkdown_caption, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_hidden(s_linkdown, true);
 }
 
 static void paint_tile(lv_obj_t *tile, int on) {
@@ -2550,6 +2574,7 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     lv_obj_align(s_message, LV_ALIGN_TOP_MID, 0, MESSAGE_Y);
     /* Sleeper under the list. */
     build_sleep(screen);
+    build_linkdown(screen);
     build_agent_rows(screen);
     dock = lv_obj_create(screen);
     lv_obj_set_size(dock, SCREEN_PX, BTN_H + EDGE_PX + DOCK_INSET + DOCK_GAP);
@@ -2862,7 +2887,7 @@ int ui_settings_is_open(void) {
 
 void ui_open_settings(void) {
     cc_close_now();
-    sleep_stop();
+    face_idle_stop();
     lv_obj_set_hidden(s_settings, false);
     lv_obj_move_foreground(s_settings);
     if (!lv_obj_is_hidden(s_keyboard)) {
@@ -2911,7 +2936,7 @@ void ui_set_settings_status(const char *text) {
 }
 
 void ui_show_panel_note(const char *phase, const char *message) {
-    sleep_stop();
+    face_idle_stop();
     if (!s_message) {
         return;
     }
