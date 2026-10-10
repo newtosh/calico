@@ -276,6 +276,74 @@
         letter-spacing: 0.025em;
         text-transform: uppercase;
       }
+      .stepper {
+        display: flex;
+        list-style: none;
+        margin: 0 0 1rem;
+        padding: 0;
+      }
+      .stepper li {
+        flex: 1;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.75rem;
+        color: var(--muted);
+      }
+      .stepper li + li::before {
+        content: "";
+        position: absolute;
+        top: 0.8125rem;
+        right: 50%;
+        width: 100%;
+        height: 2px;
+        background: var(--stroke);
+      }
+      .stepper li.done + li::before,
+      .stepper li.now::before,
+      .stepper li.fail::before {
+        background: var(--sage);
+      }
+      .stepper .n {
+        position: relative;
+        z-index: 1;
+        width: 1.625rem;
+        height: 1.625rem;
+        border-radius: 50%;
+        border: 2px solid var(--stroke);
+        background: var(--surface);
+        display: grid;
+        place-items: center;
+        font-weight: 600;
+      }
+      .stepper .done .n {
+        background: var(--selected);
+        border-color: var(--sage);
+        color: var(--sage);
+      }
+      .stepper .now .n {
+        border-color: var(--amber);
+        color: var(--amber);
+      }
+      .stepper .now .lbl {
+        color: var(--cream);
+      }
+      .stepper .fail .n {
+        border-color: var(--red);
+        color: var(--cream);
+      }
+      .stepper .fail .lbl {
+        color: var(--cream);
+      }
+      .sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+      }
       .list {
         margin: 0.25rem 0 0.5rem;
         padding-left: 1.25rem;
@@ -407,7 +475,26 @@
                   aria-modal="true"
                   aria-labelledby="m1"
                 >
-                  <p class="stepno">Step 1 of 4</p>
+                  <ol class="stepper" aria-label="Setup progress">
+                    <li class="now" aria-current="step">
+                      <span class="n" aria-hidden="true">1</span
+                      ><span class="lbl"
+                        >Confirm<span class="sr"> (current step)</span></span
+                      >
+                    </li>
+                    <li class="todo">
+                      <span class="n" aria-hidden="true">2</span
+                      ><span class="lbl">Sign in<span class="sr"></span></span>
+                    </li>
+                    <li class="todo">
+                      <span class="n" aria-hidden="true">3</span
+                      ><span class="lbl">Set up<span class="sr"></span></span>
+                    </li>
+                    <li class="todo">
+                      <span class="n" aria-hidden="true">4</span
+                      ><span class="lbl">Done<span class="sr"></span></span>
+                    </li>
+                  </ol>
                   <h3 id="m1">Set up a relay with Cloudflare</h3>
                   <p>Here is exactly what calico will do:</p>
                   <ol class="list">
@@ -476,7 +563,28 @@
                   aria-modal="true"
                   aria-labelledby="m2"
                 >
-                  <p class="stepno">Step 2 of 4</p>
+                  <ol class="stepper" aria-label="Setup progress">
+                    <li class="done">
+                      <span class="n" aria-hidden="true">✓</span
+                      ><span class="lbl"
+                        >Confirm<span class="sr"> (done)</span></span
+                      >
+                    </li>
+                    <li class="now" aria-current="step">
+                      <span class="n" aria-hidden="true">2</span
+                      ><span class="lbl"
+                        >Sign in<span class="sr"> (current step)</span></span
+                      >
+                    </li>
+                    <li class="todo">
+                      <span class="n" aria-hidden="true">3</span
+                      ><span class="lbl">Set up<span class="sr"></span></span>
+                    </li>
+                    <li class="todo">
+                      <span class="n" aria-hidden="true">4</span
+                      ><span class="lbl">Done<span class="sr"></span></span>
+                    </li>
+                  </ol>
                   <h3 id="m2">Sign in to Cloudflare</h3>
                   <p class="amber" role="status">
                     Waiting for you in the browser. Approve the request on
@@ -533,7 +641,30 @@
                   aria-modal="true"
                   aria-labelledby="m3"
                 >
-                  <p class="stepno">Step 3 of 4</p>
+                  <ol class="stepper" aria-label="Setup progress">
+                    <li class="done">
+                      <span class="n" aria-hidden="true">✓</span
+                      ><span class="lbl"
+                        >Confirm<span class="sr"> (done)</span></span
+                      >
+                    </li>
+                    <li class="done">
+                      <span class="n" aria-hidden="true">✓</span
+                      ><span class="lbl"
+                        >Sign in<span class="sr"> (done)</span></span
+                      >
+                    </li>
+                    <li class="now" aria-current="step">
+                      <span class="n" aria-hidden="true">3</span
+                      ><span class="lbl"
+                        >Set up<span class="sr"> (current step)</span></span
+                      >
+                    </li>
+                    <li class="todo">
+                      <span class="n" aria-hidden="true">4</span
+                      ><span class="lbl">Done<span class="sr"></span></span>
+                    </li>
+                  </ol>
                   <h3 id="m3">Setting up your relay</h3>
                   <ol
                     class="steps"
@@ -610,7 +741,32 @@
                   aria-modal="true"
                   aria-labelledby="m4"
                 >
-                  <p class="stepno">Step 4 of 4</p>
+                  <ol class="stepper" aria-label="Setup progress">
+                    <li class="done">
+                      <span class="n" aria-hidden="true">✓</span
+                      ><span class="lbl"
+                        >Confirm<span class="sr"> (done)</span></span
+                      >
+                    </li>
+                    <li class="done">
+                      <span class="n" aria-hidden="true">✓</span
+                      ><span class="lbl"
+                        >Sign in<span class="sr"> (done)</span></span
+                      >
+                    </li>
+                    <li class="done">
+                      <span class="n" aria-hidden="true">✓</span
+                      ><span class="lbl"
+                        >Set up<span class="sr"> (done)</span></span
+                      >
+                    </li>
+                    <li class="done">
+                      <span class="n" aria-hidden="true">✓</span
+                      ><span class="lbl"
+                        >Done<span class="sr"> (done)</span></span
+                      >
+                    </li>
+                  </ol>
                   <h3 id="m4">Your relay is ready</h3>
                   <p class="sage">
                     Everything is set up and calico's access to your Cloudflare
@@ -673,7 +829,30 @@
                   aria-modal="true"
                   aria-labelledby="m5"
                 >
-                  <p class="stepno">Step 3 of 4</p>
+                  <ol class="stepper" aria-label="Setup progress">
+                    <li class="done">
+                      <span class="n" aria-hidden="true">✓</span
+                      ><span class="lbl"
+                        >Confirm<span class="sr"> (done)</span></span
+                      >
+                    </li>
+                    <li class="done">
+                      <span class="n" aria-hidden="true">✓</span
+                      ><span class="lbl"
+                        >Sign in<span class="sr"> (done)</span></span
+                      >
+                    </li>
+                    <li class="fail" aria-current="step">
+                      <span class="n" aria-hidden="true">!</span
+                      ><span class="lbl"
+                        >Set up<span class="sr"> (failed)</span></span
+                      >
+                    </li>
+                    <li class="todo">
+                      <span class="n" aria-hidden="true">4</span
+                      ><span class="lbl">Done<span class="sr"></span></span>
+                    </li>
+                  </ol>
                   <h3 id="m5">Setup stopped</h3>
                   <p role="alert">
                     <span class="err"

@@ -67,6 +67,8 @@ Settings states:
 2. **Connected.** The relay address, `Last checked 12 s ago`, messages waiting, requests used today, and `Copy for Grok Bot` (the URL, the send token and a note to send a `User-Agent`), `Rotate tokens…` and `Turn off…`. The first view after setup adds a status line, `Relay is on`. `Rotate` and `Turn off` need a new sign-in, so they reuse the dialog from step 2 on. `Turn off` keeps its destructive confirm and offers to delete the Worker too.
 3. **Problem.** `Can't reach your relay` with the reason and a retry, or `The relay's daily budget is used. It resumes at 00:00 UTC.`
 
+The setup dialog carries a four-node stepper across its top: Confirm, Sign in, Set up, Done. A finished step is a filled node with a check, the current step an amber ring with its number, and a later step a plain ring. A failed step turns red and shows `!`. Every state differs by shape as well as color, and the list is an `<ol>` with `aria-current="step"`, so a screen reader hears the same thing.
+
 The setup dialog:
 
 1. **Confirm.** Says exactly what will happen: Calico opens your browser; Cloudflare asks you to approve **Workers Admin**; Calico deploys a Worker called `calico-relay` to your own account with two secrets; it then revokes its own access. `Continue in browser` and `Cancel`.
