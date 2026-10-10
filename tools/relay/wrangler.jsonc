@@ -1,0 +1,14 @@
+{
+  "name": "calico-relay",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-01",
+  "durable_objects": { "bindings": [{ "name": "INBOX", "class_name": "Inbox" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Inbox"] }],
+  "vars": {
+    "TOPIC": "inbox",
+    "TTL_SECONDS": "86400",
+    "MAX_MESSAGES": "200",
+    "MAX_BODY_BYTES": "4096",
+    "DAILY_REQUEST_BUDGET": "60000"
+  }
+}
