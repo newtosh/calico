@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Calico</title>
+    <meta
+      name="description"
+      content="Calico is a desktop companion for the ginger desk panel. It shows what your AI agents are doing."
+    />
+    <link rel="icon" href="logo-128.png" />
+    <style>
+      :root {
+        --bg: #14160f;
+        --text: #efe7d6;
+        --muted: #a39b88;
+        --amber: #e2a23a;
+        --stroke: #6d6756;
+        color-scheme: dark light;
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #faf7f0;
+          --text: #26241c;
+          --muted: #6b6455;
+          --amber: #875708;
+          --stroke: #cfc7b3;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          16px/1.6 system-ui,
+          "Cantarell",
+          "Noto Sans",
+          sans-serif;
+      }
+      main {
+        max-width: 42rem;
+        margin: 0 auto;
+        padding: 3rem 1rem 4rem;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+      header img {
+        width: 4.5rem;
+        height: 4.5rem;
+        border-radius: 1rem;
+      }
+      h1 {
+        margin: 0;
+        font-size: 2rem;
+      }
+      h2 {
+        margin: 2.5rem 0 0.5rem;
+        font-size: 1.15rem;
+        color: var(--amber);
+      }
+      p,
+      li {
+        max-width: 38rem;
+      }
+      .lede {
+        color: var(--muted);
+        margin: 0.25rem 0 0;
+      }
+      a {
+        color: var(--amber);
+      }
+      code {
+        font:
+          0.9em ui-monospace,
+          "JetBrains Mono",
+          monospace;
+      }
+      pre {
+        overflow-x: auto;
+        padding: 0.75rem 1rem;
+        border: 1px solid var(--stroke);
+        border-radius: 0.5rem;
+      }
+      footer {
+        margin-top: 3rem;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <img src="logo-128.png" alt="" />
+        <div>
+          <h1>Calico</h1>
+          <p class="lede">A desktop companion for the ginger desk panel.</p>
+        </div>
+      </header>
+
+      <h2>What it does</h2>
+      <p>
+        Calico runs on your computer and shows what your AI agents are doing:
+        which are running, which are waiting on you, and which have finished. It
+        serves the status the ginger desk panel reads, and it has a dashboard, a
+        console, and tools for setting up the panel over USB or Bluetooth. Grok
+        Bot routines and Cursor agents can report to it.
+      </p>
+
+      <h2>Get it</h2>
+      <p>
+        Calico is open source and runs on Linux for now. Packages for Debian and
+        Ubuntu, Arch, and an AppImage are on the
+        <a href="https://github.com/newtosh/calico/releases/latest"
+          >releases page</a
+        >. Each release has checksums and a build attestation, and the Arch
+        package is signed, so pacman can install it straight from the release
+        URL.
+      </p>
+      <p>
+        The <a href="https://github.com/newtosh/calico#install">README</a> has
+        the full steps, including how to trust the signing key.
+      </p>
+
+      <h2 id="privacy">Privacy</h2>
+      <p>
+        Calico keeps its data on your machine. It has no accounts, no analytics,
+        and no telemetry. The only outside address it ever contacts is
+        <code>api.cursor.com</code>, and only if you have given it a Cursor API
+        key.
+      </p>
+
+      <h2>Signing in to Cloudflare (in development)</h2>
+      <p>
+        We are building an optional relay, so agents that run in the cloud can
+        reach Calico even when your computer is asleep. When it ships, Calico
+        will ask you to sign in to Cloudflare so it can set the relay up for
+        you. It will deploy a small Worker to <em>your own</em> Cloudflare
+        account, which you can see and delete in your dashboard.
+      </p>
+      <p>The sign-in is designed to work like this:</p>
+      <ul>
+        <li>
+          You approve it on Cloudflare's own consent screen. Calico never sees
+          your password.
+        </li>
+        <li>
+          It asks for one permission, Workers Admin, which is what Cloudflare
+          requires to upload a Worker.
+        </li>
+        <li>
+          The access token lasts one hour, stays on your computer, and Calico
+          revokes it as soon as setup finishes.
+        </li>
+        <li>Nothing about your account is sent to the Calico project.</li>
+        <li>
+          You can review or revoke the access at any time under Connected
+          Applications in your Cloudflare profile.
+        </li>
+      </ul>
+
+      <footer>
+        <a href="https://github.com/newtosh/calico">Source on GitHub</a> · MIT
+        licensed
+      </footer>
+    </main>
+  </body>
+</html>
