@@ -166,6 +166,8 @@ export class DeskStore {
   private agents = new Map<string, AgentRecord>();
   private unread = 0;
   private capture = false;
+  // When unread was last cleared. A replayed note from before it stays gone.
+  private noteFloor = "";
   private frameBytes: Buffer | null = null;
   private readonly now: () => Date;
   private readonly runningTtlMs: () => number;
@@ -199,6 +201,18 @@ export class DeskStore {
    * A replay older than what the agent already shows is dropped.
    */
   applyEvent(raw: EventIn, at?: string): DeskEvent {
+    return this.ingest(raw, at).event;
+  }
+
+  /** Apply an event that happened at `at`. "stale" means it changed nothing. */
+  applyReplayed(raw: EventIn, at: string): "applied" | "stale" {
+    return this.ingest(raw, at).stale ? "stale" : "applied";
+  }
+
+  private ingest(
+    raw: EventIn,
+    at?: string,
+  ): { event: DeskEvent; stale: boolean } {
     const agentId = raw.agent_id ?? "";
     if (!AGENT_TYPES.has(raw.type) && raw.type !== "note")
       throw new StoreError("unknown event type");
@@ -206,8 +220,11 @@ export class DeskStore {
       throw new StoreError("agent_id required");
     const stamp = at === undefined ? this.stamp() : this.replayStamp(at);
     const known = this.agents.get(agentId);
-    if (at !== undefined && known && stamp < known.updated_at)
-      return this.stale(raw, stamp);
+    const behind = known ? stamp < known.updated_at : false;
+    // A note has no agent, so it is stale when the person cleared unread since.
+    const cleared = raw.type === "note" && stamp <= this.noteFloor;
+    if (at !== undefined && (behind || cleared))
+      return { event: this.stale(raw, stamp), stale: true };
     const title = raw.title ?? "";
     const message = raw.message ?? "";
     const event = makeEvent({
@@ -237,7 +254,7 @@ export class DeskStore {
         );
         if (changed) this.remember(event);
         this.persist();
-        return event;
+        return { event, stale: false };
       }
     }
     if (raw.type === "agent.finished") {
@@ -246,7 +263,7 @@ export class DeskStore {
       // Keep the question up while they are still waiting.
       this.touch(agentId, title, event, "idle", waiting, waiting ? null : "");
       this.persist();
-      return event;
+      return { event, stale: false };
     }
     if (raw.type === "note" && message) this.unread = 1;
     this.remember(event);
@@ -258,7 +275,7 @@ export class DeskStore {
       this.touch(agentId, title, event, "running", false, message || null);
     }
     this.persist();
-    return event;
+    return { event, stale: false };
   }
 
   dismiss(agentId = ""): void {
@@ -280,6 +297,7 @@ export class DeskStore {
       return;
     }
     this.unread = 0;
+    this.noteFloor = at;
     this.remember(
       makeEvent({
         type: "note",
@@ -316,6 +334,7 @@ export class DeskStore {
   clearUnread(): void {
     if (this.unread === 0) return;
     this.unread = 0;
+    this.noteFloor = this.stamp();
     this.persist();
   }
 

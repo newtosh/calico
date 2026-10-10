@@ -1,12 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import { defaultConfig } from "../../src/server/config";
 import {
+  fetchRelay,
   nextDelaySeconds,
+  RelayState,
   pollRelayOnce,
   type RelayGet,
   type RelayReply,
   startRelayPoll,
 } from "../../src/server/relay";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { DeskStore } from "../../src/server/store";
 
 const NOW = new Date("2026-10-10T12:00:00Z");
@@ -269,6 +273,180 @@ describe("startRelayPoll", () => {
       expect(get).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
+    }
+  });
+});
+
+describe("a message that cannot be applied", () => {
+  it("is refused when its time is out of range, not thrown", async () => {
+    const { store, get } = setup(
+      reply([
+        line("1", { type: "agent.launched", agent_id: "a1" }, 1e20),
+        line("2", { type: "agent.launched", agent_id: "a2" }),
+      ]),
+    );
+    const out = await pollRelayOnce(store, relay, get);
+    expect(out).toMatchObject({
+      ok: true,
+      applied: 1,
+      refused: 1,
+      cursor: "2",
+    });
+  });
+
+  it("is refused when the store throws", async () => {
+    const { store, get } = setup(
+      reply([line("1", { type: "agent.launched", agent_id: "a1" })]),
+    );
+    vi.spyOn(store, "applyReplayed").mockImplementation(() => {
+      throw new Error("disk full");
+    });
+    const out = await pollRelayOnce(store, relay, get, () => undefined);
+    expect(out).toMatchObject({
+      ok: true,
+      applied: 0,
+      refused: 1,
+      cursor: "1",
+    });
+  });
+
+  it("is refused when it has no id, since the cursor could not pass it", async () => {
+    const row = JSON.stringify({
+      time: 1760083200,
+      event: "message",
+      message: JSON.stringify({ type: "agent.launched", agent_id: "a1" }),
+    });
+    const { store, get } = setup(reply([row]));
+    const out = await pollRelayOnce(store, relay, get);
+    expect(out).toMatchObject({ ok: true, applied: 0, refused: 1 });
+  });
+
+  it("does not count a replay the store dropped as applied", async () => {
+    const { store, get } = setup(
+      reply([
+        line("1", { type: "agent.finished", agent_id: "a1" }, 1760083200),
+        line("2", { type: "agent.launched", agent_id: "a1" }, 1760083100),
+      ]),
+    );
+    const out = await pollRelayOnce(store, relay, get);
+    expect(out).toMatchObject({
+      ok: true,
+      applied: 1,
+      refused: 0,
+      cursor: "2",
+    });
+  });
+});
+
+describe("startRelayPoll when things go wrong", () => {
+  const configured = {
+    ...defaultConfig(),
+    relay_url: "https://r.example/inbox",
+    relay_token: "tok",
+  };
+
+  it("keeps polling after the cursor cannot be saved", async () => {
+    vi.useFakeTimers();
+    try {
+      const store = new DeskStore({ now: () => NOW });
+      const get = vi.fn<RelayGet>(async () =>
+        reply([line("4", { type: "agent.launched", agent_id: "a1" })]),
+      );
+      const stop = startRelayPoll(
+        store,
+        () => configured,
+        () => {
+          throw new Error("read-only disk");
+        },
+        undefined,
+        get,
+        () => undefined,
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(get.mock.calls.length).toBeGreaterThan(1);
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not write one relay's cursor onto another", async () => {
+    vi.useFakeTimers();
+    try {
+      const store = new DeskStore({ now: () => NOW });
+      let release: (r: RelayReply) => void = () => undefined;
+      const get = vi.fn<RelayGet>(
+        () => new Promise<RelayReply>((resolve) => (release = resolve)),
+      );
+      let config = configured;
+      const saved: string[] = [];
+      const stop = startRelayPoll(
+        store,
+        () => config,
+        (c) => saved.push(c),
+        undefined,
+        get,
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      config = { ...configured, relay_url: "https://other.example/inbox" };
+      release(reply([line("99", { type: "agent.launched", agent_id: "a1" })]));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(saved).toEqual([]);
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("polls a newly connected relay within seconds, even after a long wait", async () => {
+    vi.useFakeTimers();
+    try {
+      const store = new DeskStore({ now: () => NOW });
+      const get = vi.fn<RelayGet>(async () =>
+        reply([], { status: 429, headers: { "retry-after": "3600" } }),
+      );
+      const state = new RelayState();
+      let config = configured;
+      const stop = startRelayPoll(
+        store,
+        () => config,
+        () => undefined,
+        state,
+        get,
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      expect(get).toHaveBeenCalledTimes(1);
+      config = { ...configured, relay_token: "new-token" };
+      get.mockImplementation(async () => reply([]));
+      await vi.advanceTimersByTimeAsync(6_000);
+      expect(get).toHaveBeenCalledTimes(2);
+      expect(state.snapshot(true).ok).toBe(true);
+      stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("fetchRelay", () => {
+  it("does not follow a redirect", async () => {
+    const hits: string[] = [];
+    const server = createServer((req, res) => {
+      hits.push(req.url ?? "");
+      if (req.url === "/inbox/json")
+        res.writeHead(302, { Location: "/elsewhere" }).end();
+      else res.writeHead(200).end("followed");
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      await expect(
+        fetchRelay(`http://127.0.0.1:${port}/inbox/json`, "t"),
+      ).rejects.toThrow();
+      expect(hits).toEqual(["/inbox/json"]);
+    } finally {
+      server.close();
     }
   });
 });

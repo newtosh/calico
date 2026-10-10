@@ -254,6 +254,8 @@ function relayUrl(value: unknown): string {
   const host = rest.split("/", 1)[0] ?? "";
   if (!host || host.includes("@") || host.startsWith(":"))
     throw new BadInput("bad relay");
+  // The client appends /json?poll=1&since=, so a query or fragment would eat it.
+  if (/[?#]/.test(url)) throw new BadInput("bad relay");
   const name = host.replace(/:\d+$/, "");
   const local = name === "localhost" || name === "127.0.0.1";
   if (scheme !== "https" && !(scheme === "http" && local))

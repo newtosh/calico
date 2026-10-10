@@ -165,4 +165,14 @@ describe("RelaySection", () => {
       await screen.findByRole("button", { name: /Connect an existing relay/ }),
     ).toBeTruthy();
   });
+
+  it("clears an old error when a failed disconnect is cancelled", async () => {
+    serve(on({ ok: true, last_poll_at: new Date().toISOString() }), 500);
+    render(<RelaySection />);
+    fireEvent.click(await screen.findByRole("button", { name: /Disconnect/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect relay" }));
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
 });

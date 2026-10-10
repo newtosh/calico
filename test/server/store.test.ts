@@ -366,3 +366,51 @@ describe("DeskStore replayed events", () => {
     expect(store.status().agents[0]?.updated_at).toBe("2026-10-07T12:00:00Z");
   });
 });
+
+describe("DeskStore applyReplayed", () => {
+  it("says when it dropped a replay as stale", () => {
+    const store = new DeskStore({ now: clock("2026-10-07T12:00:00Z").now });
+    store.applyEvent({ type: "agent.finished", agent_id: "a1" });
+    expect(
+      store.applyReplayed(
+        { type: "agent.launched", agent_id: "a1" },
+        "2026-10-07T09:00:00Z",
+      ),
+    ).toBe("stale");
+    expect(
+      store.applyReplayed(
+        { type: "agent.launched", agent_id: "a2" },
+        "2026-10-07T09:00:00Z",
+      ),
+    ).toBe("applied");
+  });
+
+  it("does not bring back a note the person already cleared", () => {
+    const c = clock("2026-10-07T12:00:00Z");
+    const store = new DeskStore({ now: c.now });
+    store.applyEvent({ type: "note", message: "FYI" });
+    c.advance(60);
+    store.clearUnread();
+    expect(
+      store.applyReplayed(
+        { type: "note", message: "FYI" },
+        "2026-10-07T12:00:00Z",
+      ),
+    ).toBe("stale");
+    expect(store.status().unread).toBe(0);
+  });
+
+  it("still takes a note newer than the last clear", () => {
+    const c = clock("2026-10-07T12:00:00Z");
+    const store = new DeskStore({ now: c.now });
+    store.clearUnread();
+    c.advance(600);
+    expect(
+      store.applyReplayed(
+        { type: "note", message: "New" },
+        "2026-10-07T12:05:00Z",
+      ),
+    ).toBe("applied");
+    expect(store.status().unread).toBe(1);
+  });
+});

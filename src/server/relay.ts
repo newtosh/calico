@@ -75,7 +75,8 @@ function describeFailure(status: number): string {
 function applyLine(
   store: DeskStore,
   raw: string,
-): "applied" | "refused" | "skipped" {
+  warn: (message: string) => void,
+): "applied" | "refused" | "stale" | "skipped" {
   let row: unknown;
   try {
     row = JSON.parse(raw);
@@ -94,16 +95,19 @@ function applyLine(
   if (!payload || typeof payload !== "object" || Array.isArray(payload))
     return "refused";
   const seconds = message.time;
-  const at =
-    typeof seconds === "number" && Number.isFinite(seconds)
-      ? isoSeconds(new Date(seconds * 1000))
-      : "";
+  const sent =
+    typeof seconds === "number" ? new Date(seconds * 1000) : new Date(NaN);
+  // An out-of-range time makes toISOString throw, so check before using it.
+  if (Number.isNaN(sent.getTime())) return "refused";
   try {
-    store.applyEvent(eventIn(payload as Record<string, unknown>), at);
-    return "applied";
+    return store.applyReplayed(
+      eventIn(payload as Record<string, unknown>),
+      isoSeconds(sent),
+    );
   } catch (err) {
-    if (err instanceof StoreError) return "refused";
-    throw err;
+    if (!(err instanceof StoreError))
+      warn(`relay message not applied: ${(err as Error).message}`);
+    return "refused";
   }
 }
 
@@ -112,6 +116,7 @@ export async function pollRelayOnce(
   store: DeskStore,
   relay: RelayTarget,
   get: RelayGet,
+  warn: (message: string) => void = console.warn,
 ): Promise<RelayResult> {
   const url = `${relay.url.replace(/\/+$/, "")}/json?poll=1&since=${encodeURIComponent(relay.cursor || "all")}`;
   let answer: RelayReply;
@@ -144,14 +149,15 @@ export async function pollRelayOnce(
       // applyLine counts it as refused.
     }
     if (id && seen.has(id)) continue;
-    const outcome = applyLine(store, raw);
+    // Without an id the cursor could not move past it, so it would replay forever.
+    const outcome = id ? applyLine(store, raw, warn) : "refused";
     if (outcome === "skipped") continue;
     if (id) {
       seen.add(id);
       cursor = id;
     }
     if (outcome === "applied") applied += 1;
-    else refused += 1;
+    else if (outcome === "refused") refused += 1;
   }
   const used = number(answer.headers["x-relay-requests-today"]);
   const budget = number(answer.headers["x-relay-budget"]);
@@ -192,6 +198,11 @@ export class RelayState {
     this.last = { result, at };
   }
 
+  /** The relay changed, so the last result says nothing about the new one. */
+  clear(): void {
+    this.last = null;
+  }
+
   snapshot(configured: boolean): RelayStatus {
     if (!configured || !this.last) return { ...EMPTY_RELAY_STATUS, configured };
     const { result, at } = this.last;
@@ -214,6 +225,8 @@ export async function fetchRelay(
 ): Promise<RelayReply> {
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}`, "User-Agent": "calico" },
+    // A relay has no reason to redirect, and a hostile one could aim the read elsewhere.
+    redirect: "error",
     signal: AbortSignal.timeout(15_000),
   });
   const headers: Record<string, string> = {};
@@ -223,38 +236,73 @@ export async function fetchRelay(
   return { status: res.status, headers, body: await res.text() };
 }
 
-/** Reads the relay until the returned stop function is called. Reads the config fresh each round. */
+const TICK_SECONDS = 5;
+
+const signature = (c: CalicoConfig) => `${c.relay_url}\n${c.relay_token}`;
+
+/**
+ * Reads the relay until the returned stop function is called. It waits in
+ * short ticks, so a newly connected relay is read within seconds even after a
+ * long back-off for the old one.
+ */
 export function startRelayPoll(
   store: DeskStore,
   getConfig: () => CalicoConfig,
   setCursor: (cursor: string) => void,
   state?: RelayState,
   get: RelayGet = fetchRelay,
+  warn: (message: string) => void = console.warn,
 ): () => void {
   let timer: NodeJS.Timeout | undefined;
   let stopped = false;
   let failures = 0;
+  let polled = "";
   const round = async () => {
     const config = getConfig();
+    const sig = signature(config);
+    if (sig !== polled) {
+      polled = sig;
+      failures = 0;
+      state?.clear();
+    }
     let delay = BASE_DELAY_SECONDS;
     if (config.relay_url && config.relay_token) {
-      const result = await pollRelayOnce(
-        store,
-        {
-          url: config.relay_url,
-          token: config.relay_token,
-          cursor: config.relay_cursor,
-        },
-        get,
-      );
-      state?.record(result, isoSeconds(new Date()));
-      if (result.ok) {
-        failures = 0;
-        if (result.cursor !== config.relay_cursor) setCursor(result.cursor);
-      } else failures += 1;
-      delay = nextDelaySeconds(result, failures);
+      try {
+        const result = await pollRelayOnce(
+          store,
+          {
+            url: config.relay_url,
+            token: config.relay_token,
+            cursor: config.relay_cursor,
+          },
+          get,
+          warn,
+        );
+        // The person may have connected another relay while this read was in flight.
+        if (signature(getConfig()) === sig) {
+          state?.record(result, isoSeconds(new Date()));
+          if (result.ok) {
+            failures = 0;
+            if (result.cursor !== config.relay_cursor) setCursor(result.cursor);
+          } else failures += 1;
+          delay = nextDelaySeconds(result, failures);
+        }
+      } catch (err) {
+        warn(`relay poll failed: ${(err as Error).message}`);
+        failures += 1;
+        delay = nextDelaySeconds({ ok: false, error: "" }, failures);
+      }
     }
-    if (!stopped) timer = setTimeout(() => void round(), delay * 1000);
+    wait(delay);
+  };
+  const wait = (remaining: number) => {
+    if (stopped) return;
+    const step = Math.min(TICK_SECONDS, remaining);
+    timer = setTimeout(() => {
+      if (signature(getConfig()) !== polled || remaining - step <= 0)
+        void round();
+      else wait(remaining - step);
+    }, step * 1000);
   };
   void round();
   return () => {

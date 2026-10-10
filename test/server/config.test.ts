@@ -235,6 +235,8 @@ describe("relay settings", () => {
     { token: "t" },
     { url: 5, token: "t" },
     { url: "https://h/t u", token: "t" },
+    { url: "https://h/t#frag", token: "t" },
+    { url: "https://h/t?x=1", token: "t" },
     { url: "https://h/t", token: "a b" },
   ])("rejects %j", (patch) => {
     expect(() => mergeRelay(defaultConfig(), patch)).toThrow(BadInput);

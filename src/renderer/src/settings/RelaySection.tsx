@@ -183,7 +183,10 @@ export function RelaySection() {
                 type="button"
                 className="btn"
                 disabled={step === "working"}
-                onClick={() => setStep("idle")}
+                onClick={() => {
+                  setStep("idle");
+                  setError("");
+                }}
               >
                 Cancel
               </button>
