@@ -55,21 +55,29 @@ Config gains `relay: { url, send_token, read_token, cursor }`, stored in `config
 
 The HTTP contract the Python companion is frozen to does not change.
 
-### UI (Settings, a new "Relay" section)
+### UI (Settings, a new "Relay" section, plus a setup dialog)
 
-DESIGN.md fixes the sidebar at four views and allows modals only for device pickers and destructive confirmation. So this is a section in Settings, after Agent updates, with the inline confirm pattern the token flow already uses. No new colors, no spinner without a label.
+The Settings section shows the relay's state. `Set up with Cloudflare…` opens one stepped modal dialog that walks through the whole flow and closes on a result, so Settings only ever shows a settled state. DESIGN.md currently allows modals only for device pickers and destructive confirmation, so phase 3 amends that rule: a modal is also allowed for one multi-step privileged flow that needs the person's attention. No new colors, no spinner without a label.
 
-A static rendering of every state is in [`assets/relay-settings-states.html`](assets/relay-settings-states.html). Open it in a browser. Nothing in it is wired up.
+A static rendering of every state and dialog step is in [`assets/relay-settings-states.html`](assets/relay-settings-states.html). Open it in a browser. Nothing in it is wired up.
 
-States:
+Settings states:
 
-1. **Not set up.** Two lines of why, a button `Set up with Cloudflare…`, and a `What this does` disclosure.
-2. **Confirm** (inline, amber border, like the token replacement). It says exactly what will happen: Calico opens your browser; Cloudflare asks you to approve **Workers Admin**; Calico deploys a Worker called `calico-relay` to your own account; it sets two secrets; it then revokes its own access. `Continue` and `Cancel`.
-3. **Working.** A labelled step list with a status line (`role="status"`): waiting for you in the browser (with Cancel), uploading the relay, turning on its address, checking that it answers, saving. A failure says what failed and what to do.
-4. **Connected.** The relay address, `Last checked 12 s ago`, how many messages are waiting, and these actions: `Copy for Grok Bot` (the URL, the send token and a note to send a `User-Agent`), `Rotate tokens` (needs a new sign-in), `Turn off` (a destructive confirm, with an option to also delete the Worker, which needs a sign-in).
-5. **Problem.** `Can't reach your relay` with the reason and a retry, or `The relay's daily budget is used. It resumes at 00:00 UTC.`
+1. **Not set up.** Two lines of why, `Set up with Cloudflare…`, `Connect an existing relay…`, and a `What this does` disclosure.
+2. **Connected.** The relay address, `Last checked 12 s ago`, messages waiting, requests used today, and `Copy for Grok Bot` (the URL, the send token and a note to send a `User-Agent`), `Rotate tokens…` and `Turn off…`. The first view after setup adds a status line, `Relay is on`. `Rotate` and `Turn off` need a new sign-in, so they reuse the dialog from step 2 on. `Turn off` keeps its destructive confirm and offers to delete the Worker too.
+3. **Problem.** `Can't reach your relay` with the reason and a retry, or `The relay's daily budget is used. It resumes at 00:00 UTC.`
 
-The sidebar footer adds a muted `Relay connected` or `Relay offline` line under the panel status when a relay is configured. The Dashboard needs no change: its "last update" line already reflects relayed events.
+The setup dialog:
+
+1. **Confirm.** Says exactly what will happen: Calico opens your browser; Cloudflare asks you to approve **Workers Admin**; Calico deploys a Worker called `calico-relay` to your own account with two secrets; it then revokes its own access. `Continue in browser` and `Cancel`.
+2. **Sign in.** `Waiting for you in the browser.` with `Open the page again` and `Cancel`. Continues by itself when Cloudflare redirects back.
+3. **Working.** A labelled step list (`role="status"`): signed in, uploading the relay, turning on its address (up to 40 s), checking that it answers, saving and revoking access. `Cancel` removes anything half-made.
+4. **Done.** The address, `Copy for Grok Bot`, and `Done`. Closing returns to Settings in the Connected state.
+5. **Failure.** Says which step failed, that nothing is left half-made, and offers `Try again` or `Close`. Close returns to Not set up.
+
+The dialog is a real modal: focus moves into it and returns to the `Set up` button on close, `Escape` is Cancel, and the main process owns the flow, so closing the window mid-setup cancels and cleans up.
+
+The sidebar footer adds a muted `Relay connected`, `Relay offline` or `Relay at its daily limit` line under the panel status when a relay is configured. The Dashboard needs no change: its "last update" line already reflects relayed events.
 
 A second, simpler entry point comes first (see phases): `Connect an existing relay`, which takes a URL and a read token. It also works with a self-hosted ntfy.
 

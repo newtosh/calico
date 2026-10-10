@@ -243,9 +243,57 @@
         font-size: 0.8125rem;
         max-width: 42rem;
       }
+      .frame.tall {
+        min-height: 31rem;
+        position: relative;
+      }
+      .scrim {
+        position: absolute;
+        inset: 0;
+        background: rgb(9 10 6 / 0.78);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+      }
+      .modal {
+        width: min(30rem, 100%);
+        background: var(--surface);
+        border: 1px solid var(--stroke);
+        padding: 1rem;
+      }
+      .modal h3 {
+        margin: 0 0 0.5rem;
+        font-size: 1rem;
+        font-weight: 500;
+      }
+      .modal p {
+        margin: 0 0 0.5rem;
+      }
+      .stepno {
+        color: var(--muted);
+        font-size: 0.75rem;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+      }
+      .list {
+        margin: 0.25rem 0 0.5rem;
+        padding-left: 1.25rem;
+      }
+      .list li {
+        margin: 0.25rem 0;
+      }
+      .cap {
+        margin: 0 0 0.25rem;
+        color: var(--amber);
+        font-size: 0.8rem;
+      }
+      .why.first {
+        margin: 0 0 0.75rem;
+      }
       .pair {
         display: grid;
-        gap: 0.75rem;
+        gap: 1.25rem;
       }
       @media (max-width: 640px) {
         .side {
@@ -265,7 +313,7 @@
 
       <!-- 1 -->
       <section class="state">
-        <h2>1. Not set up</h2>
+        <h2>1. Not set up (the buttons open the dialog)</h2>
         <div class="frame">
           <nav class="side" aria-hidden="true">
             <div class="name">Calico</div>
@@ -315,171 +363,376 @@
 
       <!-- 2 -->
       <section class="state">
-        <h2>2. Confirm</h2>
-        <div class="frame">
-          <nav class="side" aria-hidden="true">
-            <div class="name">Calico</div>
-            <div class="item">Dashboard</div>
-            <div class="item">Device</div>
-            <div class="item">Console</div>
-            <div class="item on">Settings</div>
-            <div class="foot">
-              <span><span class="dot sage"></span>Panel online</span>
+        <h2>2. Setup opens a stepped dialog</h2>
+        <p class="why first">
+          "Set up with Cloudflare…" opens one dialog that stays open until the
+          relay is on or the person cancels. Settings behind it is unchanged.
+          Each frame below is one step of that dialog.
+        </p>
+        <div class="pair">
+          <div>
+            <p class="cap">Step 1: confirm</p>
+            <div class="frame tall">
+              <nav class="side" aria-hidden="true">
+                <div class="name">Calico</div>
+                <div class="item">Dashboard</div>
+                <div class="item">Device</div>
+                <div class="item">Console</div>
+                <div class="item on">Settings</div>
+                <div class="foot">
+                  <span><span class="dot sage"></span>Panel online</span>
+                </div>
+              </nav>
+              <div class="content" aria-hidden="true">
+                <h3 class="section-title">Relay</h3>
+                <div class="body">
+                  <p>
+                    Agents that run in the cloud cannot reach this computer when
+                    it is asleep or on a different network. A relay holds their
+                    updates until calico is back.
+                  </p>
+                  <div class="btns">
+                    <button class="btn btn-primary" type="button" tabindex="-1">
+                      Set up with Cloudflare…</button
+                    ><button class="btn" type="button" tabindex="-1">
+                      Connect an existing relay…
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="scrim">
+                <div
+                  class="modal"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="m1"
+                >
+                  <p class="stepno">Step 1 of 4</p>
+                  <h3 id="m1">Set up a relay with Cloudflare</h3>
+                  <p>Here is exactly what calico will do:</p>
+                  <ol class="list">
+                    <li>
+                      Open your browser so you can sign in to Cloudflare. calico
+                      never sees your password.
+                    </li>
+                    <li>
+                      Ask for one permission, <strong>Workers Admin</strong>. It
+                      is the smallest one Cloudflare has that allows uploading a
+                      Worker.
+                    </li>
+                    <li>
+                      Deploy a Worker called <code>calico-relay</code> to your
+                      account, with two secret tokens.
+                    </li>
+                    <li>Check that it answers, then revoke its own access.</li>
+                  </ol>
+                  <p class="muted">
+                    The relay stays in your account. You can delete it there at
+                    any time.
+                  </p>
+                  <div class="btns">
+                    <button class="btn btn-primary" type="button">
+                      Continue in browser</button
+                    ><button class="btn" type="button">Cancel</button>
+                  </div>
+                </div>
+              </div>
             </div>
-          </nav>
-          <div class="content">
-            <h3 class="section-title">Relay</h3>
-            <div class="body">
-              <div class="confirm">
-                <p class="amber">
-                  Before anything happens, here is exactly what calico will do:
-                </p>
-                <ol>
-                  <li>
-                    Open your browser so you can sign in to Cloudflare. calico
-                    never sees your password.
-                  </li>
-                  <li>
-                    Ask for one permission, <strong>Workers Admin</strong>. It
-                    is the smallest one Cloudflare has that allows uploading a
-                    Worker.
-                  </li>
-                  <li>
-                    Deploy a Worker called <code>calico-relay</code> to your
-                    account, with two secret tokens.
-                  </li>
-                  <li>Check that it answers, then revoke its own access.</li>
-                </ol>
-                <p class="muted">
-                  The relay stays in your account. You can delete it there at
-                  any time.
-                </p>
-                <div class="btns">
-                  <button class="btn btn-primary" type="button">
-                    Continue in browser
-                  </button>
-                  <button class="btn" type="button">Cancel</button>
+          </div>
+          <div>
+            <p class="cap">Step 2: waiting for the browser</p>
+            <div class="frame tall">
+              <nav class="side" aria-hidden="true">
+                <div class="name">Calico</div>
+                <div class="item">Dashboard</div>
+                <div class="item">Device</div>
+                <div class="item">Console</div>
+                <div class="item on">Settings</div>
+                <div class="foot">
+                  <span><span class="dot sage"></span>Panel online</span>
+                </div>
+              </nav>
+              <div class="content" aria-hidden="true">
+                <h3 class="section-title">Relay</h3>
+                <div class="body">
+                  <p>
+                    Agents that run in the cloud cannot reach this computer when
+                    it is asleep or on a different network. A relay holds their
+                    updates until calico is back.
+                  </p>
+                  <div class="btns">
+                    <button class="btn btn-primary" type="button" tabindex="-1">
+                      Set up with Cloudflare…</button
+                    ><button class="btn" type="button" tabindex="-1">
+                      Connect an existing relay…
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="scrim">
+                <div
+                  class="modal"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="m2"
+                >
+                  <p class="stepno">Step 2 of 4</p>
+                  <h3 id="m2">Sign in to Cloudflare</h3>
+                  <p class="amber" role="status">
+                    Waiting for you in the browser. Approve the request on
+                    Cloudflare's page, then come back here.
+                  </p>
+                  <p class="muted">
+                    The page will say calico wants
+                    <strong>Workers Admin</strong>. This window continues by
+                    itself once you approve.
+                  </p>
+                  <div class="btns">
+                    <button class="btn" type="button">
+                      Open the page again</button
+                    ><button class="btn" type="button">Cancel</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p class="cap">Step 3: working</p>
+            <div class="frame tall">
+              <nav class="side" aria-hidden="true">
+                <div class="name">Calico</div>
+                <div class="item">Dashboard</div>
+                <div class="item">Device</div>
+                <div class="item">Console</div>
+                <div class="item on">Settings</div>
+                <div class="foot">
+                  <span><span class="dot sage"></span>Panel online</span>
+                </div>
+              </nav>
+              <div class="content" aria-hidden="true">
+                <h3 class="section-title">Relay</h3>
+                <div class="body">
+                  <p>
+                    Agents that run in the cloud cannot reach this computer when
+                    it is asleep or on a different network. A relay holds their
+                    updates until calico is back.
+                  </p>
+                  <div class="btns">
+                    <button class="btn btn-primary" type="button" tabindex="-1">
+                      Set up with Cloudflare…</button
+                    ><button class="btn" type="button" tabindex="-1">
+                      Connect an existing relay…
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="scrim">
+                <div
+                  class="modal"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="m3"
+                >
+                  <p class="stepno">Step 3 of 4</p>
+                  <h3 id="m3">Setting up your relay</h3>
+                  <ol
+                    class="steps"
+                    role="status"
+                    aria-label="Setting up the relay"
+                  >
+                    <li class="sage">
+                      <span class="mark sage">✓</span
+                      ><span class="sage">Signed in to Cloudflare</span>
+                    </li>
+                    <li class="sage">
+                      <span class="mark sage">✓</span
+                      ><span class="sage">Uploaded the relay</span>
+                    </li>
+                    <li class="amber">
+                      <span class="mark amber">●</span
+                      ><span class="amber"
+                        >Turning on its address. This can take up to 40
+                        seconds.</span
+                      >
+                    </li>
+                    <li class="muted">
+                      <span class="mark muted">○</span
+                      ><span class="muted">Checking that it answers</span>
+                    </li>
+                    <li class="muted">
+                      <span class="mark muted">○</span
+                      ><span class="muted"
+                        >Saving, and revoking calico's access</span
+                      >
+                    </li>
+                  </ol>
+                  <div class="btns">
+                    <button class="btn" type="button">Cancel</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p class="cap">Step 4: done</p>
+            <div class="frame tall">
+              <nav class="side" aria-hidden="true">
+                <div class="name">Calico</div>
+                <div class="item">Dashboard</div>
+                <div class="item">Device</div>
+                <div class="item">Console</div>
+                <div class="item on">Settings</div>
+                <div class="foot">
+                  <span><span class="dot sage"></span>Panel online</span>
+                </div>
+              </nav>
+              <div class="content" aria-hidden="true">
+                <h3 class="section-title">Relay</h3>
+                <div class="body">
+                  <p>
+                    Agents that run in the cloud cannot reach this computer when
+                    it is asleep or on a different network. A relay holds their
+                    updates until calico is back.
+                  </p>
+                  <div class="btns">
+                    <button class="btn btn-primary" type="button" tabindex="-1">
+                      Set up with Cloudflare…</button
+                    ><button class="btn" type="button" tabindex="-1">
+                      Connect an existing relay…
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="scrim">
+                <div
+                  class="modal"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="m4"
+                >
+                  <p class="stepno">Step 4 of 4</p>
+                  <h3 id="m4">Your relay is ready</h3>
+                  <p class="sage">
+                    Everything is set up and calico's access to your Cloudflare
+                    account has been revoked.
+                  </p>
+                  <div class="row">
+                    <span class="k">Address</span
+                    ><code class="v"
+                      >https://calico-relay.jon-xo.workers.dev</code
+                    >
+                  </div>
+                  <p class="muted">
+                    Give your agents the address and send token. The copy
+                    includes a reminder to send a
+                    <code>User-Agent</code> header.
+                  </p>
+                  <div class="btns">
+                    <button class="btn btn-primary" type="button">
+                      Copy for Grok Bot</button
+                    ><button class="btn" type="button">Done</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <p class="cap">If a step fails</p>
+            <div class="frame tall">
+              <nav class="side" aria-hidden="true">
+                <div class="name">Calico</div>
+                <div class="item">Dashboard</div>
+                <div class="item">Device</div>
+                <div class="item">Console</div>
+                <div class="item on">Settings</div>
+                <div class="foot">
+                  <span><span class="dot sage"></span>Panel online</span>
+                </div>
+              </nav>
+              <div class="content" aria-hidden="true">
+                <h3 class="section-title">Relay</h3>
+                <div class="body">
+                  <p>
+                    Agents that run in the cloud cannot reach this computer when
+                    it is asleep or on a different network. A relay holds their
+                    updates until calico is back.
+                  </p>
+                  <div class="btns">
+                    <button class="btn btn-primary" type="button" tabindex="-1">
+                      Set up with Cloudflare…</button
+                    ><button class="btn" type="button" tabindex="-1">
+                      Connect an existing relay…
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="scrim">
+                <div
+                  class="modal"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="m5"
+                >
+                  <p class="stepno">Step 3 of 4</p>
+                  <h3 id="m5">Setup stopped</h3>
+                  <p role="alert">
+                    <span class="err"
+                      ><svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="#c4544a"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" /></svg
+                      ><span
+                        >Cloudflare would not turn on the address. Nothing is
+                        left half-made: the uploaded relay was removed and
+                        calico's access was revoked.</span
+                      ></span
+                    >
+                  </p>
+                  <div class="btns">
+                    <button class="btn btn-primary" type="button">
+                      Try again</button
+                    ><button class="btn" type="button">Close</button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
         <p class="why">
-          The same inline confirm the webhook-token replacement already uses
-          (amber border, no modal). DESIGN.md says to show what is about to
-          happen before anything privileged. The permission is named in the
-          app's words first, because Cloudflare's consent screen will say
-          "Workers Admin".
+          Only the destructive-confirm and picker modals existed before, so this
+          adds a rule to DESIGN.md: a modal is also allowed for one multi-step
+          privileged flow that needs the person's attention. The dialog is a
+          real modal: focus moves into it and returns to the button on close,
+          Escape is Cancel, and Cancel always removes anything half-made. A wait
+          always says what it waits on, and nothing is a bare spinner. The marks
+          use a shape as well as a color. The send token is never shown: the
+          copy goes to the clipboard from the main process.
         </p>
       </section>
 
       <!-- 3 -->
       <section class="state">
-        <h2>3. Working</h2>
-        <div class="pair">
-          <div class="frame">
-            <nav class="side" aria-hidden="true">
-              <div class="name">Calico</div>
-              <div class="item">Dashboard</div>
-              <div class="item">Device</div>
-              <div class="item">Console</div>
-              <div class="item on">Settings</div>
-              <div class="foot">
-                <span><span class="dot sage"></span>Panel online</span>
-              </div>
-            </nav>
-            <div class="content">
-              <h3 class="section-title">Relay</h3>
-              <div class="body">
-                <ol
-                  class="steps"
-                  role="status"
-                  aria-label="Setting up the relay"
-                >
-                  <li>
-                    <span class="mark amber">●</span
-                    ><span class="amber"
-                      >Waiting for you in the browser. Approve the request on
-                      Cloudflare's page, then come back.</span
-                    >
-                  </li>
-                  <li class="muted">
-                    <span class="mark">○</span>Uploading the relay
-                  </li>
-                  <li class="muted">
-                    <span class="mark">○</span>Turning on its address
-                  </li>
-                  <li class="muted">
-                    <span class="mark">○</span>Checking that it answers
-                  </li>
-                  <li class="muted">
-                    <span class="mark">○</span>Saving, and revoking calico's
-                    access
-                  </li>
-                </ol>
-                <div class="btns">
-                  <button class="btn" type="button">Cancel</button>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="frame">
-            <nav class="side" aria-hidden="true">
-              <div class="name">Calico</div>
-              <div class="item">Dashboard</div>
-              <div class="item">Device</div>
-              <div class="item">Console</div>
-              <div class="item on">Settings</div>
-              <div class="foot">
-                <span><span class="dot sage"></span>Panel online</span>
-              </div>
-            </nav>
-            <div class="content">
-              <h3 class="section-title">Relay</h3>
-              <div class="body">
-                <ol
-                  class="steps"
-                  role="status"
-                  aria-label="Setting up the relay"
-                >
-                  <li>
-                    <span class="mark sage">✓</span>Signed in to Cloudflare
-                  </li>
-                  <li><span class="mark sage">✓</span>Uploaded the relay</li>
-                  <li>
-                    <span class="mark amber">●</span
-                    ><span class="amber"
-                      >Turning on its address. This can take up to 40
-                      seconds.</span
-                    >
-                  </li>
-                  <li class="muted">
-                    <span class="mark">○</span>Checking that it answers
-                  </li>
-                  <li class="muted">
-                    <span class="mark">○</span>Saving, and revoking calico's
-                    access
-                  </li>
-                </ol>
-                <div class="btns">
-                  <button class="btn" type="button">Cancel</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <p class="why">
-          Top: waiting on the person. Bottom: a few steps later. Every wait says
-          what is being waited on, as DESIGN.md requires, and nothing is a bare
-          spinner. The marks use the shape as well as the color, so it still
-          reads without color. Cancel is always there; it deletes anything
-          half-made.
+        <h2>3. Back on Settings</h2>
+        <p class="why first">
+          Closing the dialog drops the person on the Connected view with a
+          one-line confirmation that fades after it has been read (it stays in
+          the status line, so nothing vanishes unseen).
         </p>
       </section>
 
       <!-- 4 -->
       <section class="state">
-        <h2>4. Connected</h2>
+        <h2>4. Connected (after the dialog closes)</h2>
         <div class="frame">
           <nav class="side" aria-hidden="true">
             <div class="name">Calico</div>
@@ -495,6 +748,9 @@
           <div class="content">
             <h3 class="section-title">Relay</h3>
             <div class="body">
+              <p class="sage" role="status">
+                Relay is on. Next, copy the details for Grok Bot.
+              </p>
               <div class="row">
                 <span class="k">Address</span
                 ><code class="v">https://calico-relay.jon-xo.workers.dev</code
