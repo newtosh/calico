@@ -8,6 +8,7 @@ import {
 } from "../server/config";
 import { version } from "../../package.json";
 import { CursorState, startCursorPoll } from "../server/cursor-poll";
+import { RelayState, startRelayPoll } from "../server/relay";
 import { createCompanionServer } from "../server/http";
 import {
   lanUrls,
@@ -111,6 +112,7 @@ async function start(): Promise<void> {
     setConfig: save,
     // Dev serves the renderer over http, so it sends an Origin. Packaged builds load file:// and send none.
     cursorStatus: () => cursorState.snapshot(config.cursor_api_key !== ""),
+    relayStatus: () => relayState.snapshot(config.relay_url !== ""),
     allowedOrigins:
       !app.isPackaged && process.env.ELECTRON_RENDERER_URL
         ? [new URL(process.env.ELECTRON_RENDERER_URL).origin]
@@ -119,6 +121,7 @@ async function start(): Promise<void> {
 
   const panelPort = new PanelPort(config.port);
   const cursorState = new CursorState();
+  const relayState = new RelayState();
   let bound: number | null = null;
   let serverError: ServerErrorInfo | null = null;
   try {
@@ -137,7 +140,13 @@ async function start(): Promise<void> {
   }
   initAutostartOnce(userData);
 
-  const stopPoll = startCursorPoll(store, () => config, cursorState);
+  const stopCursorPoll = startCursorPoll(store, () => config, cursorState);
+  const stopRelayPoll = startRelayPoll(
+    store,
+    () => config,
+    (cursor) => save({ ...config, relay_cursor: cursor }),
+    relayState,
+  );
 
   const info = (): CalicoInfo => ({
     serverUrl: bound ? `http://127.0.0.1:${bound}` : null,
@@ -178,7 +187,8 @@ async function start(): Promise<void> {
 
   app.on("before-quit", () => {
     quitting = true;
-    stopPoll();
+    stopCursorPoll();
+    stopRelayPoll();
     server.close();
   });
 

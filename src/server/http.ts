@@ -5,24 +5,19 @@ import {
   type CalicoConfig,
   mergeConfig,
   mergePanel,
+  mergeRelay,
   panelPublicView,
   panelStatusField,
   publicView,
+  relayPublicView,
 } from "./config";
 import type { RefusalReason, WebhookActivity } from "../shared/ipc";
 import { type CursorStatus, EMPTY_CURSOR_STATUS } from "./cursor-poll";
-import {
-  COLOR_LIMIT,
-  clipShape,
-  clipText,
-  type DeskStore,
-  type EventIn,
-  FRAME_MAX,
-  ICON_LIMIT,
-  StoreError,
-} from "./store";
+import { EMPTY_RELAY_STATUS, type RelayStatus } from "./relay";
+import { type DeskStore, eventIn, FRAME_MAX, StoreError } from "./store";
 
 const JSON_MAX = 1024 * 1024;
+const PUT_PATHS = new Set(["/api/config", "/api/panel", "/api/relay"]);
 const POST_PATHS = new Set([
   "/api/webhook/grok-bot",
   "/api/dismiss",
@@ -37,6 +32,8 @@ export interface ServerDeps {
   setConfig(next: CalicoConfig): void;
   /** Cursor polling health, for the app's Settings. Empty when not wired. */
   cursorStatus?(): CursorStatus;
+  /** Relay polling health, for the app's Settings. Empty when not wired. */
+  relayStatus?(): RelayStatus;
   /** Origins allowed to call the server, such as the dev renderer. */
   allowedOrigins?: string[];
 }
@@ -61,29 +58,6 @@ export function isLoopback(address: string | undefined): boolean {
     address.startsWith("127.") ||
     address.startsWith("::ffff:127.")
   );
-}
-
-function pyStr(value: unknown, fallback = ""): string {
-  if (value === undefined) return fallback;
-  if (value === null) return "None";
-  if (value === true) return "True";
-  if (value === false) return "False";
-  if (typeof value === "string") return value;
-  if (typeof value === "number") return String(value);
-  return JSON.stringify(value);
-}
-
-function eventIn(payload: Record<string, unknown>): EventIn {
-  return {
-    type: pyStr(payload.type),
-    agent_id: pyStr(payload.agent_id),
-    title: pyStr(payload.title),
-    message: pyStr(payload.message),
-    source: pyStr(payload.source, "grok-bot"),
-    color: clipText(payload.color, COLOR_LIMIT),
-    shape: clipShape(payload.shape),
-    icon: clipText(payload.icon, ICON_LIMIT),
-  };
 }
 
 function send(
@@ -233,6 +207,11 @@ export function createCompanionServer(deps: ServerDeps): {
           ) === "1";
         return json(res, 200, publicView(deps.getConfig(), detail));
       }
+      if (path === "/api/relay")
+        return json(res, 200, {
+          ...relayPublicView(deps.getConfig()),
+          status: deps.relayStatus?.() ?? EMPTY_RELAY_STATUS,
+        });
       if (path === "/api/cursor")
         return json(res, 200, deps.cursorStatus?.() ?? EMPTY_CURSOR_STATUS);
       return json(res, 404, { error: "not found" });
@@ -308,8 +287,7 @@ export function createCompanionServer(deps: ServerDeps): {
     }
 
     if (method === "PUT") {
-      if (path !== "/api/config" && path !== "/api/panel")
-        return json(res, 404, { error: "not found" });
+      if (!PUT_PATHS.has(path)) return json(res, 404, { error: "not found" });
       if (!allowed(req))
         return refuse(req, res, 401, "unauthorized", "unauthorized");
       const payload = await readJson(req);
@@ -317,6 +295,16 @@ export function createCompanionServer(deps: ServerDeps): {
         return refuse(req, res, 413, "too large", "too_large");
       if (payload === null)
         return refuse(req, res, 400, "bad json", "bad_json");
+      if (path === "/api/relay") {
+        try {
+          deps.setConfig(mergeRelay(deps.getConfig(), payload));
+        } catch (err) {
+          if (err instanceof BadInput)
+            return json(res, 400, { error: "bad relay" });
+          throw err;
+        }
+        return json(res, 200, relayPublicView(deps.getConfig()));
+      }
       if (path === "/api/panel") {
         try {
           deps.setConfig(mergePanel(deps.getConfig(), payload));

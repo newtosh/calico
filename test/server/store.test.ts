@@ -321,3 +321,48 @@ describe("DeskStore", () => {
     );
   });
 });
+
+describe("DeskStore replayed events", () => {
+  const launch = { type: "agent.launched", agent_id: "a1", title: "Scaffold" };
+
+  it("stamps a replayed event with its own time, so an old launch is not running", () => {
+    const store = new DeskStore({ now: clock("2026-10-07T12:00:00Z").now });
+    store.applyEvent(launch, "2026-10-07T09:00:00Z");
+    expect(store.status().phase).toBe("idle");
+    expect(store.status().agents[0]?.updated_at).toBe("2026-10-07T09:00:00Z");
+    expect(store.status().events[0]?.at).toBe("2026-10-07T09:00:00Z");
+  });
+
+  it("keeps an old needs_you waiting, since the person still has to answer", () => {
+    const store = new DeskStore({ now: clock("2026-10-07T12:00:00Z").now });
+    store.applyEvent(
+      { type: "agent.needs_you", agent_id: "a1", message: "Pick one" },
+      "2026-10-07T09:00:00Z",
+    );
+    expect(store.status().phase).toBe("needs_you");
+  });
+
+  it("ignores a replayed event older than what the agent already shows", () => {
+    const store = new DeskStore({ now: clock("2026-10-07T12:00:00Z").now });
+    store.applyEvent({
+      type: "agent.finished",
+      agent_id: "a1",
+      title: "Scaffold",
+    });
+    const before = store.snapshot();
+    store.applyEvent(launch, "2026-10-07T09:00:00Z");
+    expect(store.snapshot()).toEqual(before);
+  });
+
+  it("clamps a time in the future to now", () => {
+    const store = new DeskStore({ now: clock("2026-10-07T12:00:00Z").now });
+    store.applyEvent(launch, "2030-01-01T00:00:00Z");
+    expect(store.status().agents[0]?.updated_at).toBe("2026-10-07T12:00:00Z");
+  });
+
+  it("falls back to now for a time that is not a stamp", () => {
+    const store = new DeskStore({ now: clock("2026-10-07T12:00:00Z").now });
+    store.applyEvent(launch, "yesterday");
+    expect(store.status().agents[0]?.updated_at).toBe("2026-10-07T12:00:00Z");
+  });
+});

@@ -110,6 +110,30 @@ export function faceEventTitle(title: string, message = ""): string {
   return title === "Dismissed" && !message ? "" : title;
 }
 
+/** Python's str() of a JSON value, which the old companion stored. */
+function pyStr(value: unknown, fallback = ""): string {
+  if (value === undefined) return fallback;
+  if (value === null) return "None";
+  if (value === true) return "True";
+  if (value === false) return "False";
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return String(value);
+  return JSON.stringify(value);
+}
+
+export function eventIn(payload: Record<string, unknown>): EventIn {
+  return {
+    type: pyStr(payload.type),
+    agent_id: pyStr(payload.agent_id),
+    title: pyStr(payload.title),
+    message: pyStr(payload.message),
+    source: pyStr(payload.source, "grok-bot"),
+    color: clipText(payload.color, COLOR_LIMIT),
+    shape: clipShape(payload.shape),
+    icon: clipText(payload.icon, ICON_LIMIT),
+  };
+}
+
 export function isoSeconds(date: Date): string {
   return date.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
@@ -169,12 +193,21 @@ export class DeskStore {
     };
   }
 
-  applyEvent(raw: EventIn): DeskEvent {
+  /**
+   * `at` is for the relay, which replays events that happened while the app
+   * was off. The webhook never passes it, so a caller cannot back-date itself.
+   * A replay older than what the agent already shows is dropped.
+   */
+  applyEvent(raw: EventIn, at?: string): DeskEvent {
     const agentId = raw.agent_id ?? "";
     if (!AGENT_TYPES.has(raw.type) && raw.type !== "note")
       throw new StoreError("unknown event type");
     if (AGENT_TYPES.has(raw.type) && !agentId)
       throw new StoreError("agent_id required");
+    const stamp = at === undefined ? this.stamp() : this.replayStamp(at);
+    const known = this.agents.get(agentId);
+    if (at !== undefined && known && stamp < known.updated_at)
+      return this.stale(raw, stamp);
     const title = raw.title ?? "";
     const message = raw.message ?? "";
     const event = makeEvent({
@@ -183,7 +216,7 @@ export class DeskStore {
       title,
       message,
       source: raw.source ?? "grok-bot",
-      at: this.stamp(),
+      at: stamp,
       color: clipText(raw.color ?? "", COLOR_LIMIT),
       shape: clipShape(raw.shape ?? ""),
       icon: clipText(raw.icon ?? "", ICON_LIMIT),
@@ -381,6 +414,26 @@ export class DeskStore {
 
   private stamp(): string {
     return isoSeconds(this.now());
+  }
+
+  /** A replay time is never later than now, and a malformed one counts as now. */
+  private replayStamp(at: string): string {
+    const now = this.stamp();
+    return STAMP.test(at) && at < now ? at : now;
+  }
+
+  private stale(raw: EventIn, at: string): DeskEvent {
+    return makeEvent({
+      type: raw.type,
+      agent_id: raw.agent_id ?? "",
+      title: raw.title ?? "",
+      message: raw.message ?? "",
+      source: raw.source ?? "grok-bot",
+      at,
+      color: "",
+      shape: "",
+      icon: "",
+    });
   }
 
   private persist(): void {
