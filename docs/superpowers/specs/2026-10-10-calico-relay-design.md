@@ -59,6 +59,8 @@ The HTTP contract the Python companion is frozen to does not change.
 
 DESIGN.md fixes the sidebar at four views and allows modals only for device pickers and destructive confirmation. So this is a section in Settings, after Agent updates, with the inline confirm pattern the token flow already uses. No new colors, no spinner without a label.
 
+A static rendering of every state is in [`assets/relay-settings-states.html`](assets/relay-settings-states.html). Open it in a browser. Nothing in it is wired up.
+
 States:
 
 1. **Not set up.** Two lines of why, a button `Set up with Cloudflare…`, and a `What this does` disclosure.

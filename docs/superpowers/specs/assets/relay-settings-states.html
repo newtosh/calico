@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Calico relay: Settings states</title>
+    <!--
+      A static rendering of the Relay section proposed in
+      docs/superpowers/specs/2026-10-10-calico-relay-design.md. Nothing here is wired up.
+      The colors, type and control styles are copied from src/renderer/src/styles.css, so
+      this reads the way the real Settings view will.
+    -->
+    <style>
+      :root {
+        --glass: #0c0e09;
+        --surface: #14160f;
+        --field: #2a2d24;
+        --stroke: #6d6756;
+        --selected: #3d4f32;
+        --sage: #9bb57a;
+        --cream: #efe7d6;
+        --muted: #a39b88;
+        --amber: #e2a23a;
+        --red: #c4544a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #090a06;
+        color: var(--cream);
+        font:
+          14px/1.5 system-ui,
+          "Cantarell",
+          "Noto Sans",
+          sans-serif;
+        font-feature-settings: "tnum" 1;
+        -webkit-font-smoothing: antialiased;
+      }
+      main {
+        max-width: 56rem;
+        margin: 0 auto;
+        padding: 2rem 1rem 4rem;
+      }
+      h1 {
+        font-size: 1.25rem;
+        margin: 0 0 0.25rem;
+      }
+      .intro {
+        color: var(--muted);
+        max-width: 40rem;
+        margin: 0 0 2rem;
+      }
+      .state {
+        margin: 0 0 2.5rem;
+      }
+      .state > h2 {
+        font-size: 0.8rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--amber);
+        margin: 0 0 0.5rem;
+      }
+      .frame {
+        display: flex;
+        border: 1px solid var(--stroke);
+        background: var(--glass);
+        min-height: 6rem;
+      }
+      .side {
+        width: 12rem;
+        flex: none;
+        background: var(--surface);
+        border-right: 1px solid
+          color-mix(in srgb, var(--stroke) 40%, transparent);
+        display: flex;
+        flex-direction: column;
+      }
+      .side .name {
+        padding: 1rem 1rem 0.75rem;
+        font-size: 1rem;
+        font-weight: 500;
+        color: var(--cream);
+      }
+      .side .item {
+        padding: 0.5rem 1rem;
+        color: var(--muted);
+      }
+      .side .item.on {
+        background: var(--selected);
+        color: var(--cream);
+      }
+      .side .foot {
+        margin-top: auto;
+        padding: 0.75rem 1rem;
+        font-size: 0.75rem;
+        color: var(--muted);
+        display: grid;
+        gap: 0.25rem;
+      }
+      .dot {
+        display: inline-block;
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 50%;
+        margin-right: 0.5rem;
+        background: var(--muted);
+      }
+      .dot.sage {
+        background: var(--sage);
+      }
+      .dot.red {
+        background: var(--red);
+      }
+      .dot.amber {
+        background: var(--amber);
+      }
+      .content {
+        flex: 1;
+        min-width: 0;
+        padding-bottom: 1rem;
+      }
+      .section-title {
+        padding: 1rem 1rem 0.5rem;
+        font-size: 0.75rem;
+        font-weight: 500;
+        letter-spacing: 0.025em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0;
+      }
+      .body {
+        padding: 0 1rem;
+        max-width: 42rem;
+      }
+      .body p {
+        margin: 0 0 0.5rem;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .sage {
+        color: var(--sage);
+      }
+      .amber {
+        color: var(--amber);
+      }
+      .btn {
+        border-radius: 0.375rem;
+        border: 1px solid var(--stroke);
+        background: var(--field);
+        padding: 0.375rem 0.75rem;
+        color: var(--cream);
+        font: inherit;
+      }
+      .btn-primary {
+        border-color: var(--sage);
+        background: var(--selected);
+      }
+      .btns {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        padding: 0.5rem 0 0;
+      }
+      code,
+      .mono {
+        font:
+          0.75rem ui-monospace,
+          "JetBrains Mono",
+          "Fira Code",
+          monospace;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid
+          color-mix(in srgb, var(--stroke) 30%, transparent);
+      }
+      .row .k {
+        width: 8rem;
+        flex: none;
+        color: var(--muted);
+      }
+      .row .v {
+        min-width: 0;
+        flex: 1;
+        overflow-wrap: anywhere;
+      }
+      .confirm {
+        border: 1px solid color-mix(in srgb, var(--amber) 60%, transparent);
+        background: var(--surface);
+        padding: 0.75rem;
+        margin-top: 0.5rem;
+      }
+      .confirm ol {
+        margin: 0.25rem 0 0.5rem;
+        padding-left: 1.25rem;
+      }
+      .confirm li {
+        margin: 0.25rem 0;
+      }
+      .steps {
+        list-style: none;
+        margin: 0.25rem 0 0.5rem;
+        padding: 0;
+      }
+      .steps li {
+        display: flex;
+        gap: 0.5rem;
+        padding: 0.25rem 0;
+        align-items: baseline;
+      }
+      .steps .mark {
+        width: 1rem;
+        flex: none;
+        text-align: center;
+      }
+      .err {
+        display: inline-flex;
+        gap: 0.375rem;
+        align-items: flex-start;
+      }
+      .err svg {
+        margin-top: 0.15rem;
+        flex: none;
+      }
+      details {
+        margin-top: 0.5rem;
+      }
+      summary {
+        cursor: pointer;
+        color: var(--muted);
+      }
+      .why {
+        margin: 0.5rem 0 0;
+        padding: 0.5rem 0.75rem;
+        border-left: 2px solid var(--stroke);
+        color: var(--muted);
+        font-size: 0.8125rem;
+        max-width: 42rem;
+      }
+      .pair {
+        display: grid;
+        gap: 0.75rem;
+      }
+      @media (max-width: 640px) {
+        .side {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Relay: the Settings states</h1>
+      <p class="intro">
+        A static rendering of the section proposed in the relay design. Each
+        frame is the Settings view (right of the sidebar) in one state. The
+        notes under a frame say why it is that way. Nothing here works yet.
+      </p>
+
+      <!-- 1 -->
+      <section class="state">
+        <h2>1. Not set up</h2>
+        <div class="frame">
+          <nav class="side" aria-hidden="true">
+            <div class="name">Calico</div>
+            <div class="item">Dashboard</div>
+            <div class="item">Device</div>
+            <div class="item">Console</div>
+            <div class="item on">Settings</div>
+            <div class="foot">
+              <span><span class="dot sage"></span>Panel online</span>
+            </div>
+          </nav>
+          <div class="content">
+            <h3 class="section-title">Relay</h3>
+            <div class="body">
+              <p>
+                Agents that run in the cloud cannot reach this computer when it
+                is asleep or on a different network. A relay holds their updates
+                until calico is back. It runs on your own Cloudflare account, on
+                the free plan.
+              </p>
+              <div class="btns">
+                <button class="btn btn-primary" type="button">
+                  Set up with Cloudflare…
+                </button>
+                <button class="btn" type="button">
+                  Connect an existing relay…
+                </button>
+              </div>
+              <details>
+                <summary>What this does</summary>
+                <p class="muted" style="margin-top: 0.5rem">
+                  calico deploys a small Worker to your Cloudflare account and
+                  keeps two secret tokens: a send token for your agents and a
+                  read token that stays here. Nothing about your account is sent
+                  to the calico project.
+                </p>
+              </details>
+            </div>
+          </div>
+        </div>
+        <p class="why">
+          Two buttons, not a wizard: the common case first, and "connect an
+          existing relay" is the same screen for anyone running a self-hosted
+          ntfy. The disclosure is closed by default, so the section stays short.
+        </p>
+      </section>
+
+      <!-- 2 -->
+      <section class="state">
+        <h2>2. Confirm</h2>
+        <div class="frame">
+          <nav class="side" aria-hidden="true">
+            <div class="name">Calico</div>
+            <div class="item">Dashboard</div>
+            <div class="item">Device</div>
+            <div class="item">Console</div>
+            <div class="item on">Settings</div>
+            <div class="foot">
+              <span><span class="dot sage"></span>Panel online</span>
+            </div>
+          </nav>
+          <div class="content">
+            <h3 class="section-title">Relay</h3>
+            <div class="body">
+              <div class="confirm">
+                <p class="amber">
+                  Before anything happens, here is exactly what calico will do:
+                </p>
+                <ol>
+                  <li>
+                    Open your browser so you can sign in to Cloudflare. calico
+                    never sees your password.
+                  </li>
+                  <li>
+                    Ask for one permission, <strong>Workers Admin</strong>. It
+                    is the smallest one Cloudflare has that allows uploading a
+                    Worker.
+                  </li>
+                  <li>
+                    Deploy a Worker called <code>calico-relay</code> to your
+                    account, with two secret tokens.
+                  </li>
+                  <li>Check that it answers, then revoke its own access.</li>
+                </ol>
+                <p class="muted">
+                  The relay stays in your account. You can delete it there at
+                  any time.
+                </p>
+                <div class="btns">
+                  <button class="btn btn-primary" type="button">
+                    Continue in browser
+                  </button>
+                  <button class="btn" type="button">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="why">
+          The same inline confirm the webhook-token replacement already uses
+          (amber border, no modal). DESIGN.md says to show what is about to
+          happen before anything privileged. The permission is named in the
+          app's words first, because Cloudflare's consent screen will say
+          "Workers Admin".
+        </p>
+      </section>
+
+      <!-- 3 -->
+      <section class="state">
+        <h2>3. Working</h2>
+        <div class="pair">
+          <div class="frame">
+            <nav class="side" aria-hidden="true">
+              <div class="name">Calico</div>
+              <div class="item">Dashboard</div>
+              <div class="item">Device</div>
+              <div class="item">Console</div>
+              <div class="item on">Settings</div>
+              <div class="foot">
+                <span><span class="dot sage"></span>Panel online</span>
+              </div>
+            </nav>
+            <div class="content">
+              <h3 class="section-title">Relay</h3>
+              <div class="body">
+                <ol
+                  class="steps"
+                  role="status"
+                  aria-label="Setting up the relay"
+                >
+                  <li>
+                    <span class="mark amber">●</span
+                    ><span class="amber"
+                      >Waiting for you in the browser. Approve the request on
+                      Cloudflare's page, then come back.</span
+                    >
+                  </li>
+                  <li class="muted">
+                    <span class="mark">○</span>Uploading the relay
+                  </li>
+                  <li class="muted">
+                    <span class="mark">○</span>Turning on its address
+                  </li>
+                  <li class="muted">
+                    <span class="mark">○</span>Checking that it answers
+                  </li>
+                  <li class="muted">
+                    <span class="mark">○</span>Saving, and revoking calico's
+                    access
+                  </li>
+                </ol>
+                <div class="btns">
+                  <button class="btn" type="button">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="frame">
+            <nav class="side" aria-hidden="true">
+              <div class="name">Calico</div>
+              <div class="item">Dashboard</div>
+              <div class="item">Device</div>
+              <div class="item">Console</div>
+              <div class="item on">Settings</div>
+              <div class="foot">
+                <span><span class="dot sage"></span>Panel online</span>
+              </div>
+            </nav>
+            <div class="content">
+              <h3 class="section-title">Relay</h3>
+              <div class="body">
+                <ol
+                  class="steps"
+                  role="status"
+                  aria-label="Setting up the relay"
+                >
+                  <li>
+                    <span class="mark sage">✓</span>Signed in to Cloudflare
+                  </li>
+                  <li><span class="mark sage">✓</span>Uploaded the relay</li>
+                  <li>
+                    <span class="mark amber">●</span
+                    ><span class="amber"
+                      >Turning on its address. This can take up to 40
+                      seconds.</span
+                    >
+                  </li>
+                  <li class="muted">
+                    <span class="mark">○</span>Checking that it answers
+                  </li>
+                  <li class="muted">
+                    <span class="mark">○</span>Saving, and revoking calico's
+                    access
+                  </li>
+                </ol>
+                <div class="btns">
+                  <button class="btn" type="button">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="why">
+          Top: waiting on the person. Bottom: a few steps later. Every wait says
+          what is being waited on, as DESIGN.md requires, and nothing is a bare
+          spinner. The marks use the shape as well as the color, so it still
+          reads without color. Cancel is always there; it deletes anything
+          half-made.
+        </p>
+      </section>
+
+      <!-- 4 -->
+      <section class="state">
+        <h2>4. Connected</h2>
+        <div class="frame">
+          <nav class="side" aria-hidden="true">
+            <div class="name">Calico</div>
+            <div class="item">Dashboard</div>
+            <div class="item">Device</div>
+            <div class="item">Console</div>
+            <div class="item on">Settings</div>
+            <div class="foot">
+              <span><span class="dot sage"></span>Panel online</span>
+              <span><span class="dot sage"></span>Relay connected</span>
+            </div>
+          </nav>
+          <div class="content">
+            <h3 class="section-title">Relay</h3>
+            <div class="body">
+              <div class="row">
+                <span class="k">Address</span
+                ><code class="v">https://calico-relay.jon-xo.workers.dev</code
+                ><button class="btn" type="button">Copy</button>
+              </div>
+              <div class="row">
+                <span class="k">Status</span
+                ><span class="v sage">Connected, checked 12 s ago</span>
+              </div>
+              <div class="row">
+                <span class="k">Waiting</span><span class="v">0 messages</span>
+              </div>
+              <div class="row">
+                <span class="k">Used today</span
+                ><span class="v">212 of 60,000 requests</span>
+              </div>
+              <div class="btns">
+                <button class="btn btn-primary" type="button">
+                  Copy for Grok Bot
+                </button>
+                <button class="btn" type="button">Rotate tokens…</button>
+                <button class="btn" type="button">Turn off…</button>
+              </div>
+              <p class="muted" style="margin-top: 0.75rem">
+                The copy for Grok Bot holds the address, the send token, and a
+                reminder to send a
+                <code>User-Agent</code> header, since Cloudflare refuses
+                Python's default one.
+              </p>
+            </div>
+          </div>
+        </div>
+        <p class="why">
+          Dense rows with hairlines, like the panel's agent list. The send token
+          is never shown on screen: "Copy for Grok Bot" puts it on the clipboard
+          from the main process. Rotate and Turn off both say they need a fresh
+          Cloudflare sign-in, because calico keeps no standing access.
+        </p>
+      </section>
+
+      <!-- 5 -->
+      <section class="state">
+        <h2>5. Problems</h2>
+        <div class="pair">
+          <div class="frame">
+            <nav class="side" aria-hidden="true">
+              <div class="name">Calico</div>
+              <div class="item">Dashboard</div>
+              <div class="item">Device</div>
+              <div class="item">Console</div>
+              <div class="item on">Settings</div>
+              <div class="foot">
+                <span><span class="dot sage"></span>Panel online</span>
+                <span><span class="dot red"></span>Relay offline</span>
+              </div>
+            </nav>
+            <div class="content">
+              <h3 class="section-title">Relay</h3>
+              <div class="body">
+                <p role="alert">
+                  <span class="err">
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#c4544a"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <span
+                      >Can't reach your relay. The last 3 checks timed out.
+                      calico keeps trying every minute, and anything agents sent
+                      is waiting safely on the relay.</span
+                    >
+                  </span>
+                </p>
+                <div class="row">
+                  <span class="k">Address</span
+                  ><code class="v">https://calico-relay.jon-xo.workers.dev</code
+                  ><button class="btn" type="button">Copy</button>
+                </div>
+                <div class="btns">
+                  <button class="btn btn-primary" type="button">Try now</button
+                  ><button class="btn" type="button">Turn off…</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="frame">
+            <nav class="side" aria-hidden="true">
+              <div class="name">Calico</div>
+              <div class="item">Dashboard</div>
+              <div class="item">Device</div>
+              <div class="item">Console</div>
+              <div class="item on">Settings</div>
+              <div class="foot">
+                <span><span class="dot sage"></span>Panel online</span>
+                <span
+                  ><span class="dot amber"></span>Relay at its daily limit</span
+                >
+              </div>
+            </nav>
+            <div class="content">
+              <h3 class="section-title">Relay</h3>
+              <div class="body">
+                <p class="amber">
+                  The relay has used its daily request budget. It starts again
+                  at 00:00 UTC, in 3 h 12 min.
+                </p>
+                <p class="muted">
+                  Agents that post now are told to try again later. Updates
+                  already on the relay are still collected.
+                </p>
+                <div class="row">
+                  <span class="k">Used today</span
+                  ><span class="v">60,001 of 60,000 requests</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="why">
+          Each problem says what happened, what is safe, and what happens next,
+          in the app's own words. Red is for "can't reach", amber for "nothing
+          wrong, just full". The sidebar line repeats it so a glance at any view
+          shows the relay's health.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>
