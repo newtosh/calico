@@ -9,6 +9,8 @@ import {
   loadConfig,
   mergeConfig,
   mergePanel,
+  mergeRelay,
+  relayPublicView,
   panelStatusField,
   publicView,
   saveConfig,
@@ -166,5 +168,102 @@ describe("running timeout", () => {
     const config = { ...defaultConfig(), running_timeout_seconds: 600 };
     expect(publicView(config)).not.toHaveProperty("running_timeout_seconds");
     expect(publicView(config, true).running_timeout_seconds).toBe(600);
+  });
+});
+
+describe("relay settings", () => {
+  it("round-trips through the file", () => {
+    const path = file();
+    const config = {
+      ...defaultConfig(),
+      relay_url: "https://r.example/inbox",
+      relay_token: "tok",
+      relay_cursor: "41",
+    };
+    saveConfig(path, config);
+    expect(loadConfig(path).config).toEqual(config);
+  });
+
+  it("defaults to no relay", () => {
+    expect(relayPublicView(defaultConfig())).toEqual({
+      url: "",
+      token_set: false,
+    });
+  });
+
+  it("stores the address without trailing slashes, and starts from the top", () => {
+    const merged = mergeRelay(
+      { ...defaultConfig(), relay_cursor: "9" },
+      { url: "https://r.example/inbox//", token: "tok" },
+    );
+    expect(merged).toMatchObject({
+      relay_url: "https://r.example/inbox",
+      relay_token: "tok",
+      relay_cursor: "",
+    });
+  });
+
+  it("never shows the token", () => {
+    const merged = mergeRelay(defaultConfig(), {
+      url: "https://r.example/inbox",
+      token: "tok",
+    });
+    expect(relayPublicView(merged)).toEqual({
+      url: "https://r.example/inbox",
+      token_set: true,
+    });
+  });
+
+  it("accepts plain http only for this computer", () => {
+    const set = (url: string) =>
+      mergeRelay(defaultConfig(), { url, token: "t" }).relay_url;
+    expect(set("http://127.0.0.1:2586/calico")).toBe(
+      "http://127.0.0.1:2586/calico",
+    );
+    expect(set("http://localhost:2586/calico")).toBe(
+      "http://localhost:2586/calico",
+    );
+    expect(() => set("http://ntfy.example/calico")).toThrow(BadInput);
+  });
+
+  it.each([
+    { url: "ftp://h/t", token: "t" },
+    { url: "https://", token: "t" },
+    { url: "https://u:p@h/t", token: "t" },
+    { url: "https://h/t", token: "" },
+    { url: "https://h/t" },
+    { token: "t" },
+    { url: 5, token: "t" },
+    { url: "https://h/t u", token: "t" },
+    { url: "https://h/t#frag", token: "t" },
+    { url: "https://h/t?x=1", token: "t" },
+    { url: "https://h/t", token: "a b" },
+  ])("rejects %j", (patch) => {
+    expect(() => mergeRelay(defaultConfig(), patch)).toThrow(BadInput);
+  });
+
+  it("turns the relay off and forgets its token", () => {
+    const on = mergeRelay(defaultConfig(), {
+      url: "https://r.example/inbox",
+      token: "tok",
+    });
+    expect(mergeRelay(on, { clear: true })).toMatchObject({
+      relay_url: "",
+      relay_token: "",
+      relay_cursor: "",
+    });
+  });
+
+  it("keeps the cursor when the same relay is saved again", () => {
+    const on = {
+      ...defaultConfig(),
+      relay_url: "https://r.example/inbox",
+      relay_token: "tok",
+      relay_cursor: "41",
+    };
+    expect(
+      mergeRelay(on, { url: "https://r.example/inbox", token: "tok" })
+        .relay_cursor,
+    ).toBe("41");
   });
 });

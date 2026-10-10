@@ -10,6 +10,10 @@ export interface CalicoConfig {
   panel_token: string;
   /** How long a running agent stays running without an update. */
   running_timeout_seconds: number;
+  /** A relay's topic URL, its read token, and the id of the last message applied. */
+  relay_url: string;
+  relay_token: string;
+  relay_cursor: string;
 }
 
 export const DEFAULT_PORT = 8787;
@@ -32,6 +36,9 @@ export function defaultConfig(): CalicoConfig {
     panel_url: "",
     panel_token: "",
     running_timeout_seconds: DEFAULT_RUNNING_TIMEOUT,
+    relay_url: "",
+    relay_token: "",
+    relay_cursor: "",
   };
 }
 
@@ -113,6 +120,9 @@ export function loadConfig(path: string): {
                 "running_timeout_seconds",
               )
             : base.running_timeout_seconds,
+        relay_url: str(data, "relay_url"),
+        relay_token: str(data, "relay_token"),
+        relay_cursor: str(data, "relay_cursor"),
       },
     };
   } catch (err) {
@@ -229,4 +239,50 @@ export function mergePanel(
   if ("token" in patch)
     merged.panel_token = plainText(patch.token, PANEL_TOKEN_MAX);
   return merged;
+}
+
+export function relayPublicView(config: CalicoConfig) {
+  return { url: config.relay_url, token_set: Boolean(config.relay_token) };
+}
+
+// The relay URL and token end up in a request header and URL, so keep them
+// plain. http is for a self-hosted relay on this computer, nothing else.
+function relayUrl(value: unknown): string {
+  if (typeof value !== "string") throw new BadInput("bad relay");
+  const url = plainText(value.replace(/\/+$/, ""), 512);
+  const [scheme, rest = ""] = url.split("://", 2);
+  const host = rest.split("/", 1)[0] ?? "";
+  if (!host || host.includes("@") || host.startsWith(":"))
+    throw new BadInput("bad relay");
+  // The client appends /json?poll=1&since=, so a query or fragment would eat it.
+  if (/[?#]/.test(url)) throw new BadInput("bad relay");
+  const name = host.replace(/:\d+$/, "");
+  const local = name === "localhost" || name === "127.0.0.1";
+  if (scheme !== "https" && !(scheme === "http" && local))
+    throw new BadInput("bad relay");
+  return url;
+}
+
+function relayToken(value: unknown): string {
+  const token = plainText(value, 256);
+  if (!token) throw new BadInput("bad relay");
+  return token;
+}
+
+export function mergeRelay(
+  current: CalicoConfig,
+  patch: Record<string, unknown>,
+): CalicoConfig {
+  if (patch.clear === true)
+    return { ...current, relay_url: "", relay_token: "", relay_cursor: "" };
+  if (!("url" in patch) || !("token" in patch)) throw new BadInput("bad relay");
+  const url = relayUrl(patch.url);
+  const token = relayToken(patch.token);
+  const same = url === current.relay_url && token === current.relay_token;
+  return {
+    ...current,
+    relay_url: url,
+    relay_token: token,
+    relay_cursor: same ? current.relay_cursor : "",
+  };
 }

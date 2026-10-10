@@ -8,6 +8,7 @@ import {
   isLoopback,
 } from "../../src/server/http";
 import type { CursorStatus } from "../../src/server/cursor-poll";
+import type { RelayStatus } from "../../src/server/relay";
 import { DeskStore } from "../../src/server/store";
 
 let close: (() => void) | null = null;
@@ -17,6 +18,7 @@ async function start(
   config: Partial<CalicoConfig> = {},
   allowedOrigins: string[] = [],
   cursorStatus?: () => CursorStatus,
+  relayStatus?: () => RelayStatus,
 ) {
   let current: CalicoConfig = { ...defaultConfig(), ...config };
   const store = new DeskStore();
@@ -24,6 +26,7 @@ async function start(
     store,
     allowedOrigins,
     ...(cursorStatus ? { cursorStatus } : {}),
+    ...(relayStatus ? { relayStatus } : {}),
     getConfig: () => current,
     setConfig: (next) => {
       current = next;
@@ -331,5 +334,104 @@ describe("webhook activity", () => {
     expect(kept).not.toContain("hunter2");
     expect(kept).not.toContain("guess");
     expect(kept).not.toContain("s3cret");
+  });
+});
+
+describe("/api/relay", () => {
+  const auth = {
+    Authorization: "Bearer hook",
+    "Content-Type": "application/json",
+  };
+  const put = (
+    base: string,
+    body: unknown,
+    headers: Record<string, string> = auth,
+  ) =>
+    fetch(`${base}/api/relay`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify(body),
+    });
+
+  it("starts with no relay and an empty status", async () => {
+    const { base } = await start({ webhook_token: "hook" });
+    expect(await (await fetch(`${base}/api/relay`)).json()).toEqual({
+      url: "",
+      token_set: false,
+      status: {
+        configured: false,
+        last_poll_at: null,
+        ok: null,
+        applied: 0,
+        refused: 0,
+        error: "",
+        used: null,
+        budget: null,
+      },
+    });
+  });
+
+  it("saves a relay, and never hands the token back", async () => {
+    const { base } = await start({ webhook_token: "hook" });
+    const saved = await put(base, {
+      url: "https://r.example/inbox",
+      token: "secret-read",
+    });
+    expect(saved.status).toBe(200);
+    const text = await (await fetch(`${base}/api/relay`)).text();
+    expect(text).not.toContain("secret-read");
+    expect(JSON.parse(text)).toMatchObject({
+      url: "https://r.example/inbox",
+      token_set: true,
+    });
+  });
+
+  it("serves the poll status the app supplies", async () => {
+    const status: RelayStatus = {
+      configured: true,
+      last_poll_at: "2026-10-10T12:00:00Z",
+      ok: true,
+      applied: 3,
+      refused: 0,
+      error: "",
+      used: 212,
+      budget: 60000,
+    };
+    const { base } = await start(
+      { webhook_token: "hook" },
+      [],
+      undefined,
+      () => status,
+    );
+    expect(
+      ((await (await fetch(`${base}/api/relay`)).json()) as { status: unknown })
+        .status,
+    ).toEqual(status);
+  });
+
+  it("answers 400 for a bad relay and 401 without the token", async () => {
+    const { base } = await start({ webhook_token: "hook" });
+    expect((await put(base, { url: "ftp://x", token: "t" })).status).toBe(400);
+    expect(
+      (
+        await put(
+          base,
+          { url: "https://r.example/i", token: "t" },
+          {
+            "Content-Type": "application/json",
+          },
+        )
+      ).status,
+    ).toBe(401);
+  });
+
+  it("turns the relay off", async () => {
+    const { base } = await start({ webhook_token: "hook" });
+    await put(base, { url: "https://r.example/inbox", token: "t" });
+    await put(base, { clear: true });
+    expect(await (await fetch(`${base}/api/relay`)).json()).toMatchObject({
+      url: "",
+      token_set: false,
+    });
   });
 });
