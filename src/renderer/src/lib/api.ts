@@ -77,6 +77,27 @@ export interface PanelPatch {
   clear?: boolean;
 }
 
+export interface RelayInfo {
+  url: string;
+  token_set: boolean;
+  status: {
+    configured: boolean;
+    last_poll_at: string | null;
+    ok: boolean | null;
+    applied: number;
+    refused: number;
+    error: string;
+    used: number | null;
+    budget: number | null;
+  };
+}
+
+export interface RelayPatch {
+  url?: string;
+  token?: string;
+  clear?: boolean;
+}
+
 export type MarkShape = "circle" | "square" | "diamond" | "triangle";
 export const NEUTRAL_MARK = "#a39b88";
 
@@ -293,4 +314,42 @@ export async function fetchCursor(): Promise<CursorInfo> {
     agents: typeof value.agents === "number" ? value.agents : 0,
     error: typeof value.error === "string" ? value.error : "",
   };
+}
+
+const num = (value: unknown): number | null =>
+  typeof value === "number" ? value : null;
+
+export async function fetchRelay(): Promise<RelayInfo> {
+  const value: unknown = await (await call("/api/relay")).json();
+  if (!isRecord(value) || typeof value.url !== "string")
+    throw new Error("bad relay");
+  const st = isRecord(value.status) ? value.status : {};
+  return {
+    url: value.url,
+    token_set: value.token_set === true,
+    status: {
+      configured: st.configured === true,
+      last_poll_at:
+        typeof st.last_poll_at === "string" ? st.last_poll_at : null,
+      ok: typeof st.ok === "boolean" ? st.ok : null,
+      applied: num(st.applied) ?? 0,
+      refused: num(st.refused) ?? 0,
+      error: s(st.error),
+      used: num(st.used),
+      budget: num(st.budget),
+    },
+  };
+}
+
+/** Throws "relay rejected" when the server turns the address or token down. */
+export async function putRelay(patch: RelayPatch): Promise<void> {
+  const res = await fetch(base + "/api/relay", {
+    method: "PUT",
+    headers: headers(),
+    body: JSON.stringify(patch),
+  });
+  if (res.status === 400) throw new Error("relay rejected");
+  if (res.status === 401)
+    throw new Error("Unauthorized. Check the webhook token in Settings.");
+  if (!res.ok) throw new Error(`/api/relay ${res.status}`);
 }

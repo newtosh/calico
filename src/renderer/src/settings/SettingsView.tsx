@@ -5,6 +5,7 @@ import { AutostartSection } from "./AutostartSection";
 import { ConfigSection } from "./ConfigSection";
 import { CursorStatus } from "./CursorStatus";
 import { PanelSection } from "./PanelSection";
+import { RelaySection } from "./RelaySection";
 
 export function SettingsView({ info }: { info: CalicoInfo }) {
   return (
@@ -12,6 +13,7 @@ export function SettingsView({ info }: { info: CalicoInfo }) {
       {info.serverUrl ? <ConfigSection /> : null}
       {info.serverUrl ? <CursorStatus /> : null}
       <AgentUpdatesSection info={info} />
+      {info.serverUrl ? <RelaySection /> : null}
       {info.serverUrl ? <PanelSection /> : null}
       <AutostartSection autostart={info.autostart} />
       <AboutSection version={info.version} />
