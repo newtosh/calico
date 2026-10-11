@@ -121,18 +121,42 @@ describe("signIn", () => {
     expect(new Set(states).size).toBe(2);
   });
 
-  it("refuses a callback whose state is not ours", async () => {
+  it("ignores a callback with the wrong state and still takes the real one", async () => {
+    const cf = await fakeCloudflare();
+    const token = await signIn(
+      options(cf.base, cf.seen, async (auth) => {
+        const bad = await approve(auth, { state: "forged" });
+        expect(bad.status).toBe(400);
+        void approve(auth);
+      }),
+    );
+    expect(token.accessToken).toBe("tok-1");
+    expect(cf.seen.token?.get("code")).toBe("code-1");
+  });
+
+  it("serves the whole success page before it closes", async () => {
+    const cf = await fakeCloudflare();
+    let page = "";
+    await signIn(
+      options(cf.base, cf.seen, (auth) => {
+        void approve(auth)
+          .then((r) => r.text())
+          .then((t) => (page = t));
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 50));
+    expect(page).toContain("Signed in to Cloudflare");
+  });
+
+  it("raises an OAuthError when the browser cannot be opened", async () => {
     const cf = await fakeCloudflare();
     await expect(
       signIn(
-        options(
-          cf.base,
-          cf.seen,
-          (auth) => void approve(auth, { state: "forged" }),
-        ),
+        options(cf.base, cf.seen, () => {
+          throw new Error("no xdg-open");
+        }),
       ),
-    ).rejects.toThrow(OAuthError);
-    expect(cf.seen.token).toBeNull();
+    ).rejects.toBeInstanceOf(OAuthError);
   });
 
   it("says so when the person declines", async () => {

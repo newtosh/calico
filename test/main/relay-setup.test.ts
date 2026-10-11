@@ -109,7 +109,7 @@ describe("setupRelay", () => {
     expect(log).toEqual(["upload", "delete", "revoke"]);
   });
 
-  it("does not delete anything when the upload itself fails", async () => {
+  it("does not delete anything when Cloudflare refuses the upload", async () => {
     const { deps, api, log } = fakes();
     api.uploadWorker.mockRejectedValue(
       new CloudflareError(
@@ -123,6 +123,56 @@ describe("setupRelay", () => {
       "Authentication error",
     );
     expect(log).toEqual(["revoke"]);
+  });
+
+  it("still removes the Worker when reporting progress throws, as when the window is gone", async () => {
+    let failing = false;
+    const { deps, log } = fakes({
+      probe: async () => false,
+      attempts: 1,
+      report: (p) => {
+        if (p.state === "failed") failing = true;
+        if (failing) throw new Error("Object has been destroyed");
+      },
+    });
+    const error = await setupRelay(deps).catch((e: unknown) => e);
+    expect(error).toMatchObject({ step: "check", cleanedUp: true });
+    expect(log).toEqual(["upload", "enable", "delete", "revoke"]);
+  });
+
+  it("removes the Worker when the upload may have landed but the reply never came", async () => {
+    const { deps, api, log } = fakes();
+    api.uploadWorker.mockRejectedValue(
+      new CloudflareError(0, "Could not reach Cloudflare: timed out."),
+    );
+    await expect(setupRelay(deps)).rejects.toMatchObject({
+      step: "upload",
+      cleanedUp: true,
+    });
+    expect(log).toEqual(["delete", "revoke"]);
+  });
+
+  it("retries a revoke that failed, and says if the access is still live", async () => {
+    const revoke = vi.fn(async () => false);
+    const { deps } = fakes({ revoke });
+    const out = await setupRelay(deps);
+    expect(revoke).toHaveBeenCalledTimes(2);
+    expect(out.revoked).toBe(false);
+  });
+
+  it("reports the access revoked when the retry works", async () => {
+    const answers = [false, true];
+    const { deps } = fakes({ revoke: async () => answers.shift() ?? true });
+    expect((await setupRelay(deps)).revoked).toBe(true);
+  });
+
+  it("keeps the result when revoking throws", async () => {
+    const { deps } = fakes({
+      revoke: async () => {
+        throw new Error("net down");
+      },
+    });
+    expect((await setupRelay(deps)).revoked).toBe(false);
   });
 
   it("says what to delete by hand when the cleanup fails too", async () => {

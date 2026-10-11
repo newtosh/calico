@@ -51,6 +51,7 @@ export class CloudflareApi {
         headers: { Authorization: `Bearer ${this.token}`, ...headers },
         ...(body === undefined ? {} : { body }),
         signal: AbortSignal.timeout(30_000),
+        redirect: "error",
       });
     } catch (err) {
       throw new CloudflareError(
@@ -172,9 +173,14 @@ export class CloudflareApi {
   }
 
   async deleteWorker(accountId: string, name: string): Promise<void> {
-    await this.call(
-      "DELETE",
-      `/accounts/${accountId}/workers/scripts/${name}?force=true`,
-    );
+    try {
+      await this.call(
+        "DELETE",
+        `/accounts/${accountId}/workers/scripts/${name}?force=true`,
+      );
+    } catch (err) {
+      // Already gone is what we wanted.
+      if (!(err instanceof CloudflareError && err.status === 404)) throw err;
+    }
   }
 }

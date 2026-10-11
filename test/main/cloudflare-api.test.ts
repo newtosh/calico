@@ -173,6 +173,18 @@ describe("CloudflareApi", () => {
     expect(calls[0]?.path).toContain("force=true");
   });
 
+  it("counts a Worker that is already gone as deleted", async () => {
+    const { api } = await fake({
+      "DELETE /accounts/a1/workers/scripts/calico-relay": {
+        status: 404,
+        body: { success: false, errors: [{ message: "not found" }] },
+      },
+    });
+    await expect(
+      api.deleteWorker("a1", "calico-relay"),
+    ).resolves.toBeUndefined();
+  });
+
   it("raises Cloudflare's own words, and never the token", async () => {
     const { api } = await fake({
       "GET /accounts": {

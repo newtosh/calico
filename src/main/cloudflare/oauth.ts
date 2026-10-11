@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { createServer, type Server } from "node:http";
+import { createServer, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 
 export const AUTH_URL = "https://dash.cloudflare.com/oauth2/auth";
@@ -11,7 +11,7 @@ export const CALLBACK_PORT = 53682;
 export const WORKERS_SCOPE = "workers-scripts.admin";
 
 export type OAuthReason =
-  "port" | "denied" | "state" | "timeout" | "cancelled" | "exchange";
+  "port" | "denied" | "timeout" | "cancelled" | "exchange";
 
 /** Every message is safe to show to the person: it names what happened, never a token. */
 export class OAuthError extends Error {
@@ -64,6 +64,9 @@ export async function signIn(opts: SignInOptions): Promise<Token> {
     server?.closeAllConnections();
     server?.close();
   };
+  // Let the browser finish reading its answer before the listener goes.
+  const stopAfter = (res: ServerResponse, then: () => void) =>
+    res.once("close", then);
 
   try {
     const redirect = await new Promise<string>((resolve, reject) => {
@@ -86,6 +89,15 @@ export async function signIn(opts: SignInOptions): Promise<Token> {
     const code = await new Promise<string>((resolve, reject) => {
       const fail = (error: OAuthError) => reject(error);
       server?.removeAllListeners("error");
+      // A late listener error must not become an uncaught exception.
+      server?.on("error", (err) =>
+        fail(
+          new OAuthError(
+            "port",
+            `The sign-in listener failed: ${err.message}.`,
+          ),
+        ),
+      );
       server?.on("request", (req, res) => {
         const url = new URL(req.url ?? "/", redirect);
         if (url.pathname !== "/callback") {
@@ -100,12 +112,6 @@ export async function signIn(opts: SignInOptions): Promise<Token> {
           answer(
             400,
             "That sign-in did not start from calico. You can close this tab.",
-          );
-          fail(
-            new OAuthError(
-              "state",
-              "The sign-in answer did not match the request, so calico ignored it.",
-            ),
           );
           return;
         }
@@ -135,7 +141,7 @@ export async function signIn(opts: SignInOptions): Promise<Token> {
           200,
           "Signed in to Cloudflare. You can close this tab and go back to calico.",
         );
-        resolve(got);
+        stopAfter(res, () => resolve(got));
       });
       timer = setTimeout(
         () =>
@@ -162,9 +168,13 @@ export async function signIn(opts: SignInOptions): Promise<Token> {
         code_challenge: sha256Base64Url(verifier),
         code_challenge_method: "S256",
       }).toString();
-      Promise.resolve(opts.openUrl(ask.toString())).catch(() =>
-        fail(new OAuthError("exchange", "calico could not open your browser.")),
-      );
+      const noBrowser = () =>
+        fail(new OAuthError("exchange", "calico could not open your browser."));
+      try {
+        Promise.resolve(opts.openUrl(ask.toString())).catch(noBrowser);
+      } catch {
+        noBrowser();
+      }
     });
     stop();
 
@@ -180,9 +190,15 @@ export async function signIn(opts: SignInOptions): Promise<Token> {
           client_id: opts.clientId,
           code_verifier: verifier,
         }),
-        signal: AbortSignal.timeout(20_000),
+        signal: AbortSignal.any([
+          AbortSignal.timeout(20_000),
+          ...(opts.signal ? [opts.signal] : []),
+        ]),
+        redirect: "error",
       });
     } catch (err) {
+      if (opts.signal?.aborted)
+        throw new OAuthError("cancelled", "Setup was cancelled.");
       throw new OAuthError(
         "exchange",
         `Could not reach Cloudflare to finish signing in: ${(err as Error).message}.`,
@@ -219,6 +235,7 @@ export async function revokeToken(
         client_id: opts.clientId,
       }),
       signal: AbortSignal.timeout(10_000),
+      redirect: "error",
     });
     return reply.ok;
   } catch {

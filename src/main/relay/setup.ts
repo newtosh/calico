@@ -58,6 +58,8 @@ export interface SetupResult {
   readToken: string;
   accountId: string;
   workerName: string;
+  /** False when Cloudflare would not revoke the access: it lapses within the hour. */
+  revoked: boolean;
 }
 
 /**
@@ -104,11 +106,19 @@ export async function setupRelay(deps: SetupDeps): Promise<SetupResult> {
   const check = () => {
     if (deps.signal?.aborted) throw new Stop();
   };
+  // The window can be gone by the time we report, and that must not skip cleanup.
+  const say = (progress: SetupProgress) => {
+    try {
+      deps.report(progress);
+    } catch {
+      /* nobody is listening */
+    }
+  };
   const begin = (next: SetupStep) => {
     step = next;
-    deps.report({ step, state: "active" });
+    say({ step, state: "active" });
   };
-  const done = () => deps.report({ step, state: "done" });
+  const done = () => say({ step, state: "done" });
 
   try {
     begin("sign-in");
@@ -151,12 +161,19 @@ export async function setupRelay(deps: SetupDeps): Promise<SetupResult> {
     const sendToken = token("send");
     const readToken = token("read");
     check();
-    await api.uploadWorker(accountId, WORKER_NAME, {
-      source: deps.workerSource,
-      vars: RELAY_VARS,
-      secrets: { SEND_TOKEN: sendToken, READ_TOKEN: readToken },
-      durableObject: DURABLE_OBJECT,
-    });
+    try {
+      await api.uploadWorker(accountId, WORKER_NAME, {
+        source: deps.workerSource,
+        vars: RELAY_VARS,
+        secrets: { SEND_TOKEN: sendToken, READ_TOKEN: readToken },
+        durableObject: DURABLE_OBJECT,
+      });
+    } catch (err) {
+      // No HTTP answer means the upload may have landed: clean up to be sure.
+      if (!(err instanceof CloudflareError) || err.status === 0)
+        uploaded = true;
+      throw err;
+    }
     uploaded = true;
     done();
 
@@ -187,13 +204,20 @@ export async function setupRelay(deps: SetupDeps): Promise<SetupResult> {
     done();
 
     begin("save");
-    await deps.revoke(accessToken);
+    const revoked = await revokeTwice(deps, accessToken);
     accessToken = "";
     finished = true;
     done();
-    return { url, sendToken, readToken, accountId, workerName: WORKER_NAME };
+    return {
+      url,
+      sendToken,
+      readToken,
+      accountId,
+      workerName: WORKER_NAME,
+      revoked,
+    };
   } catch (err) {
-    deps.report({ step, state: "failed" });
+    say({ step, state: "failed" });
     let cleanedUp = true;
     if (uploaded && !finished && api) {
       try {
@@ -215,8 +239,19 @@ export async function setupRelay(deps: SetupDeps): Promise<SetupResult> {
       cancelled,
     );
   } finally {
-    if (accessToken) await deps.revoke(accessToken);
+    if (accessToken) await revokeTwice(deps, accessToken);
   }
+}
+
+async function revokeTwice(deps: SetupDeps, accessToken: string) {
+  for (let i = 0; i < 2; i += 1) {
+    try {
+      if (await deps.revoke(accessToken)) return true;
+    } catch {
+      /* try once more */
+    }
+  }
+  return false;
 }
 
 function leftBehind(
