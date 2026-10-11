@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { request } from "node:http";
 import { after, before, describe, it } from "node:test";
 import { dropState, newState, sleep, startRelay } from "./harness.mjs";
 
@@ -73,6 +74,25 @@ describe("the relay", () => {
     it("does not find another topic", async () => {
       assert.equal((await api.req("POST", "/other", SEND, "x")).status, 404);
     });
+    it("refuses a request method that is not a real one, whatever token it carries", async () => {
+      // An object lookup on the method would find inherited keys such as "constructor".
+      const send = (method, bearer) =>
+        new Promise((resolve, reject) => {
+          const url = new URL(relay.base);
+          const req = request(
+            { host: url.hostname, port: url.port, path: `/${T}/json?poll=1`, method, headers: { Authorization: `Bearer ${bearer}` } },
+            (res) => {
+              res.resume();
+              resolve(res.statusCode);
+            },
+          );
+          req.on("error", reject);
+          req.end();
+        });
+      for (const method of ["constructor", "toString", "hasOwnProperty"])
+        // workerd itself may answer 501 before the Worker sees such a method.
+        assert.ok([405, 501].includes(await send(method, "function Object() { [native code] }")));
+    });
     it("answers health without credentials, with a version", async () => {
       const res = await api.req("GET", "/v1/health", null);
       assert.equal(res.status, 200);
@@ -107,6 +127,10 @@ describe("the relay", () => {
     it("answers 400 for a cursor that is not an id", async () => {
       assert.equal((await api.req("GET", `/${T}/json?poll=1&since=abc`, READ)).status, 400);
     });
+    it("tells a reader whose cursor is ahead of the relay, so it can start over", async () => {
+      const res = await api.req("GET", `/${T}/json?poll=1&since=999999`, READ);
+      assert.equal(res.status, 409);
+    });
     it("stamps each message with the time it arrived", async () => {
       const [first] = (await api.read()).msgs;
       assert.ok(Math.abs(first.time - Date.now() / 1000) < 30);
@@ -120,6 +144,9 @@ describe("the relay", () => {
     });
     it("refuses an empty body", async () => {
       assert.equal((await api.req("POST", `/${T}`, SEND, "  ")).status, 400);
+    });
+    it("counts bytes, not characters, so 3000 two-byte letters are too big", async () => {
+      assert.equal((await api.req("POST", `/${T}`, SEND, "é".repeat(3000))).status, 413);
     });
     it("takes 3 KB", async () => {
       assert.equal((await api.req("POST", `/${T}`, SEND, "y".repeat(3000))).status, 200);

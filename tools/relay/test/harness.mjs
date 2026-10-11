@@ -20,6 +20,7 @@ function freePort() {
 }
 
 export const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const giveUpAfter = (ms) => new Promise((resolve) => setTimeout(resolve, ms).unref());
 
 export function newState() {
   return mkdtempSync(join(tmpdir(), "calico-relay-"));
@@ -36,14 +37,19 @@ export async function startRelay({ state, vars }) {
   for (const [key, value] of Object.entries(vars)) args.push("--var", `${key}:${value}`);
   const child = spawn("npx", args, { cwd: ROOT, detached: true, stdio: "ignore" });
   const base = `http://127.0.0.1:${port}`;
+  const exited = new Promise((resolve) => child.once("exit", resolve));
   const stop = async () => {
-    // wrangler starts workerd as a child, so end the whole group.
-    try {
-      process.kill(-child.pid, "SIGTERM");
-    } catch {
-      // Already gone.
+    // wrangler starts workerd as a child, so end the whole group. Wait for it to be gone, since
+    // the next start may reopen the same storage, and escalate if it does not go.
+    for (const signal of ["SIGTERM", "SIGKILL"]) {
+      try {
+        process.kill(-child.pid, signal);
+      } catch {
+        return;
+      }
+      if ((await Promise.race([exited.then(() => true), giveUpAfter(signal === "SIGTERM" ? 10000 : 3000).then(() => false)]))) break;
     }
-    await sleep(1500);
+    await sleep(500);
   };
   for (let i = 0; i < 120; i += 1) {
     try {

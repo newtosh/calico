@@ -10,7 +10,7 @@ It speaks the part of the [ntfy](https://ntfy.sh) protocol Calico needs, so the 
 | `GET /<topic>/json?poll=1&since=<id>`    | read token  | Returns the messages after `id`, oldest first, as NDJSON. `since=all` returns every message. |
 | `GET /v1/health`                         | none        | `{"healthy": true, "version": N}`.                           |
 
-A send token cannot read and a read token cannot send. Requests without the right token are refused before they reach storage, so scanning cannot spend the daily budget. If a token is not set, the Worker answers `405` instead of letting anyone in.
+A send token cannot read and a read token cannot send. Requests without the right token are refused before they reach storage and do not count against the daily budget. Cloudflare still counts them as Worker requests, so a flood from outside can use up the plan's own allowance; the budget cannot see that. If a token is not set, the Worker answers `405` instead of letting anyone in.
 
 ## Limits
 
@@ -23,6 +23,8 @@ Set in `wrangler.jsonc` as plain variables.
 | `MAX_MESSAGES`         | `200`   | Only the newest this many are kept.                               |
 | `MAX_BODY_BYTES`       | `4096`  | Larger bodies are refused with `413`.                             |
 | `DAILY_REQUEST_BUDGET` | `60000` | After this many requests in a UTC day, `429` with `Retry-After`. The free plan allows 100,000. |
+
+A reader whose `since` id is ahead of the relay (the relay was deleted and set up again, so ids restarted) gets `409`, and should start over from `since=all`.
 
 Every answer carries `x-relay-requests-today` and `x-relay-budget`. The count is kept in memory, so it is a guard and not an exact meter. A restart of the Durable Object resets it.
 
@@ -43,6 +45,7 @@ Then give your agents `https://calico-relay.<your-subdomain>.workers.dev/inbox` 
 ## Tests
 
 ```sh
+cd tools/relay
 npm install
 npm test
 ```
