@@ -135,6 +135,12 @@ describe("pollRelayOnce", () => {
     });
   });
 
+  it("starts over from the top when the relay says the cursor is ahead of it", async () => {
+    const { store, get } = setup(reply([], { status: 409 }));
+    const out = await pollRelayOnce(store, { ...relay, cursor: "500" }, get);
+    expect(out).toEqual({ ok: true, applied: 0, refused: 0, cursor: "" });
+  });
+
   it("reports the wait the relay asks for when it is over its budget", async () => {
     const { store, get } = setup(
       reply([], { status: 429, headers: { "retry-after": "3600" } }),

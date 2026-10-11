@@ -128,6 +128,10 @@ export async function pollRelayOnce(
       error: `Could not reach the relay: ${(err as Error).message}.`,
     };
   }
+  // Ids restart when a relay is deleted and set up again. Starting over is safe,
+  // since a replay that is no newer than what the app already shows is dropped.
+  if (answer.status === 409)
+    return { ok: true, applied: 0, refused: 0, cursor: "" };
   if (answer.status !== 200) {
     const wait = number(answer.headers["retry-after"]);
     return {

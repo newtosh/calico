@@ -1,0 +1,12 @@
+{
+  "name": "calico-relay",
+  "private": true,
+  "type": "module",
+  "description": "The mailbox Worker Calico can read agent updates from.",
+  "scripts": {
+    "test": "node --test --test-timeout=180000 test/relay.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

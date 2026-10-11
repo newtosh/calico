@@ -82,3 +82,18 @@ jobs:
         run: >-
           cd firmware/scripts && "$RUNNER_TEMP/venv/bin/python" -m pytest -q
           --deselect test_ble_provision.py::test_wifi_join_and_glass_scan_use_psram_stacks
+  # The relay Worker, run in a local workerd. Its own lockfile: it is not part of the app.
+  relay:
+    name: relay worker
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: tools/relay/package-lock.json
+      - run: npm ci --prefix tools/relay
+      - run: npm test --prefix tools/relay
