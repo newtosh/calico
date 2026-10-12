@@ -17,7 +17,7 @@ import type {
   WebhookActivity,
 } from "../shared/ipc";
 import { type CursorStatus, EMPTY_CURSOR_STATUS } from "./cursor-poll";
-import { parsePanelBattery } from "./panel-battery";
+import { recordPanelBattery } from "./panel-battery";
 import { EMPTY_RELAY_STATUS, type RelayStatus } from "./relay";
 import { type DeskStore, eventIn, FRAME_MAX, StoreError } from "./store";
 
@@ -197,8 +197,7 @@ export function createCompanionServer(deps: ServerDeps): {
         const params = new URL(req.url ?? "/", "http://calico").searchParams;
         if (!isLoopback(req.socket.remoteAddress)) {
           stats.lastPanelPoll = Date.now();
-          const battery = parsePanelBattery(params);
-          if (battery) stats.panelBattery = { ...battery, at: Date.now() };
+          recordPanelBattery(stats, params, Date.now());
         }
         const detail = params.get("detail") === "1";
         const body = store.status(detail);

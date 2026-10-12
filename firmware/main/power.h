@@ -32,6 +32,21 @@ typedef enum {
 
 power_fill_t power_fill(const power_reading_t *r);
 
+/* One failed I2C read must not blank the widget: hold the last good reading
+ * and report "absent" only after POWER_MISS_LIMIT failures in a row. */
+#define POWER_MISS_LIMIT 3
+
+typedef struct {
+    power_reading_t last;
+    int misses;
+} power_hold_t;
+
+/* `fresh` is NULL when the read failed. */
+void power_hold(power_hold_t *h, const power_reading_t *fresh, power_reading_t *out);
+
+/* Equal for everything shown or sent. Millivolts jitter and are not compared. */
+int power_same(const power_reading_t *a, const power_reading_t *b);
+
 /* ESP-IDF only (power_task.c). The listener runs on the power task. */
 typedef void (*power_listener_t)(const power_reading_t *r);
 void power_start(power_listener_t on_change);

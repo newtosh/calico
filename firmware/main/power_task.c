@@ -33,7 +33,7 @@ static int read_regs(i2c_master_dev_handle_t dev, uint8_t out[5]) {
 static void publish(const power_reading_t *next) {
     int changed;
     xSemaphoreTake(s_lock, portMAX_DELAY);
-    changed = memcmp(&s_last, next, sizeof s_last) != 0;
+    changed = !power_same(&s_last, next);
     s_last = *next;
     xSemaphoreGive(s_lock);
     if (changed && s_listener) {
@@ -43,8 +43,11 @@ static void publish(const power_reading_t *next) {
 
 static void power_task(void *arg) {
     i2c_master_dev_handle_t dev = NULL;
+    power_hold_t hold;
     (void)arg;
+    memset(&hold, 0, sizeof hold);
     for (;;) {
+        power_reading_t fresh;
         power_reading_t next;
         uint8_t regs[5];
         memset(&next, 0, sizeof next);
@@ -59,7 +62,10 @@ static void power_task(void *arg) {
             }
         }
         if (dev && read_regs(dev, regs) == 0) {
-            power_decode(regs, &next);
+            power_decode(regs, &fresh);
+            power_hold(&hold, &fresh, &next);
+        } else {
+            power_hold(&hold, NULL, &next);
         }
         publish(&next);
         vTaskDelay(pdMS_TO_TICKS(POWER_POLL_MS));

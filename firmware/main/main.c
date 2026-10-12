@@ -599,6 +599,8 @@ void app_main(void) {
         }
         unlock_lvgl();
     }
+    /* After ui_init: the listener only fires on a change, so a reading that
+     * lands before the widget exists would never be drawn. */
     power_start(on_power);
     ble_link_start(&s_store, on_ble_state, on_ble_restart);
     /* esp_wifi_init wants the DMA block logged after nimble_port_init.

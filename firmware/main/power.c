@@ -40,3 +40,29 @@ power_fill_t power_fill(const power_reading_t *r) {
     }
     return POWER_FILL_INK;
 }
+
+void power_hold(power_hold_t *h, const power_reading_t *fresh, power_reading_t *out) {
+    if (fresh) {
+        h->last = *fresh;
+        h->misses = 0;
+        *out = *fresh;
+        return;
+    }
+    if (h->misses < POWER_MISS_LIMIT) {
+        h->misses++;
+    }
+    if (h->misses >= POWER_MISS_LIMIT) {
+        out->present = 0;
+        out->percent = 0;
+        out->millivolts = 0;
+        out->charging = 0;
+        out->external = 0;
+        return;
+    }
+    *out = h->last;
+}
+
+int power_same(const power_reading_t *a, const power_reading_t *b) {
+    return a->present == b->present && a->percent == b->percent && a->charging == b->charging &&
+           a->external == b->external;
+}

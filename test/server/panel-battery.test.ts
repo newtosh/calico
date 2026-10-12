@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parsePanelBattery } from "../../src/server/panel-battery";
+import type { PanelBatteryInfo } from "../../src/shared/ipc";
+import {
+  parsePanelBattery,
+  recordPanelBattery,
+} from "../../src/server/panel-battery";
 
 const q = (s: string) => new URLSearchParams(s);
 
@@ -42,5 +46,39 @@ describe("parsePanelBattery", () => {
       "bat=81&chg=0&ext=yes",
     ])
       expect(parsePanelBattery(q(bad)), bad).toBeNull();
+  });
+});
+
+describe("recordPanelBattery", () => {
+  const stats = (): { panelBattery: PanelBatteryInfo | null } => ({
+    panelBattery: null,
+  });
+
+  it("stores a valid report with the time it arrived", () => {
+    const s = stats();
+    recordPanelBattery(s, q("bat=81&chg=1&ext=0"), 5_000);
+    expect(s.panelBattery).toEqual({
+      pct: 81,
+      charging: true,
+      external: false,
+      at: 5_000,
+    });
+  });
+
+  it("keeps the previous report when a later one is malformed", () => {
+    const s = stats();
+    recordPanelBattery(s, q("bat=81&chg=1&ext=0"), 5_000);
+    recordPanelBattery(s, q("bat=999&chg=1&ext=0"), 6_000);
+    recordPanelBattery(s, q("bat=50"), 7_000);
+    recordPanelBattery(s, q(""), 8_000);
+    expect(s.panelBattery?.pct).toBe(81);
+    expect(s.panelBattery?.at).toBe(5_000);
+  });
+
+  it("replaces it with a newer valid one", () => {
+    const s = stats();
+    recordPanelBattery(s, q("bat=81&chg=1&ext=0"), 5_000);
+    recordPanelBattery(s, q("bat=80&chg=0&ext=0"), 9_000);
+    expect(s.panelBattery).toMatchObject({ pct: 80, at: 9_000 });
   });
 });

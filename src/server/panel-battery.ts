@@ -18,3 +18,13 @@ export function parsePanelBattery(
   if (pct > 100 || charging === null || external === null) return null;
   return { pct, charging, external };
 }
+
+/** Keeps the last valid report. A malformed one never replaces it. */
+export function recordPanelBattery(
+  stats: { panelBattery: PanelBatteryInfo | null },
+  params: URLSearchParams,
+  now: number,
+): void {
+  const battery = parsePanelBattery(params);
+  if (battery) stats.panelBattery = { ...battery, at: now };
+}
