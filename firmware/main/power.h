@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 /* AXP2101 on the shared I2C bus. The five registers, in this order:
- * 0x00 status 1 (bit 5: external power), 0x01 status 2 (bits 6:5: 01 charging),
+ * 0x00 status 1 (bit 5: external power, bit 3: battery present), 0x01 status 2 (bits 6:5: 01 charging),
  * 0xA4 battery percent, 0x34 and 0x35 battery millivolts (14 bit). VBUS
  * millivolts are never read: they float to garbage with nothing plugged in. */
 #define POWER_I2C_ADDR 0x34

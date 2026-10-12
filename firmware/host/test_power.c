@@ -109,6 +109,30 @@ int main(void) {
         check(power_same(&good, &same) == 0, "losing the battery is");
     }
 
+    {
+        /* Captured on the real board with the battery connector pulled and USB in. */
+        const uint8_t no_battery[5] = {0x20, 0x15, 0x00, 0x3F, 0xF3};
+        power_reading_t gone;
+        uint8_t flagless[5];
+        power_decode(no_battery, &gone);
+        check(gone.present == 0, "no battery: the present flag is clear, so absent");
+        check(gone.external == 1, "no battery: USB power is still seen");
+        check(power_query(&gone, q, sizeof q) == 0 && q[0] == '\0', "no battery: nothing is reported");
+
+        /* The flag decides, not the voltage: a clear flag with a believable reading is still absent. */
+        memcpy(flagless, plugged, sizeof flagless);
+        flagless[0] = 0x20;
+        power_decode(flagless, &gone);
+        check(gone.present == 0, "a clear present flag means no battery whatever the voltage");
+
+        /* And a set flag with a dead-low voltage is still absent. */
+        memcpy(flagless, plugged, sizeof flagless);
+        flagless[3] = 0x00;
+        flagless[4] = 0x10;
+        power_decode(flagless, &gone);
+        check(gone.present == 0, "a set flag with under 2500 mV is absent");
+    }
+
     if (g_failed) {
         return 1;
     }

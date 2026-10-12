@@ -5,7 +5,10 @@
 void power_decode(const uint8_t regs[5], power_reading_t *out) {
     int percent = regs[2];
     out->millivolts = ((regs[3] & 0x3F) << 8) | regs[4];
-    out->present = out->millivolts >= POWER_NO_BATTERY_MV;
+    /* Status 1 bit 3 is the chip's "battery present" flag. It is clear with the connector
+     * pulled, when the voltage reading pegs near 16 V, so the flag has to decide. The
+     * voltage floor still drops a cell that is connected but dead. */
+    out->present = ((regs[0] >> 3) & 1) && out->millivolts >= POWER_NO_BATTERY_MV;
     out->percent = percent > 100 ? 100 : percent;
     out->external = (regs[0] >> 5) & 1;
     out->charging = ((regs[1] >> 5) & 3) == 1;
