@@ -74,6 +74,12 @@ describe("setupRelay", () => {
     ]);
   });
 
+  it("uses the address a test supplies instead of workers.dev", async () => {
+    const { deps } = fakes({ origin: () => "http://127.0.0.1:9999" });
+    const out = await setupRelay(deps);
+    expect(out.url).toBe("http://127.0.0.1:9999/inbox");
+  });
+
   it("checks the relay with the read token it just made", async () => {
     const { deps } = fakes();
     const out = await setupRelay(deps);
@@ -150,6 +156,36 @@ describe("setupRelay", () => {
       cleanedUp: true,
     });
     expect(log).toEqual(["delete", "revoke"]);
+  });
+
+  it("saves the tokens before it revokes, so a failed save leaves nothing behind", async () => {
+    const { deps, log } = fakes({
+      persist: vi.fn(async () => {
+        log.push("persist");
+      }),
+    });
+    const out = await setupRelay(deps);
+    expect(log).toEqual(["upload", "enable", "persist", "revoke"]);
+    expect(deps.persist).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: out.url,
+        sendToken: out.sendToken,
+        readToken: out.readToken,
+      }),
+    );
+  });
+
+  it("removes the Worker when saving the tokens fails", async () => {
+    const { deps, log } = fakes({
+      persist: async () => {
+        throw new Error("disk full");
+      },
+    });
+    await expect(setupRelay(deps)).rejects.toMatchObject({
+      step: "save",
+      cleanedUp: true,
+    });
+    expect(log).toEqual(["upload", "enable", "delete", "revoke"]);
   });
 
   it("retries a revoke that failed, and says if the access is still live", async () => {

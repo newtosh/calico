@@ -175,4 +175,41 @@ describe("RelaySection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("alert")).toBeNull();
   });
+
+  it("offers to set one up with Cloudflare and opens the dialog", async () => {
+    serve(off);
+    const calico = {
+      relaySetupView: vi.fn(async () => ({ phase: "idle" })),
+      onRelaySetup: vi.fn(() => () => undefined),
+    };
+    vi.stubGlobal("window", Object.assign(window, { calico }));
+    render(<RelaySection />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Set up with Cloudflare/ }),
+    );
+    expect(await screen.findByText(/Workers Admin/)).toBeTruthy();
+  });
+
+  it("copies for the bot only when calico made the relay", async () => {
+    const calico = {
+      relayCopyForBot: vi.fn(async () => true),
+    };
+    vi.stubGlobal("window", Object.assign(window, { calico }));
+    serve({ ...on({ ok: true }), can_copy: true });
+    render(<RelaySection />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Copy for Grok Bot/ }),
+    );
+    expect(calico.relayCopyForBot).toHaveBeenCalled();
+    expect(await screen.findByText(/Copied/)).toBeTruthy();
+  });
+
+  it("hides Copy for Grok Bot for a relay connected by hand", async () => {
+    serve({ ...on({ ok: true }), can_copy: false });
+    render(<RelaySection />);
+    await screen.findByText(/Connected/);
+    expect(
+      screen.queryByRole("button", { name: /Copy for Grok Bot/ }),
+    ).toBeNull();
+  });
 });

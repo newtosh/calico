@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchRelay, putRelay, type RelayInfo } from "../lib/api";
 import { ago } from "../lib/time";
 import { ErrorNote } from "../shell/ErrorNote";
+import { SetupDialog } from "./SetupDialog";
 
 type Step = "idle" | "form" | "disconnect" | "working";
 
@@ -34,6 +35,8 @@ export function RelaySection() {
   const [url, setUrl] = useState("");
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const load = useCallback(
     () =>
@@ -107,18 +110,47 @@ export function RelaySection() {
       </div>
       <div className="px-4 pt-2">
         {step === "idle" && !connected ? (
-          <button type="button" className="btn" onClick={() => setStep("form")}>
-            Connect an existing relay…
-          </button>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setSetupOpen(true)}
+            >
+              Set up with Cloudflare…
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setStep("form")}
+            >
+              Connect an existing relay…
+            </button>
+          </div>
         ) : null}
         {step === "idle" && connected ? (
-          <button
-            type="button"
-            className="btn"
-            onClick={() => setStep("disconnect")}
-          >
-            Disconnect…
-          </button>
+          <div className="flex items-center gap-3">
+            {relay.can_copy ? (
+              <button
+                type="button"
+                className="btn"
+                onClick={() =>
+                  void window.calico.relayCopyForBot().then(setCopied)
+                }
+              >
+                Copy for Grok Bot
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setStep("disconnect")}
+            >
+              Disconnect…
+            </button>
+            <span role="status" className="text-sage">
+              {copied ? "Copied." : ""}
+            </span>
+          </div>
         ) : null}
         {step === "form" || (step === "working" && !connected) ? (
           <div className="grid max-w-2xl grid-cols-2 gap-3">
@@ -194,6 +226,13 @@ export function RelaySection() {
           </div>
         ) : null}
       </div>
+      <SetupDialog
+        open={setupOpen}
+        onClose={() => {
+          setSetupOpen(false);
+          void load();
+        }}
+      />
       {error ? (
         <p role="alert" className="max-w-2xl px-4 pt-2">
           <ErrorNote>{error}</ErrorNote>

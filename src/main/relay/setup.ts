@@ -46,6 +46,13 @@ export interface SetupDeps {
   report(progress: SetupProgress): void;
   /** Only asked when the person has several accounts. Null means they backed out. */
   chooseAccount?(accounts: Account[]): Promise<string | null>;
+  /**
+   * Keeps the new tokens. Called before access is revoked and the Worker is
+   * made permanent, so a failed save removes the Worker instead of orphaning it.
+   */
+  persist?(result: Omit<SetupResult, "revoked">): Promise<void> | void;
+  /** Where the new Worker answers. Only a test overrides the workers.dev default. */
+  origin?(workerName: string, subdomain: string): string;
   signal?: AbortSignal;
   /** How many times to ask a new address whether it answers. */
   attempts?: number;
@@ -183,7 +190,10 @@ export async function setupRelay(deps: SetupDeps): Promise<SetupResult> {
     done();
 
     begin("check");
-    const url = `https://${WORKER_NAME}.${subdomain}.workers.dev/${RELAY_VARS.TOPIC}`;
+    const origin =
+      deps.origin?.(WORKER_NAME, subdomain) ??
+      `https://${WORKER_NAME}.${subdomain}.workers.dev`;
+    const url = `${origin}/${RELAY_VARS.TOPIC}`;
     let answered = false;
     for (
       let i = 0;
@@ -204,18 +214,19 @@ export async function setupRelay(deps: SetupDeps): Promise<SetupResult> {
     done();
 
     begin("save");
-    const revoked = await revokeTwice(deps, accessToken);
-    accessToken = "";
-    finished = true;
-    done();
-    return {
+    const made = {
       url,
       sendToken,
       readToken,
       accountId,
       workerName: WORKER_NAME,
-      revoked,
     };
+    await deps.persist?.(made);
+    const revoked = await revokeTwice(deps, accessToken);
+    accessToken = "";
+    finished = true;
+    done();
+    return { ...made, revoked };
   } catch (err) {
     say({ step, state: "failed" });
     let cleanedUp = true;

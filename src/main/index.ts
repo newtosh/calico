@@ -24,6 +24,9 @@ import { execFileP, portHolders } from "./assist";
 import { initAutostartOnce } from "./autostart";
 import { wireDevicePickers } from "./devices";
 import { autostartState, registerIpc } from "./ipc";
+import { botNote, RelaySetupService, withMadeRelay } from "./relay/service";
+import { setupRelay } from "./relay/setup";
+import { cloudflareSetupDeps } from "./relay/wire";
 import { createTray, type TrayActions, updateTray } from "./tray";
 import appIcon from "../../resources/icon.png?asset";
 
@@ -162,7 +165,24 @@ async function start(): Promise<void> {
     version,
   });
 
+  const relaySetup = new RelaySetupService((signal, report) =>
+    setupRelay({
+      ...cloudflareSetupDeps(signal),
+      report,
+      persist: (made) => save(withMadeRelay(config, made)),
+    }),
+  );
+  relaySetup.subscribe((view) => {
+    for (const w of BrowserWindow.getAllWindows())
+      if (!w.isDestroyed()) w.webContents.send("relay:setup-changed", view);
+  });
+
   registerIpc({
+    relaySetup,
+    botNote: () =>
+      config.relay_url && config.relay_send_token
+        ? botNote(config.relay_url, config.relay_send_token)
+        : null,
     info,
     boundPort: () => bound,
     adoptPort: () => {
@@ -189,6 +209,7 @@ async function start(): Promise<void> {
     quitting = true;
     stopCursorPoll();
     stopRelayPoll();
+    relaySetup.cancel();
     server.close();
   });
 

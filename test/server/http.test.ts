@@ -358,6 +358,7 @@ describe("/api/relay", () => {
     expect(await (await fetch(`${base}/api/relay`)).json()).toEqual({
       url: "",
       token_set: false,
+      can_copy: false,
       status: {
         configured: false,
         last_poll_at: null,

@@ -80,6 +80,8 @@ export interface PanelPatch {
 export interface RelayInfo {
   url: string;
   token_set: boolean;
+  /** True when calico made the relay and holds its send token. */
+  can_copy: boolean;
   status: {
     configured: boolean;
     last_poll_at: string | null;
@@ -327,6 +329,7 @@ export async function fetchRelay(): Promise<RelayInfo> {
   return {
     url: value.url,
     token_set: value.token_set === true,
+    can_copy: value.can_copy === true,
     status: {
       configured: st.configured === true,
       last_poll_at:
