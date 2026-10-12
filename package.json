@@ -25,6 +25,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "deploy:site": "scripts/deploy-site.sh",
     "dist": "electron-vite build && electron-builder --linux --publish never"
   },
   "dependencies": {

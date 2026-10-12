@@ -36,3 +36,23 @@ pnpm dev
 ## Firmware
 
 The firmware lives in `firmware/` (see [firmware/README.md](firmware/README.md) for building and flashing). Run its host tests with `firmware/host/run.sh`. A change to the Bluetooth or USB protocol touches both sides in one pull request: `docs/usb-console-protocol.md` is the contract, and a test in `src/renderer/src/device/ble.test.ts` fails if the BLE UUIDs in `firmware/main/ble_desk.h` and the app drift apart.
+
+## Project site
+
+`site/` is a static page served from a VM by Caddy at https://calico.newto.sh. It no longer goes through GitHub Pages, so a merge does not update it. After a site change lands on `main`, deploy by hand:
+
+```bash
+pnpm deploy:site
+```
+
+That runs `scripts/deploy-site.sh`: one `rsync` of `site/` over SSH, then a check that the page answers. It uses the SSH host alias `nitpub` and the directory `/var/www/calico`. Override them with `SITE_HOST` and `SITE_DIR`. No key or password lives in the repository.
+
+The VM needs this once: a DNS A record for `calico` pointing at it, the directory `/var/www/calico`, and a Caddy block that serves it. Caddy fetches the certificate.
+
+```
+calico.newto.sh {
+	encode gzip
+	root * /var/www/calico
+	file_server
+}
+```
