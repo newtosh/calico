@@ -103,3 +103,19 @@ int power_same(const power_reading_t *a, const power_reading_t *b) {
     return a->present == b->present && a->percent == b->percent && a->charging == b->charging &&
            a->external == b->external;
 }
+
+int power_fill_width(int percent) {
+    int width;
+    if (percent > 100) {
+        percent = 100;
+    }
+    if (percent < 0) {
+        percent = 0;
+    }
+    width = percent * POWER_FILL_PX / 100;
+    return width < 1 ? 1 : width;
+}
+
+int power_mark_on_fill(int percent) {
+    return power_fill_width(percent) >= POWER_MARK_REACH_PX;
+}

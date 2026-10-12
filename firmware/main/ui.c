@@ -2402,8 +2402,6 @@ static void build_battery(lv_obj_t *cluster) {
 
 void ui_set_battery(const power_reading_t *reading) {
     char text[8];
-    int inner = BAT_W - 2 * BAT_INSET - 2;
-    int width;
     if (!s_bat_box) {
         return;
     }
@@ -2413,12 +2411,11 @@ void ui_set_battery(const power_reading_t *reading) {
     }
     snprintf(text, sizeof text, "%d%%", reading->percent);
     lv_label_set_text(s_bat_pct, text);
-    width = reading->percent * inner / 100;
-    if (width < 1) {
-        width = 1;
-    }
-    lv_obj_set_width(s_bat_fill, width);
+    lv_obj_set_width(s_bat_fill, power_fill_width(reading->percent));
     lv_obj_set_style_bg_color(s_bat_fill, lv_color_hex(battery_fill_color(power_fill(reading))), 0);
+    /* Dark over a fill that reaches the mark, cream over the empty body. */
+    lv_obj_set_style_text_color(s_bat_mark,
+                                lv_color_hex(power_mark_on_fill(reading->percent) ? DOCK : INK), 0);
     if (reading->charging) {
         lv_label_set_text_static(s_bat_mark, LV_SYMBOL_CHARGE);
         lv_obj_clear_flag(s_bat_mark, LV_OBJ_FLAG_HIDDEN);

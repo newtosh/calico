@@ -167,6 +167,22 @@ int main(void) {
         check(last == 100, "4.3 V estimates 100");
     }
 
+    {
+        /* The charging bolt and the USB mark are dark over a fill that reaches them and cream
+         * otherwise, like the desktop chip: the fill is 22 px at 100 percent, and the mark sits
+         * where a 16 px fill still covers it. */
+        check(power_fill_width(100) == 22, "fill is 22 px at 100 percent");
+        check(power_fill_width(50) == 11, "fill is half at 50 percent");
+        check(power_fill_width(1) == 1, "fill never drops under one pixel");
+        check(power_fill_width(0) == 1, "an empty reading still draws a pixel");
+        check(power_fill_width(180) == 22, "a reading over 100 stops at the full width");
+        check(power_mark_on_fill(100) == 1, "mark is over the fill at 100 percent");
+        check(power_mark_on_fill(73) == 1, "mark is over the fill at 73 percent");
+        check(power_mark_on_fill(72) == 0, "mark is off the fill at 72 percent");
+        check(power_mark_on_fill(10) == 0, "mark is off the fill at 10 percent");
+        check(power_mark_on_fill(0) == 0, "mark is off the fill when empty");
+    }
+
     if (g_failed) {
         return 1;
     }

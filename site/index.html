@@ -174,6 +174,22 @@
           Applications in your Cloudflare profile.
         </li>
       </ul>
+      <p>
+        <strong>Whose data is this?</strong> Yours alone. Each relay is its own
+        Worker in your own Cloudflare account, with its own storage, its own
+        address, and its own two random tokens. There is no shared inbox and no
+        Calico server in the middle: events go from your agent to your Worker,
+        and your copy of Calico collects them from it. Messages expire after 24
+        hours, and only the newest 200 are kept. Every request needs a token and
+        a token that can post cannot read, so a leaked agent token cannot show
+        anyone your events.
+      </p>
+      <p>
+        It is not end-to-end encrypted. Traffic is HTTPS, but Cloudflare hosts
+        your Worker and can, in principle, see what passes through it, as with
+        any service you run on someone else's platform. Anyone holding your
+        tokens can use the relay, and the address alone is not enough.
+      </p>
 
       <footer>
         <a href="https://github.com/newtosh/calico">Source on GitHub</a> · MIT

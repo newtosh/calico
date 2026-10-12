@@ -106,8 +106,11 @@ describe("mergePanel", () => {
     });
   });
 
-  it("requires a url before a token", () => {
+  it("requires a url before a token, and says so", () => {
     expect(() => mergePanel(defaultConfig(), { token: "t" })).toThrow(BadInput);
+    expect(() => mergePanel(defaultConfig(), { token: "t" })).toThrow(
+      "a panel URL is required",
+    );
   });
 
   it.each([

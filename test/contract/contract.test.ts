@@ -80,6 +80,22 @@ const fixture = JSON.parse(
   steps: Recorded[];
 };
 
+// Where calico deliberately says more than the Python companion did. The recording stays
+// exactly as captured, so it is still the Python companion's word. Each entry names the
+// step, the status it must still have, and what calico now returns instead.
+const KNOWN_DIVERGENCES: Record<
+  number,
+  { method: string; path: string; status: number; json: unknown }
+> = {
+  // A token-only panel push says a URL is needed, where Python said "bad panel".
+  17: {
+    method: "PUT",
+    path: "/api/panel",
+    status: 400,
+    json: { error: "a panel URL is required" },
+  },
+};
+
 describe("frozen HTTP contract", () => {
   it("matches the Python companion step for step, including key order", async () => {
     let config: CalicoConfig = { ...defaultConfig(), webhook_token: "secret" };
@@ -98,7 +114,19 @@ describe("frozen HTTP contract", () => {
     const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
     try {
       for (const [index, recorded] of fixture.steps.entries()) {
-        const { step, ...expected } = recorded;
+        const { step, ...recordedResponse } = recorded;
+        const divergence = KNOWN_DIVERGENCES[index];
+        if (divergence) {
+          // A divergence must still be the same request with the same status.
+          expect([step.method, step.path, recordedResponse.status]).toEqual([
+            divergence.method,
+            divergence.path,
+            divergence.status,
+          ]);
+        }
+        const expected = divergence
+          ? { ...recordedResponse, json: divergence.json }
+          : recordedResponse;
         const actual = await replay(base, step);
         expect(
           `${index} ${step.method} ${step.path} ${JSON.stringify(normalize(actual))}`,

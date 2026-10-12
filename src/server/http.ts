@@ -6,6 +6,7 @@ import {
   mergeConfig,
   mergePanel,
   mergeRelay,
+  PANEL_URL_REQUIRED,
   panelPublicView,
   panelStatusField,
   publicView,
@@ -317,7 +318,10 @@ export function createCompanionServer(deps: ServerDeps): {
           deps.setConfig(mergePanel(deps.getConfig(), payload));
         } catch (err) {
           if (err instanceof BadInput)
-            return json(res, 400, { error: "bad panel" });
+            return json(res, 400, {
+              error:
+                err.message === PANEL_URL_REQUIRED ? err.message : "bad panel",
+            });
           throw err;
         }
         return json(res, 200, panelPublicView(deps.getConfig()));
