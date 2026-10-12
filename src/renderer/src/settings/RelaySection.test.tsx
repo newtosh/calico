@@ -1,8 +1,18 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { configureApi } from "../lib/api";
 import { RelaySection } from "./RelaySection";
+
+beforeEach(() => {
+  // Settings asks main whether a setup is under way when it opens.
+  Object.assign(window, {
+    calico: {
+      relaySetupView: vi.fn(async () => ({ phase: "idle" })),
+      onRelaySetup: vi.fn(() => () => undefined),
+    },
+  });
+});
 
 afterEach(() => {
   cleanup();
@@ -192,6 +202,8 @@ describe("RelaySection", () => {
 
   it("copies for the bot only when calico made the relay", async () => {
     const calico = {
+      relaySetupView: vi.fn(async () => ({ phase: "idle" })),
+      onRelaySetup: vi.fn(() => () => undefined),
       relayCopyForBot: vi.fn(async () => true),
     };
     vi.stubGlobal("window", Object.assign(window, { calico }));
@@ -211,5 +223,23 @@ describe("RelaySection", () => {
     expect(
       screen.queryByRole("button", { name: /Copy for Grok Bot/ }),
     ).toBeNull();
+  });
+
+  it("shows a setup that is still running or has ended when Settings is opened again", async () => {
+    serve(off);
+    Object.assign(window, {
+      calico: {
+        relaySetupView: vi.fn(async () => ({
+          phase: "failed",
+          step: "upload",
+          message: "Cloudflare answered HTTP 403.",
+          cleanedUp: true,
+          cancelled: false,
+        })),
+        onRelaySetup: vi.fn(() => () => undefined),
+      },
+    });
+    render(<RelaySection />);
+    expect(await screen.findByText(/HTTP 403/)).toBeTruthy();
   });
 });

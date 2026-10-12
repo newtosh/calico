@@ -43,8 +43,15 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle("relay:setup-dismiss", () => deps.relaySetup.dismiss());
   ipcMain.handle("relay:copy-bot", () => {
     const text = deps.botNote();
-    if (text) clipboard.writeText(text);
-    return text !== null;
+    if (!text) return false;
+    clipboard.writeText(text);
+    // The send token should not sit on the clipboard for good.
+    setTimeout(() => {
+      void (async () => {
+        if ((await clipboard.readText()) === text) clipboard.clear();
+      })();
+    }, 60_000).unref();
+    return true;
   });
   ipcMain.handle("calico:set-autostart", (_e, on: unknown) =>
     autostartAvailable() ? setAutostart(on === true) : false,

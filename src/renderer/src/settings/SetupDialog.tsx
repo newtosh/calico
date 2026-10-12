@@ -1,11 +1,12 @@
 import { Dialog } from "@base-ui/react/dialog";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   RelaySetupStep,
   RelaySetupView,
   RelayStepState,
 } from "../../../shared/ipc";
 import { stage } from "../lib/relay-setup";
+import { useCopy } from "../lib/use-copy";
 import { ErrorNote } from "../shell/ErrorNote";
 import { Stepper } from "./Stepper";
 
@@ -33,7 +34,8 @@ export function SetupDialog({
   onClose: () => void;
 }) {
   const [view, setView] = useState<RelaySetupView>({ phase: "idle" });
-  const [copied, setCopied] = useState(false);
+  const [copied, copy, resetCopied] = useCopy();
+  const title = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -46,13 +48,19 @@ export function SetupDialog({
     };
   }, [open]);
 
+  // A new step unmounts the button that had focus, so land on its title.
+  useEffect(() => {
+    if (open) title.current?.focus();
+  }, [open, view.phase]);
+
   const { at, failed } = stage(view);
+  const saving = view.phase === "running" && view.steps.save !== "pending";
 
   function finish() {
     if (view.phase === "done" || view.phase === "failed")
       void window.calico.relaySetupDismiss();
     setView({ phase: "idle" });
-    setCopied(false);
+    resetCopied();
     onClose();
   }
 
@@ -63,14 +71,23 @@ export function SetupDialog({
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={(next) => !next && dismiss()}>
+    <Dialog.Root
+      open={open}
+      // A stray click must not abort a sign-in. Escape and Cancel still do.
+      disablePointerDismissal={view.phase === "running"}
+      onOpenChange={(next) => !next && dismiss()}
+    >
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 bg-glass/80" />
         <Dialog.Popup className="fixed top-1/2 left-1/2 w-[30rem] max-w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 border border-stroke bg-surface p-4">
           <Stepper at={at} failed={failed} />
           {view.phase === "idle" ? (
             <>
-              <Dialog.Title className="mb-2 text-base font-medium">
+              <Dialog.Title
+                ref={title}
+                tabIndex={-1}
+                className="mb-2 text-base font-medium outline-none"
+              >
                 Set up a relay with Cloudflare
               </Dialog.Title>
               <p className="mb-2">Here is exactly what calico will do:</p>
@@ -111,7 +128,11 @@ export function SetupDialog({
 
           {view.phase === "running" ? (
             <>
-              <Dialog.Title className="mb-2 text-base font-medium">
+              <Dialog.Title
+                ref={title}
+                tabIndex={-1}
+                className="mb-2 text-base font-medium outline-none"
+              >
                 {view.steps["sign-in"] === "done"
                   ? "Setting up your relay"
                   : "Sign in to Cloudflare"}
@@ -143,6 +164,7 @@ export function SetupDialog({
                 <button
                   type="button"
                   className="btn"
+                  disabled={saving}
                   onClick={() => void window.calico.relaySetupCancel()}
                 >
                   Cancel
@@ -153,7 +175,11 @@ export function SetupDialog({
 
           {view.phase === "done" ? (
             <>
-              <Dialog.Title className="mb-2 text-base font-medium">
+              <Dialog.Title
+                ref={title}
+                tabIndex={-1}
+                className="mb-2 text-base font-medium outline-none"
+              >
                 Your relay is on
               </Dialog.Title>
               <p className="mb-1 text-muted">Address</p>
@@ -170,13 +196,7 @@ export function SetupDialog({
                 </p>
               )}
               <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() =>
-                    void window.calico.relayCopyForBot().then(setCopied)
-                  }
-                >
+                <button type="button" className="btn" onClick={copy}>
                   Copy for Grok Bot
                 </button>
                 <button
@@ -187,7 +207,7 @@ export function SetupDialog({
                   Done
                 </button>
                 <span role="status" className="text-sage">
-                  {copied ? "Copied." : ""}
+                  {copied}
                 </span>
               </div>
             </>
@@ -195,7 +215,11 @@ export function SetupDialog({
 
           {view.phase === "failed" ? (
             <>
-              <Dialog.Title className="mb-2 text-base font-medium">
+              <Dialog.Title
+                ref={title}
+                tabIndex={-1}
+                className="mb-2 text-base font-medium outline-none"
+              >
                 {view.cancelled
                   ? "Setup was cancelled"
                   : "Setup did not finish"}

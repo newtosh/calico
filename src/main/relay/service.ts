@@ -24,12 +24,15 @@ export class RelaySetupService {
   private steps = fresh();
   private abort: AbortController | null = null;
   private listeners = new Set<(view: SetupView) => void>();
+  private running: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly run: (
       signal: AbortSignal,
       report: (progress: SetupProgress) => void,
     ) => Promise<SetupResult>,
+    /** False when a relay is already connected: setup would overwrite it. */
+    private readonly allowed: () => boolean = () => true,
   ) {}
 
   view(): SetupView {
@@ -43,11 +46,39 @@ export class RelaySetupService {
 
   private set(view: SetupView): void {
     this.current = view;
-    for (const cb of this.listeners) cb(view);
+    // A window that closed must not turn a finished setup into a failure.
+    for (const cb of this.listeners) {
+      try {
+        cb(view);
+      } catch {
+        /* nobody is listening */
+      }
+    }
   }
 
-  async start(): Promise<void> {
-    if (this.current.phase === "running") return;
+  start(): Promise<void> {
+    if (this.current.phase === "running") return Promise.resolve();
+    if (!this.allowed()) {
+      this.set({
+        phase: "failed",
+        step: "sign-in",
+        message:
+          "A relay is already connected. Disconnect it before setting up another.",
+        cleanedUp: true,
+        cancelled: false,
+      });
+      return Promise.resolve();
+    }
+    this.running = this.go();
+    return this.running;
+  }
+
+  /** Resolves once a running setup, including its cleanup, has ended. */
+  settled(): Promise<void> {
+    return this.running;
+  }
+
+  private async go(): Promise<void> {
     this.steps = fresh();
     const controller = new AbortController();
     this.abort = controller;

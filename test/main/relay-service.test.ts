@@ -136,6 +136,50 @@ describe("RelaySetupService", () => {
   });
 });
 
+describe("RelaySetupService safety", () => {
+  it("keeps going when a listener throws, as when the window is gone", async () => {
+    const s = new RelaySetupService(async () => result);
+    s.subscribe(() => {
+      throw new Error("Object has been destroyed");
+    });
+    await s.start();
+    expect(s.view().phase).toBe("done");
+  });
+
+  it("settles after a cancelled run has finished its cleanup", async () => {
+    const g = gate();
+    const s = new RelaySetupService(async () => {
+      await g.wait;
+      throw new SetupError("check", "Setup was cancelled.", true, true);
+    });
+    void s.start();
+    s.cancel();
+    let settled = false;
+    const wait = s.settled().then(() => (settled = true));
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    g.open();
+    await wait;
+    expect(s.view().phase).toBe("failed");
+  });
+
+  it("settles at once when nothing is running", async () => {
+    await new RelaySetupService(async () => result).settled();
+  });
+
+  it("refuses to start over a relay that is already connected", async () => {
+    const run = vi.fn(async () => result);
+    const s = new RelaySetupService(run, () => false);
+    await s.start();
+    expect(run).not.toHaveBeenCalled();
+    expect(s.view()).toMatchObject({
+      phase: "failed",
+      cleanedUp: true,
+      message: expect.stringMatching(/already/i),
+    });
+  });
+});
+
 describe("botNote", () => {
   it("gives the address, the send token, and the User-Agent advice", () => {
     const text = botNote(result.url, "send_x");

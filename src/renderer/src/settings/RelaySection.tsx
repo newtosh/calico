@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchRelay, putRelay, type RelayInfo } from "../lib/api";
 import { ago } from "../lib/time";
+import { useCopy } from "../lib/use-copy";
 import { ErrorNote } from "../shell/ErrorNote";
 import { SetupDialog } from "./SetupDialog";
 
@@ -36,7 +37,7 @@ export function RelaySection() {
   const [token, setToken] = useState("");
   const [error, setError] = useState("");
   const [setupOpen, setSetupOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, copy] = useCopy();
 
   const load = useCallback(
     () =>
@@ -45,6 +46,13 @@ export function RelaySection() {
         .catch(() => undefined),
     [],
   );
+
+  // Settings may have been closed mid-setup: show where it ended up.
+  useEffect(() => {
+    void window.calico
+      .relaySetupView()
+      .then((view) => view.phase !== "idle" && setSetupOpen(true));
+  }, []);
 
   useEffect(() => {
     void load();
@@ -130,13 +138,7 @@ export function RelaySection() {
         {step === "idle" && connected ? (
           <div className="flex items-center gap-3">
             {relay.can_copy ? (
-              <button
-                type="button"
-                className="btn"
-                onClick={() =>
-                  void window.calico.relayCopyForBot().then(setCopied)
-                }
-              >
+              <button type="button" className="btn" onClick={copy}>
                 Copy for Grok Bot
               </button>
             ) : null}
@@ -148,7 +150,7 @@ export function RelaySection() {
               Disconnect…
             </button>
             <span role="status" className="text-sage">
-              {copied ? "Copied." : ""}
+              {copied}
             </span>
           </div>
         ) : null}

@@ -160,6 +160,57 @@ describe("SetupDialog", () => {
     expect(screen.queryByText(/Nothing is left in your account/)).toBeNull();
   });
 
+  it("cannot cancel once it is saving", async () => {
+    const { push } = stub();
+    render(<SetupDialog open onClose={() => undefined} />);
+    await screen.findByText(/Workers Admin/);
+    push({
+      phase: "running",
+      steps: steps({
+        "sign-in": "done",
+        upload: "done",
+        address: "done",
+        check: "done",
+        save: "active",
+      }),
+    });
+    expect(
+      (screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+  });
+
+  it("moves focus into the new step when the phase changes", async () => {
+    const { push } = stub();
+    render(<SetupDialog open onClose={() => undefined} />);
+    await screen.findByText(/Workers Admin/);
+    push({ phase: "done", url: "https://x/inbox", revoked: true });
+    expect(document.activeElement?.textContent).toBe("Your relay is on");
+  });
+
+  it("says when there was nothing to copy", async () => {
+    const { api, push } = stub();
+    api.relayCopyForBot.mockResolvedValue(false);
+    render(<SetupDialog open onClose={() => undefined} />);
+    await screen.findByText(/Workers Admin/);
+    push({ phase: "done", url: "https://x/inbox", revoked: true });
+    fireEvent.click(screen.getByRole("button", { name: /Copy for Grok Bot/ }));
+    expect(await screen.findByText(/Nothing to copy/)).toBeTruthy();
+  });
+
+  it("forgets that it copied when the dialog is closed and opened again", async () => {
+    const { push } = stub();
+    const { rerender } = render(<SetupDialog open onClose={() => undefined} />);
+    await screen.findByText(/Workers Admin/);
+    push({ phase: "done", url: "https://x/inbox", revoked: true });
+    fireEvent.click(screen.getByRole("button", { name: /Copy for Grok Bot/ }));
+    await screen.findByText(/Copied/);
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    rerender(<SetupDialog open={false} onClose={() => undefined} />);
+    rerender(<SetupDialog open onClose={() => undefined} />);
+    expect(screen.queryByText(/Copied/)).toBeNull();
+  });
+
   it("picks up a setup already running when the window opens", async () => {
     stub({ phase: "running", steps: steps({ "sign-in": "active" }) });
     render(<SetupDialog open onClose={() => undefined} />);
