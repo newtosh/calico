@@ -54,5 +54,6 @@ describe("batteryFillWidth", () => {
     expect(batteryFillWidth(50)).toBe(BATTERY_INNER_PX / 2);
     expect(batteryFillWidth(0)).toBe(1);
     expect(batteryFillWidth(1)).toBe(1);
+    expect(batteryFillWidth(180)).toBe(BATTERY_INNER_PX);
   });
 });

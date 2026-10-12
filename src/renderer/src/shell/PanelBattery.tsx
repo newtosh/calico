@@ -19,7 +19,11 @@ const FILL: Record<BatteryFill, string> = {
 // The same drawing as the panel's status bar: the number, then an outline with
 // its nub on the left and a fill that grows from the right. 30 by 13 px.
 const BODY = { x: 2.5, width: 27 };
-const FILL_RIGHT = 27;
+// The fill ends 2 px inside the body, as on the panel.
+const FILL_RIGHT = 28;
+// The mark sits at the body's middle. It is dark over a fill that reaches it and
+// cream over the empty body, so a low charge does not lose it.
+const MARK_REACH = 12;
 
 export function PanelBattery({
   battery,
@@ -32,8 +36,11 @@ export function PanelBattery({
   if (!live) return null;
   const state = batteryState(live);
   const width = batteryFillWidth(live.pct);
+  const markTone =
+    FILL_RIGHT - width <= MARK_REACH ? "text-glass" : "text-cream";
   return (
     <span
+      role="img"
       className="inline-flex items-center gap-1.5 text-xs text-cream"
       aria-label={`Panel battery ${live.pct}%, ${state}`}
       title={state}
@@ -71,15 +78,13 @@ export function PanelBattery({
         </svg>
         {live.charging ? (
           <Zap
-            role="img"
-            aria-label="Charging"
-            className="absolute top-1/2 left-4 size-[11px] -translate-x-1/2 -translate-y-1/2 fill-current text-glass"
+            aria-hidden="true"
+            className={`absolute top-1/2 left-4 size-[11px] -translate-x-1/2 -translate-y-1/2 fill-current ${markTone}`}
           />
         ) : live.external ? (
           <Usb
-            role="img"
-            aria-label="On external power"
-            className="absolute top-1/2 left-4 size-[11px] -translate-x-1/2 -translate-y-1/2 text-glass"
+            aria-hidden="true"
+            className={`absolute top-1/2 left-4 size-[11px] -translate-x-1/2 -translate-y-1/2 ${markTone}`}
           />
         ) : null}
       </span>

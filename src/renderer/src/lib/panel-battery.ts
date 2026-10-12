@@ -34,5 +34,5 @@ export function batteryFill(battery: PanelBatteryInfo): BatteryFill {
 
 /** Whole pixels, never fewer than one, like the panel. */
 export function batteryFillWidth(pct: number): number {
-  return Math.max(1, Math.floor((pct * BATTERY_INNER_PX) / 100));
+  return Math.max(1, Math.floor((Math.min(pct, 100) * BATTERY_INNER_PX) / 100));
 }
