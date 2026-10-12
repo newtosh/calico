@@ -133,6 +133,39 @@ int main(void) {
         check(gone.present == 0, "a set flag with under 2500 mV is absent");
     }
 
+    {
+        /* Captured on the real board after the battery was pulled and put back: the chip's gauge
+         * reads 0 percent although the cell is at about 4.03 V and charging. */
+        const uint8_t stuck[5] = {0x38, 0x32, 0x00, 0x0F, 0xC2};
+        power_reading_t est;
+        uint8_t low[5];
+        int last = -1;
+        int mv;
+        power_decode(stuck, &est);
+        check(est.present == 1, "stuck gauge: the battery is present");
+        check(est.estimated == 1, "stuck gauge: the percent is flagged as an estimate");
+        check(est.percent >= 78 && est.percent <= 88, "stuck gauge: the estimate matches the voltage");
+
+        power_decode(plugged, &est);
+        check(est.estimated == 0 && est.percent == 81, "a working gauge is used as it reads");
+
+        /* A genuinely low cell: gauge 0 and a low voltage stays 0, not an invented number. */
+        memcpy(low, stuck, sizeof low);
+        low[3] = 0x0C;
+        low[4] = 0xE4; /* 3300 mV */
+        power_decode(low, &est);
+        check(est.percent == 0 && est.estimated == 0, "gauge 0 at 3.3 V is really empty");
+
+        /* The curve only ever goes up with voltage, and tops out at 100. */
+        for (mv = 3500; mv <= 4300; mv += 10) {
+            uint8_t r[5] = {0x38, 0x32, 0x00, (uint8_t)(mv >> 8), (uint8_t)(mv & 0xFF)};
+            power_decode(r, &est);
+            check(est.percent >= last, "estimate never falls as voltage rises");
+            last = est.percent;
+        }
+        check(last == 100, "4.3 V estimates 100");
+    }
+
     if (g_failed) {
         return 1;
     }
