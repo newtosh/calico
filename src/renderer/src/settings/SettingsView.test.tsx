@@ -82,4 +82,17 @@ describe("SettingsView", () => {
     render(<SettingsView info={info} />);
     expect(panel().getAttribute("aria-labelledby")).toBe("settings-tab-agents");
   });
+
+  it("keeps the pinned strip below dialogs by isolating its stacking", () => {
+    const { container } = render(<SettingsView info={info} />);
+    expect((container.firstChild as HTMLElement).className).toContain(
+      "isolate",
+    );
+  });
+
+  it("lets keyboard users reach a panel that has nothing focusable", () => {
+    render(<SettingsView info={info} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Connectivity" }));
+    expect(panel().tabIndex).toBe(0);
+  });
 });

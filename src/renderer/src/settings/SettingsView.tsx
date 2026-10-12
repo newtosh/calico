@@ -35,6 +35,7 @@ function Panel({
       id={panelId(id)}
       aria-labelledby={tabId(id)}
       hidden={current !== id}
+      tabIndex={0}
     >
       {children}
     </div>
@@ -49,7 +50,9 @@ export function SettingsView({ info }: { info: CalicoInfo }) {
   };
   const server = info.serverUrl !== null;
   return (
-    <div className="pb-6">
+    // isolate keeps the pinned strip's z-index local, so a dialog portaled to the
+    // body paints above it.
+    <div className="isolate pb-6">
       <SettingsTabs tabs={TABS} value={tab} onChange={choose} />
       <Panel id="agents" current={tab}>
         <AgentUpdatesSection info={info} />
