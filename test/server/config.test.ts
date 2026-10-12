@@ -179,6 +179,7 @@ describe("relay settings", () => {
       relay_url: "https://r.example/inbox",
       relay_token: "tok",
       relay_cursor: "41",
+      relay_send_token: "send",
     };
     saveConfig(path, config);
     expect(loadConfig(path).config).toEqual(config);
@@ -188,6 +189,7 @@ describe("relay settings", () => {
     expect(relayPublicView(defaultConfig())).toEqual({
       url: "",
       token_set: false,
+      can_copy: false,
     });
   });
 
@@ -211,7 +213,32 @@ describe("relay settings", () => {
     expect(relayPublicView(merged)).toEqual({
       url: "https://r.example/inbox",
       token_set: true,
+      can_copy: false,
     });
+  });
+
+  it("says a send token is stored without showing it", () => {
+    const view = relayPublicView({
+      ...defaultConfig(),
+      relay_url: "https://r.example/inbox",
+      relay_token: "tok",
+      relay_send_token: "send",
+    });
+    expect(view.can_copy).toBe(true);
+    expect(JSON.stringify(view)).not.toContain("send");
+  });
+
+  it("drops the send token when another relay is connected by hand", () => {
+    const made = {
+      ...defaultConfig(),
+      relay_url: "https://r.example/inbox",
+      relay_token: "tok",
+      relay_send_token: "send",
+    };
+    expect(
+      mergeRelay(made, { url: "https://other.example/inbox", token: "t2" })
+        .relay_send_token,
+    ).toBe("");
   });
 
   it("accepts plain http only for this computer", () => {
@@ -251,6 +278,7 @@ describe("relay settings", () => {
       relay_url: "",
       relay_token: "",
       relay_cursor: "",
+      relay_send_token: "",
     });
   });
 

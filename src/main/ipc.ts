@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { userInfo } from "node:os";
-import { ipcMain } from "electron";
+import { clipboard, ipcMain } from "electron";
 import type { CalicoInfo } from "../shared/ipc";
+import type { RelaySetupService } from "./relay/service";
 import {
   deniedSerialPorts,
   detectFirewall,
@@ -27,11 +28,31 @@ export interface IpcDeps {
   info(): CalicoInfo;
   boundPort(): number | null;
   adoptPort(): void;
+  relaySetup: RelaySetupService;
+  /** The text for the bot, or null when calico did not make this relay. */
+  botNote(): string | null;
 }
 
 export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle("calico:info", () => deps.info());
   ipcMain.handle("calico:adopt-port", () => deps.adoptPort());
+  ipcMain.handle("relay:setup-view", () => deps.relaySetup.view());
+  // Not awaited: the window follows progress through "relay:setup-changed".
+  ipcMain.handle("relay:setup-start", () => void deps.relaySetup.start());
+  ipcMain.handle("relay:setup-cancel", () => deps.relaySetup.cancel());
+  ipcMain.handle("relay:setup-dismiss", () => deps.relaySetup.dismiss());
+  ipcMain.handle("relay:copy-bot", () => {
+    const text = deps.botNote();
+    if (!text) return false;
+    clipboard.writeText(text);
+    // The send token should not sit on the clipboard for good.
+    setTimeout(() => {
+      void (async () => {
+        if ((await clipboard.readText()) === text) clipboard.clear();
+      })();
+    }, 60_000).unref();
+    return true;
+  });
   ipcMain.handle("calico:set-autostart", (_e, on: unknown) =>
     autostartAvailable() ? setAutostart(on === true) : false,
   );

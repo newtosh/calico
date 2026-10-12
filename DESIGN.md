@@ -39,7 +39,7 @@ Type: the platform UI font (`system-ui`), tabular numerals everywhere. Monospace
 - Card grids, hero headers, gradients, glassmorphism, drop shadows for depth.
 - Inter, or any web font download.
 - shadcn default theme, purple, blue links.
-- Modals for anything except device pickers and destructive confirmation.
+- Modals for anything except device pickers, destructive confirmation, and one multi-step privileged flow that needs the person's attention (relay setup). That dialog shows a labelled stepper and always ends on a result.
 - Toasts that vanish before they can be read.
 - Spinners without a label saying what is being waited on.
 

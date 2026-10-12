@@ -14,6 +14,8 @@ export interface CalicoConfig {
   relay_url: string;
   relay_token: string;
   relay_cursor: string;
+  /** Only set when calico made the relay. Lets "Copy for Grok Bot" work later. */
+  relay_send_token: string;
 }
 
 export const DEFAULT_PORT = 8787;
@@ -39,6 +41,7 @@ export function defaultConfig(): CalicoConfig {
     relay_url: "",
     relay_token: "",
     relay_cursor: "",
+    relay_send_token: "",
   };
 }
 
@@ -123,6 +126,7 @@ export function loadConfig(path: string): {
         relay_url: str(data, "relay_url"),
         relay_token: str(data, "relay_token"),
         relay_cursor: str(data, "relay_cursor"),
+        relay_send_token: str(data, "relay_send_token"),
       },
     };
   } catch (err) {
@@ -242,7 +246,11 @@ export function mergePanel(
 }
 
 export function relayPublicView(config: CalicoConfig) {
-  return { url: config.relay_url, token_set: Boolean(config.relay_token) };
+  return {
+    url: config.relay_url,
+    token_set: Boolean(config.relay_token),
+    can_copy: Boolean(config.relay_send_token),
+  };
 }
 
 // The relay URL and token end up in a request header and URL, so keep them
@@ -274,7 +282,13 @@ export function mergeRelay(
   patch: Record<string, unknown>,
 ): CalicoConfig {
   if (patch.clear === true)
-    return { ...current, relay_url: "", relay_token: "", relay_cursor: "" };
+    return {
+      ...current,
+      relay_url: "",
+      relay_token: "",
+      relay_cursor: "",
+      relay_send_token: "",
+    };
   if (!("url" in patch) || !("token" in patch)) throw new BadInput("bad relay");
   const url = relayUrl(patch.url);
   const token = relayToken(patch.token);
@@ -284,5 +298,6 @@ export function mergeRelay(
     relay_url: url,
     relay_token: token,
     relay_cursor: same ? current.relay_cursor : "",
+    relay_send_token: same ? current.relay_send_token : "",
   };
 }

@@ -24,6 +24,10 @@ import { execFileP, portHolders } from "./assist";
 import { initAutostartOnce } from "./autostart";
 import { wireDevicePickers } from "./devices";
 import { autostartState, registerIpc } from "./ipc";
+import { ConfigHolder } from "./config-holder";
+import { botNote, RelaySetupService, withMadeRelay } from "./relay/service";
+import { setupRelay } from "./relay/setup";
+import { cloudflareSetupDeps } from "./relay/wire";
 import { createTray, type TrayActions, updateTray } from "./tray";
 import appIcon from "../../resources/icon.png?asset";
 
@@ -96,9 +100,13 @@ async function start(): Promise<void> {
     throw err;
   }
   let config = loaded.config;
+  const holder = new ConfigHolder(config, (next) =>
+    saveConfig(configPath, next),
+  );
+  // Write first: a failed write must not leave memory ahead of disk.
   const save = (next: CalicoConfig) => {
-    config = next;
-    saveConfig(configPath, config);
+    holder.set(next);
+    config = holder.get();
   };
 
   const store = new DeskStore({
@@ -162,7 +170,26 @@ async function start(): Promise<void> {
     version,
   });
 
+  const relaySetup = new RelaySetupService(
+    (signal, report) =>
+      setupRelay({
+        ...cloudflareSetupDeps(signal),
+        report,
+        persist: (made) => save(withMadeRelay(config, made)),
+      }),
+    () => config.relay_url === "",
+  );
+  relaySetup.subscribe((view) => {
+    for (const w of BrowserWindow.getAllWindows())
+      if (!w.isDestroyed()) w.webContents.send("relay:setup-changed", view);
+  });
+
   registerIpc({
+    relaySetup,
+    botNote: () =>
+      config.relay_url && config.relay_send_token
+        ? botNote(config.relay_url, config.relay_send_token)
+        : null,
     info,
     boundPort: () => bound,
     adoptPort: () => {
@@ -185,8 +212,20 @@ async function start(): Promise<void> {
     updateTray(actions, info().lanUrls[0] ?? null, panelPort.driftFrom(bound));
   refreshTray();
 
-  app.on("before-quit", () => {
+  let closing = false;
+  app.on("before-quit", (event) => {
     quitting = true;
+    // Give a running setup time to delete its Worker and revoke its access.
+    if (!closing && relaySetup.view().phase === "running") {
+      closing = true;
+      event.preventDefault();
+      relaySetup.cancel();
+      void Promise.race([
+        relaySetup.settled(),
+        new Promise((r) => setTimeout(r, 10_000)),
+      ]).then(() => app.quit());
+      return;
+    }
     stopCursorPoll();
     stopRelayPoll();
     server.close();

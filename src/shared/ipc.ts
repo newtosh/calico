@@ -58,6 +58,23 @@ export interface FixResult {
   output: string;
 }
 
+export type RelaySetupStep =
+  "sign-in" | "upload" | "address" | "check" | "save";
+export type RelayStepState = "pending" | "active" | "done" | "failed";
+
+/** What the window may know about relay setup. It never holds a token. */
+export type RelaySetupView =
+  | { phase: "idle" }
+  | { phase: "running"; steps: Record<RelaySetupStep, RelayStepState> }
+  | { phase: "done"; url: string; revoked: boolean }
+  | {
+      phase: "failed";
+      step: RelaySetupStep;
+      message: string;
+      cleanedUp: boolean;
+      cancelled: boolean;
+    };
+
 export interface CalicoApi {
   info(): Promise<CalicoInfo>;
   onBleCandidates(cb: (list: Candidate[]) => void): () => void;
@@ -73,6 +90,15 @@ export interface CalicoApi {
   /** Save the bound port after the panel was re-pointed. */
   adoptPort(): Promise<void>;
   setAutostart(on: boolean): Promise<boolean>;
+  relaySetupView(): Promise<RelaySetupView>;
+  /** Returns at once. Progress arrives through onRelaySetup. */
+  relaySetupStart(): Promise<void>;
+  relaySetupCancel(): Promise<void>;
+  /** Closes a finished or failed setup. */
+  relaySetupDismiss(): Promise<void>;
+  onRelaySetup(cb: (view: RelaySetupView) => void): () => void;
+  /** Puts the relay address and send token on the clipboard. The token never reaches the window. */
+  relayCopyForBot(): Promise<boolean>;
 }
 
 declare global {
