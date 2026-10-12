@@ -30,6 +30,44 @@ Send `Authorization: Bearer <token>` when `webhook_token` is set. Leave the head
 
 Leave `color`, `shape`, and `icon` off when you have nothing to send. An empty string, or a non-string, keeps the previous value for that agent. Omitted fields are not filled in from the agent id. Every session without a color and shape uses the same neutral circle, `#a39b88`. The companion stores a shape string as sent (clipped and lowercased) and does not drop names it does not draw.
 
+## Through the relay
+
+A bot that runs in the cloud cannot reach a LAN address, and this computer's address changes with the Wi-Fi network. Post to your relay instead. It is a small mailbox on your own Cloudflare account that Calico empties when the computer is on, so a bot can report while the computer is off or on another network. Set it up in Calico under Settings, Relay, **Set up with Cloudflare**, then press **Copy for Grok Bot**. That copies the relay address and the send token.
+
+The body is exactly the event JSON above. Only the address and headers change:
+
+```bash
+curl -s -X POST "$RELAY_URL" \
+  -H "Authorization: Bearer $RELAY_SEND_TOKEN" \
+  -H "User-Agent: grok-bot-routine" \
+  -H 'Content-Type: application/json' \
+  -d '{"type":"agent.launched","agent_id":"'"$AGENT_ID"'","title":"'"$AGENT_TITLE"'","message":"started"}'
+```
+
+`RELAY_URL` looks like `https://calico-relay.<you>.workers.dev/inbox`. Send a `User-Agent` of your own: Cloudflare turns away Python's default `Python-urllib` (error 1010). In Python:
+
+```python
+import json, urllib.request
+req = urllib.request.Request(
+    RELAY_URL,
+    data=json.dumps({"type": "agent.finished", "agent_id": AGENT_ID}).encode(),
+    headers={
+        "Authorization": f"Bearer {RELAY_SEND_TOKEN}",
+        "User-Agent": "grok-bot-routine",
+        "Content-Type": "application/json",
+    },
+)
+urllib.request.urlopen(req, timeout=10)
+```
+
+What to know:
+
+- The send token can only post. It cannot read the relay. Calico holds a separate read token, so a leaked send token cannot show anyone your events.
+- Calico replays each message with the time it was sent. An old `agent.launched` therefore cannot make a bot look Running. Keep repeating the launch POST while the routine runs, as you do for the local webhook, and see [How long a bot stays Running](#how-long-a-bot-stays-running).
+- A message is up to 4096 bytes. The relay keeps the newest 200 for 24 hours.
+- A bad token gets `401` or `403`. A body that is too large gets `413`. A day over the request budget gets `429` with `Retry-After`.
+- Pick one path per routine. A routine that can only reach the internet posts to the relay. A routine on your own network can keep using the local webhook. Posting the same event to both only repeats it.
+
 ## How long a bot stays Running
 
 A bot shows as Running on the panel until it has gone quiet for the **running timeout**. The default is 120 seconds, the same as the old Python companion. A routine that can only fire every few minutes would flicker to idle between pings.
