@@ -5,5 +5,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 host="${SITE_HOST:-nitpub}"
 dir="${SITE_DIR:-/var/www/calico}"
+# rsync --delete empties the target, so refuse anything that is not a directory two levels down.
+case "$dir" in
+/?*/?*) ;;
+*) echo "refusing SITE_DIR=$dir: use an absolute path such as /var/www/calico" >&2; exit 1 ;;
+esac
 rsync -a --no-owner --no-group --delete --chmod=D755,F644 --itemize-changes site/ "$host:$dir/"
 curl -fsSI "https://calico.newto.sh/" | head -n 1
