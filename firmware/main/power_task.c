@@ -37,6 +37,11 @@ static void publish(const power_reading_t *next) {
     changed = !power_same(&s_last, next);
     s_last = *next;
     xSemaphoreGive(s_lock);
+    if (changed) {
+        ESP_LOGI(TAG, "battery %s%d%%%s%s%s", next->estimated ? "~" : "", next->percent,
+                 next->present ? "" : " (absent)", next->charging ? ", charging" : "",
+                 next->external ? ", external power" : "");
+    }
     if (changed && s_listener) {
         s_listener(next);
     }

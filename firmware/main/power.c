@@ -38,6 +38,9 @@ void power_decode(const uint8_t regs[5], power_reading_t *out) {
     out->external = (regs[0] >> 5) & 1;
     out->charging = ((regs[1] >> 5) & 3) == 1;
     out->estimated = 0;
+    /* A gauge that truly reads 0 above 3.5 V is indistinguishable from a stuck one, and
+     * the curve gives 3 to 5 percent there, which still draws red, so the low-battery
+     * warning is not lost. */
     if (out->present && out->percent == 0 && out->millivolts >= POWER_GAUGE_STUCK_MV) {
         out->percent = power_estimate_percent(out->millivolts);
         out->estimated = 1;

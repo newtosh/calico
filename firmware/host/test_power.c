@@ -144,7 +144,8 @@ int main(void) {
         power_decode(stuck, &est);
         check(est.present == 1, "stuck gauge: the battery is present");
         check(est.estimated == 1, "stuck gauge: the percent is flagged as an estimate");
-        check(est.percent >= 78 && est.percent <= 88, "stuck gauge: the estimate matches the voltage");
+        check(est.millivolts == 4034, "stuck gauge: the voltage is read as captured");
+        check(est.percent == 81, "stuck gauge: 4034 mV on the curve is 81 percent");
 
         power_decode(plugged, &est);
         check(est.estimated == 0 && est.percent == 81, "a working gauge is used as it reads");
