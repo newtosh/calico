@@ -4,7 +4,6 @@ import { parseWhole } from "../lib/whole";
 
 export function ConfigSection() {
   const [config, setConfig] = useState<PublicConfig | null>(null);
-  const [port, setPort] = useState("");
   const [poll, setPoll] = useState("");
   const [runningFor, setRunningFor] = useState("");
   const [token, setToken] = useState<string | null>(null);
@@ -14,7 +13,6 @@ export function ConfigSection() {
   const load = async () => {
     const loaded = await fetchConfig();
     setConfig(loaded);
-    setPort(String(loaded.port));
     setPoll(String(loaded.cursor_poll_seconds));
     setRunningFor(String(loaded.running_timeout_seconds));
   };
@@ -27,11 +25,8 @@ export function ConfigSection() {
 
   async function save() {
     // The server refuses the whole save over one bad number, so check here.
-    const portNumber = parseWhole(port, 1, 65535);
     const pollNumber = parseWhole(poll, 5, 86400);
     const runningNumber = parseWhole(runningFor, 30, 3600);
-    if (portNumber === null)
-      return setNotice("Port must be a whole number from 1 to 65535.");
     if (pollNumber === null)
       return setNotice(
         "Cursor poll seconds must be a whole number from 5 to 86400.",
@@ -41,8 +36,7 @@ export function ConfigSection() {
         "Enter a whole number of seconds from 30 to 3600 for the running timeout.",
       );
     try {
-      const { restart_required } = await putConfig({
-        port: portNumber,
+      await putConfig({
         cursor_poll_seconds: pollNumber,
         running_timeout_seconds: runningNumber,
         ...(token !== null ? { webhook_token: token } : {}),
@@ -51,11 +45,7 @@ export function ConfigSection() {
       setToken(null);
       setApiKey(null);
       await load();
-      setNotice(
-        restart_required
-          ? "Saved. Quit and reopen calico to use the new port."
-          : "Saved.",
-      );
+      setNotice("Saved.");
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Save failed");
     }
@@ -63,17 +53,8 @@ export function ConfigSection() {
 
   return (
     <section>
-      <h2 className="section-title">Companion</h2>
+      <h2 className="section-title">Agent settings</h2>
       <div className="grid max-w-2xl grid-cols-2 gap-3 px-4">
-        <label className="label">
-          Port
-          <input
-            className="field mt-1"
-            inputMode="numeric"
-            value={port}
-            onChange={(e) => setPort(e.target.value)}
-          />
-        </label>
         <label className="label">
           Cursor poll seconds
           <input

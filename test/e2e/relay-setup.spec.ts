@@ -107,6 +107,7 @@ test("sets up a relay with Cloudflare, ends on a result, and returns to Settings
     await standInForBrowser(app);
     const page = await app.firstWindow();
     await page.getByRole("button", { name: "Settings" }).click();
+    await page.getByRole("tab", { name: "Connectivity" }).click();
     await page.getByRole("button", { name: /Set up with Cloudflare/ }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText(/Workers Admin/)).toBeVisible();
@@ -143,6 +144,7 @@ test("a refused upload says what failed, leaves nothing behind, and returns to N
     await standInForBrowser(app);
     const page = await app.firstWindow();
     await page.getByRole("button", { name: "Settings" }).click();
+    await page.getByRole("tab", { name: "Connectivity" }).click();
     await page.getByRole("button", { name: /Set up with Cloudflare/ }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByRole("button", { name: /Continue in browser/ }).click();

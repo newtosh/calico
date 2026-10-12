@@ -50,20 +50,25 @@ test("launches, serves status, and renders the dashboard", async () => {
       version: string;
     };
     await page.getByRole("button", { name: "Settings" }).click();
+    await page.getByRole("tab", { name: "App" }).click();
     await expect(page.getByText(`Calico ${version}`)).toBeVisible();
+
+    // The running timeout is under Agents. It loads with the Python
+    // companion's 120 seconds.
+    await page.getByRole("tab", { name: "Agents" }).click();
+    await expect(page.getByLabel("Running timeout seconds")).not.toHaveValue(
+      "",
+    );
+    await expect(page.getByLabel("Running timeout seconds")).toHaveValue("120");
 
     // Saving a new port takes effect on restart. The panel is still pointed at
     // the port calico is on, so the drift banner must stay away.
+    await page.getByRole("tab", { name: "Connectivity" }).click();
     // Settings fills the field when its first load lands. Typing before that
     // gets overwritten and the save becomes a no-op.
     await expect(page.getByLabel("Port")).not.toHaveValue("");
-    // The running timeout loads with the Python companion's 120 seconds.
-    await expect(page.getByLabel("Running timeout seconds")).toHaveValue("120");
     await page.getByLabel("Port").fill("9001");
-    await page
-      .getByRole("button", { name: "Save", exact: true })
-      .first()
-      .click();
+    await page.getByRole("button", { name: "Save port" }).click();
     await expect(page.getByText(/Saved\. Quit and reopen/)).toBeVisible();
     // Two polls of the info bridge (2 s each), so a banner would have shown.
     await page.waitForTimeout(4500);
