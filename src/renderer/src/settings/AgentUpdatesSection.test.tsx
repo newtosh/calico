@@ -16,6 +16,7 @@ const info: CalicoInfo = {
   expectedPort: 8787,
   lanUrls: ["http://192.168.4.30:8787"],
   lastPanelPoll: null,
+  panelBattery: null,
   webhookToken: "",
   webhook: { accepted: null, refused: { count: 0, last: null } },
   serverError: null,

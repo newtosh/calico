@@ -139,6 +139,12 @@ describe("companion server", () => {
     expect(stats.lastPanelPoll).toBeNull();
   });
 
+  it("does not record a battery from a loopback poll", async () => {
+    const { base, stats } = await start();
+    await fetch(`${base}/api/status?bat=81&chg=1&ext=1`);
+    expect(stats.panelBattery).toBeNull();
+  });
+
   it("rejects an oversized JSON body with 413", async () => {
     const { base } = await start();
     const res = await fetch(`${base}/api/webhook/grok-bot`, {
