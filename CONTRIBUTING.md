@@ -45,9 +45,9 @@ The firmware lives in `firmware/` (see [firmware/README.md](firmware/README.md) 
 pnpm deploy:site
 ```
 
-That runs `scripts/deploy-site.sh`: one `rsync` of `site/` over SSH, then a check that the page answers. It uses the SSH host alias `nitpub` and the directory `/var/www/calico`. Override them with `SITE_HOST` and `SITE_DIR`. No key or password lives in the repository.
+That runs `scripts/deploy-site.sh`: one `rsync` of `site/` over SSH, then a check that the page answers. It uses the SSH host alias `nitpub` and the directory `/var/www/calico`. Override them with `SITE_HOST` and `SITE_DIR`, and the checked page with `SITE_URL`. The script refuses a directory shallower than three levels or containing `..`, and refuses to run without `site/index.html`, because `rsync --delete` empties its target. No key or password lives in the repository.
 
-The VM needs this once: a DNS A record for `calico` pointing at it, the directory `/var/www/calico`, and a Caddy block that serves it. Caddy fetches the certificate.
+The VM needs this once: `rsync` installed, ports 80 and 443 open for Caddy's certificate check, a DNS A record for `calico` pointing at it, the directory `/var/www/calico` writable by the SSH user, and a Caddy block that serves it. Caddy fetches the certificate.
 
 ```
 calico.newto.sh {
