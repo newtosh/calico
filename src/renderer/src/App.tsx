@@ -9,6 +9,7 @@ import { webhookUrl } from "./lib/webhook";
 import { SettingsView } from "./settings/SettingsView";
 import { DriftBanner } from "./shell/DriftBanner";
 import { ServerErrorPanel } from "./shell/ServerErrorPanel";
+import { PanelBattery } from "./shell/PanelBattery";
 import { Sidebar, type View } from "./shell/Sidebar";
 import { UrlChip } from "./shell/UrlChip";
 
@@ -27,6 +28,7 @@ export function App() {
       <Sidebar view={view} onSelect={setView} panelOnline={panelOnline} />
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-end gap-3 border-b border-stroke/40 px-4 py-2">
+          <PanelBattery battery={info?.panelBattery ?? null} now={Date.now()} />
           {lanUrl ? <UrlChip url={lanUrl} /> : null}
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto">
