@@ -11,8 +11,13 @@ import {
   publicView,
   relayPublicView,
 } from "./config";
-import type { RefusalReason, WebhookActivity } from "../shared/ipc";
+import type {
+  PanelBatteryInfo,
+  RefusalReason,
+  WebhookActivity,
+} from "../shared/ipc";
 import { type CursorStatus, EMPTY_CURSOR_STATUS } from "./cursor-poll";
+import { recordPanelBattery } from "./panel-battery";
 import { EMPTY_RELAY_STATUS, type RelayStatus } from "./relay";
 import { type DeskStore, eventIn, FRAME_MAX, StoreError } from "./store";
 
@@ -40,6 +45,7 @@ export interface ServerDeps {
 
 export interface ServerStats {
   lastPanelPoll: number | null;
+  panelBattery: PanelBatteryInfo | null;
   webhook: WebhookActivity;
 }
 
@@ -133,6 +139,7 @@ export function createCompanionServer(deps: ServerDeps): {
 } {
   const stats: ServerStats = {
     lastPanelPoll: null,
+    panelBattery: null,
     webhook: { accepted: null, refused: { count: 0, last: null } },
   };
   const { store } = deps;
@@ -187,12 +194,12 @@ export function createCompanionServer(deps: ServerDeps): {
           : json(res, 404, { error: "not found" });
       }
       if (path === "/api/status") {
-        if (!isLoopback(req.socket.remoteAddress))
+        const params = new URL(req.url ?? "/", "http://calico").searchParams;
+        if (!isLoopback(req.socket.remoteAddress)) {
           stats.lastPanelPoll = Date.now();
-        const detail =
-          new URL(req.url ?? "/", "http://calico").searchParams.get(
-            "detail",
-          ) === "1";
+          recordPanelBattery(stats, params, Date.now());
+        }
+        const detail = params.get("detail") === "1";
         const body = store.status(detail);
         const panel = panelStatusField(deps.getConfig());
         // First key: the panel buffer is 16 KB and drops the tail.

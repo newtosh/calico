@@ -162,6 +162,7 @@ async function start(): Promise<void> {
     expectedPort: panelPort.expected,
     lanUrls: bound ? lanUrls(bound) : [],
     lastPanelPoll: stats.lastPanelPoll,
+    panelBattery: stats.panelBattery,
     webhookToken: config.webhook_token,
     webhook: stats.webhook,
     serverError,

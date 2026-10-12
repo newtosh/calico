@@ -22,6 +22,14 @@ export interface WebhookActivity {
   };
 }
 
+/** The panel's last reported battery. `at` is epoch ms when Calico received it. */
+export interface PanelBatteryInfo {
+  pct: number;
+  charging: boolean;
+  external: boolean;
+  at: number;
+}
+
 export interface CalicoInfo {
   /** http://127.0.0.1:<port>, null if the server could not bind. */
   serverUrl: string | null;
@@ -32,6 +40,8 @@ export interface CalicoInfo {
   lanUrls: string[];
   /** Epoch ms of the last non-loopback GET /api/status. */
   lastPanelPoll: number | null;
+  /** The panel's last reported battery, null until it reports one. */
+  panelBattery: PanelBatteryInfo | null;
   webhookToken: string;
   webhook: WebhookActivity;
   serverError: ServerErrorInfo | null;

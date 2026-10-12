@@ -2,6 +2,7 @@
 
 #include "desk_view.h"
 #include "net.h"
+#include "power.h"
 
 typedef void (*ui_save_fn)(const char *ssid, const char *pass, const char *url, const char *token);
 typedef void (*ui_scan_fn)(void);
@@ -18,6 +19,8 @@ void ui_set_sta(int on);
 void ui_set_link(int has_ip, int rssi, int retries, int gave_up);
 /* 0 dim rune, 1 advertising, 2 connected. Live states draw the dotted mark. */
 void ui_set_bt(int state);
+/* Battery in the status bar. Hidden when no battery is present. */
+void ui_set_battery(const power_reading_t *reading);
 void ui_open_settings(void);
 int ui_settings_is_open(void);
 void ui_set_fields(const desk_settings_t *settings);

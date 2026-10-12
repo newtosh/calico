@@ -2,6 +2,7 @@
 #include "dma_stripe.h"
 #include "net.h"
 #include "orient.h"
+#include "power.h"
 #include "ui.h"
 
 #include "bsp/esp-bsp.h"
@@ -559,6 +560,13 @@ static void imu_task(void *arg) {
     }
 }
 
+static void on_power(const power_reading_t *reading) {
+    if (lock_lvgl()) {
+        ui_set_battery(reading);
+        unlock_lvgl();
+    }
+}
+
 void app_main(void) {
     esp_err_t err = nvs_flash_init();
     desk_settings_t fields;
@@ -591,6 +599,9 @@ void app_main(void) {
         }
         unlock_lvgl();
     }
+    /* After ui_init: the listener only fires on a change, so a reading that
+     * lands before the widget exists would never be drawn. */
+    power_start(on_power);
     ble_link_start(&s_store, on_ble_state, on_ble_restart);
     /* esp_wifi_init wants the DMA block logged after nimble_port_init.
      * The host task (6144) is the internal stack. wifi-join is PSRAM and
