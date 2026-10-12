@@ -29,6 +29,7 @@ Type: the platform UI font (`system-ui`), tabular numerals everywhere. Monospace
 
 - Dense rows separated by hairlines, like the panel's agent list.
 - A sidebar with four views: Dashboard, Device, Console, Settings.
+- Settings groups its sections under tabs (Agents, Connectivity, App) along a hairline strip pinned to the top of the page. The active tab is cream with a sage underline. Every tab stays mounted, so a half-typed field survives a switch, and the last tab is remembered.
 - Say what happened and what to do next, in plain words. Show the exact command before running anything privileged.
 - Motion only for state changes, 150 to 200 ms, and none under `prefers-reduced-motion`.
 - Lucide icons, because the panel draws Lucide glyphs.

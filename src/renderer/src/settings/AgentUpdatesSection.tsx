@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CalicoInfo } from "../../../shared/ipc";
 import { configureApi, fetchPanel, putConfig, putPanel } from "../lib/api";
+import { CircleAlert } from "lucide-react";
 import { newWebhookToken } from "../lib/token";
 import { webhookUrl } from "../lib/webhook";
 import { activityLines } from "../lib/webhook-activity";
@@ -107,7 +108,7 @@ export function AgentUpdatesSection({ info }: { info: CalicoInfo }) {
       <p className="max-w-2xl px-4 pb-2 text-muted">
         Point Grok Bot routines (such as desky) and other agents at this
         address. calico shows whatever they post. Cursor agents come from
-        polling instead, set up above.
+        polling instead, set up below.
       </p>
       <div className="flex max-w-2xl items-center gap-3 px-4">
         <code className="min-w-0 flex-1 break-all font-mono text-xs">
@@ -115,11 +116,22 @@ export function AgentUpdatesSection({ info }: { info: CalicoInfo }) {
         </code>
         <Copy label="Copy webhook URL" text={webhook} />
       </div>
-      <p className="max-w-2xl px-4 pt-2">
-        {info.webhookToken
-          ? "A token is set. Posts must send it as a Bearer header."
-          : "No token is set, so anyone on your network can post events."}
-      </p>
+      {info.webhookToken ? (
+        <p className="max-w-2xl px-4 pt-2">
+          A token is set. Posts must send it as a Bearer header.
+        </p>
+      ) : (
+        <p className="flex max-w-2xl items-center gap-2 px-4 pt-2 text-amber">
+          <CircleAlert
+            className="size-4 shrink-0"
+            role="img"
+            aria-label="Warning"
+          />
+          <span>
+            No token is set, so anyone on your network can post events.
+          </span>
+        </p>
+      )}
       <p className="max-w-2xl px-4 pt-2 text-muted">{lines.received}</p>
       {lines.refused ? (
         <p className="max-w-2xl px-4 pt-1 text-amber">{lines.refused}</p>

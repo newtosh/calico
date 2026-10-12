@@ -43,6 +43,17 @@ describe("AgentUpdatesSection", () => {
     expect(screen.getByText(/A token is set/)).toBeTruthy();
   });
 
+  it("makes the missing token hard to miss", () => {
+    const { rerender } = render(<AgentUpdatesSection info={info} />);
+    const warning = screen.getByText(/No token is set/);
+    expect(warning.closest("p")?.className).toContain("text-amber");
+    expect(screen.getByRole("img", { name: "Warning" })).toBeTruthy();
+    rerender(<AgentUpdatesSection info={{ ...info, webhookToken: "abc" }} />);
+    const set = screen.getByText(/A token is set/);
+    expect(set.closest("p")?.className).not.toContain("text-amber");
+    expect(screen.queryByRole("img", { name: "Warning" })).toBeNull();
+  });
+
   it("falls back to the loopback address when there is no LAN address", () => {
     render(<AgentUpdatesSection info={{ ...info, lanUrls: [] }} />);
     expect(

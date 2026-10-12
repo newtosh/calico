@@ -85,14 +85,28 @@ describe("ConfigSection running timeout", () => {
     },
   );
 
-  it("catches a bad port or poll interval before the server rejects the whole save", async () => {
+  it("catches a bad poll interval before the server rejects the whole save", async () => {
     const { puts } = serve(120);
     render(<ConfigSection />);
-    const port = (await screen.findByLabelText("Port")) as HTMLInputElement;
-    await vi.waitFor(() => expect(port.value).toBe("8787"));
-    fireEvent.change(port, { target: { value: "" } });
+    const poll = (await screen.findByLabelText(
+      "Cursor poll seconds",
+    )) as HTMLInputElement;
+    await vi.waitFor(() => expect(poll.value).toBe("30"));
+    fireEvent.change(poll, { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByText(/Port must be/)).toBeTruthy();
+    expect(await screen.findByText(/Cursor poll seconds must be/)).toBeTruthy();
     expect(puts).toHaveLength(0);
+  });
+
+  it("does not send the port: that has its own save under Connectivity", async () => {
+    const { puts } = serve(120);
+    render(<ConfigSection />);
+    const timeout = (await screen.findByLabelText(
+      "Running timeout seconds",
+    )) as HTMLInputElement;
+    await vi.waitFor(() => expect(timeout.value).toBe("120"));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await vi.waitFor(() => expect(puts).toHaveLength(1));
+    expect(puts[0]).not.toHaveProperty("port");
   });
 });
