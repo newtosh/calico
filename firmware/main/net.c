@@ -2,6 +2,7 @@
 #include "ble_desk.h"
 #include "desk_view.h"
 #include "orient.h"
+#include "power.h"
 
 #include "esp_check.h"
 #include "esp_event.h"
@@ -796,11 +797,17 @@ static esp_err_t request(const desk_settings_t *in, const char *suffix, const ch
 
 int net_fetch_status(const desk_settings_t *in, char *body, size_t body_len) {
     http_buf_t buf = {.body = body, .cap = body_len, .len = 0};
+    char suffix[48];
+    char query[32];
+    power_reading_t reading;
     if (body_len == 0) {
         return -1;
     }
     body[0] = '\0';
-    if (request(in, "/api/status", "GET", &buf, NULL) != ESP_OK) {
+    power_get(&reading);
+    power_query(&reading, query, sizeof query);
+    snprintf(suffix, sizeof suffix, "/api/status%s", query);
+    if (request(in, suffix, "GET", &buf, NULL) != ESP_OK) {
         return -1;
     }
     return 0;

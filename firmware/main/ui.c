@@ -226,6 +226,10 @@ static lv_obj_t *s_bar;
 static lv_obj_t *s_lamp;
 static lv_obj_t *s_wifi_bars[3];
 static lv_obj_t *s_bt_icon;
+static lv_obj_t *s_bat_box;
+static lv_obj_t *s_bat_pct;
+static lv_obj_t *s_bat_fill;
+static lv_obj_t *s_bat_mark;
 static int s_bt_state;
 static lv_obj_t *s_rot_ring;
 static lv_obj_t *s_rot_lock;
@@ -1795,7 +1799,8 @@ static void psram_objects_end(void) {
  * desk_icon_rot is the Heroicons outline (stroke 1.5, 24 viewBox) as A8 in
  * flash. Recolor makes it cream. The image object is a malloc, so callers
  * build this inside the PSRAM window. */
-static lv_obj_t *make_rot_symbol(lv_obj_t *parent, int px, lv_obj_t **ring_out, lv_obj_t **lock_out) {
+static lv_obj_t *make_rot_symbol(lv_obj_t *parent, int px, uint32_t lock_color, lv_obj_t **ring_out,
+                                 lv_obj_t **lock_out) {
     lv_obj_t *box = glyph_frame(parent, px, px);
     lv_obj_t *ring = lv_image_create(box);
     lv_obj_t *lock = glyph_frame(box, px, px);
@@ -1810,6 +1815,7 @@ static lv_obj_t *make_rot_symbol(lv_obj_t *parent, int px, lv_obj_t **ring_out, 
         body_w = 8;
     }
     lv_image_set_src(ring, &desk_icon_rot);
+    lv_image_set_scale(ring, 256 * px / DESK_ROT_PX);
     lv_obj_set_style_image_recolor(ring, lv_color_hex(INK), 0);
     lv_obj_set_style_image_recolor_opa(ring, LV_OPA_COVER, 0);
     lv_obj_align(ring, LV_ALIGN_CENTER, 0, 0);
@@ -1822,12 +1828,12 @@ static lv_obj_t *make_rot_symbol(lv_obj_t *parent, int px, lv_obj_t **ring_out, 
     lv_obj_set_style_border_width(shackle, 2, 0);
     lv_obj_set_style_border_side(shackle,
                                 LV_BORDER_SIDE_TOP | LV_BORDER_SIDE_LEFT | LV_BORDER_SIDE_RIGHT, 0);
-    lv_obj_set_style_border_color(shackle, lv_color_hex(ROW_MARK), 0);
+    lv_obj_set_style_border_color(shackle, lv_color_hex(lock_color), 0);
     lv_obj_set_style_pad_all(shackle, 0, 0);
     lv_obj_set_style_shadow_width(shackle, 0, 0);
     lv_obj_clear_flag(shackle, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
     body = ink_rect(lock, body_w, px / 2, 2, 1);
-    lv_obj_set_style_bg_color(body, lv_color_hex(ROW_MARK), 0);
+    lv_obj_set_style_bg_color(body, lv_color_hex(lock_color), 0);
     lv_obj_align(body, LV_ALIGN_BOTTOM_MID, 0, 0);
     lv_obj_clear_flag(lock, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
     if (ring_out) {
@@ -2237,7 +2243,7 @@ static void build_control_center(lv_obj_t *screen) {
 
     row = cc_row(s_cc_panel);
     s_cc_rot = cc_tile(row, on_cc_rot);
-    make_rot_symbol(s_cc_rot, DESK_ROT_PX, &s_cc_rot_ring, &s_cc_rot_lock);
+    make_rot_symbol(s_cc_rot, DESK_ROT_PX, ROW_MARK, &s_cc_rot_ring, &s_cc_rot_lock);
     cc_caption(s_cc_rot, "Rotation", &s_cc_rot_state);
     s_cc_mic = cc_tile(row, on_cc_mic);
     cc_mic_glyph(s_cc_mic);
@@ -2291,6 +2297,7 @@ static void paint_bt(void) {
         color = INK;
     }
     lv_image_set_src(s_bt_icon, on ? &desk_icon_bt_on : &desk_icon_bt);
+    lv_image_set_scale(s_bt_icon, 296); /* 15% over the 256 base */
     lv_obj_set_style_image_recolor(s_bt_icon, lv_color_hex(color), 0);
     lv_obj_set_style_image_recolor_opa(s_bt_icon, LV_OPA_COVER, 0);
     lv_obj_set_style_opa(s_bt_icon, on ? LV_OPA_COVER : LV_OPA_40, 0);
@@ -2330,6 +2337,100 @@ static int present_status(const char *phase, int failures) {
     return glance.lamp;
 }
 
+/* Status bar rotation glyph, 12% under the 24 px art. The lock is cream, so sage stays
+ * the battery's charging color. */
+enum { STATUS_ROT_PX = 21 };
+enum { BAT_W = 28, BAT_H = 13, BAT_INSET = 2 };
+
+static uint32_t battery_fill_color(power_fill_t fill) {
+    switch (fill) {
+    case POWER_FILL_SAGE:
+        return ROW_MARK;
+    case POWER_FILL_AMBER:
+        return LAMP_AMBER;
+    case POWER_FILL_RED:
+        return LAMP_RED;
+    default:
+        return INK;
+    }
+}
+
+/* Battery: number, then the outline with its nub on the left, a fill that
+ * grows from the right, one mark. */
+static void build_battery(lv_obj_t *cluster) {
+    lv_obj_t *body;
+    lv_obj_t *nub;
+    s_bat_box = lv_obj_create(cluster);
+    lv_obj_set_height(s_bat_box, BAR_H);
+    lv_obj_set_width(s_bat_box, LV_SIZE_CONTENT);
+    flatten(s_bat_box);
+    lv_obj_set_flex_flow(s_bat_box, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(s_bat_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(s_bat_box, 0, 0);
+    lv_obj_clear_flag(s_bat_box, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(s_bat_box, LV_OBJ_FLAG_HIDDEN);
+
+    s_bat_pct = lv_label_create(s_bat_box);
+    lv_obj_set_style_text_font(s_bat_pct, &lv_font_montserrat_16, 0);
+    lv_obj_set_style_text_color(s_bat_pct, lv_color_hex(INK), 0);
+    lv_obj_clear_flag(s_bat_pct, LV_OBJ_FLAG_CLICKABLE);
+    /* The nub touches the body. The gap goes between the number and the nub. */
+    lv_obj_set_style_margin_right(s_bat_pct, 5, 0);
+
+    nub = ink_rect(s_bat_box, 2, 6, 1, 1);
+    lv_obj_set_style_bg_opa(nub, LV_OPA_60, 0);
+
+    body = lv_obj_create(s_bat_box);
+    lv_obj_set_size(body, BAT_W, BAT_H);
+    flatten(body);
+    lv_obj_set_style_radius(body, 3, 0);
+    lv_obj_set_style_border_width(body, 1, 0);
+    lv_obj_set_style_border_color(body, lv_color_hex(INK), 0);
+    lv_obj_set_style_border_opa(body, LV_OPA_60, 0);
+    lv_obj_clear_flag(body, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
+
+    s_bat_fill = ink_rect(body, 1, BAT_H - 2 * BAT_INSET, 2, 1);
+    lv_obj_align(s_bat_fill, LV_ALIGN_RIGHT_MID, -(BAT_INSET - 1), 0);
+
+    s_bat_mark = lv_label_create(body);
+    lv_obj_set_style_text_font(s_bat_mark, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_color(s_bat_mark, lv_color_hex(DOCK), 0);
+    lv_obj_align(s_bat_mark, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_add_flag(s_bat_mark, LV_OBJ_FLAG_HIDDEN);
+
+}
+
+void ui_set_battery(const power_reading_t *reading) {
+    char text[8];
+    int inner = BAT_W - 2 * BAT_INSET - 2;
+    int width;
+    if (!s_bat_box) {
+        return;
+    }
+    if (!reading || !reading->present) {
+        lv_obj_add_flag(s_bat_box, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    snprintf(text, sizeof text, "%d%%", reading->percent);
+    lv_label_set_text(s_bat_pct, text);
+    width = reading->percent * inner / 100;
+    if (width < 1) {
+        width = 1;
+    }
+    lv_obj_set_width(s_bat_fill, width);
+    lv_obj_set_style_bg_color(s_bat_fill, lv_color_hex(battery_fill_color(power_fill(reading))), 0);
+    if (reading->charging) {
+        lv_label_set_text_static(s_bat_mark, LV_SYMBOL_CHARGE);
+        lv_obj_clear_flag(s_bat_mark, LV_OBJ_FLAG_HIDDEN);
+    } else if (reading->external) {
+        lv_label_set_text_static(s_bat_mark, LV_SYMBOL_USB);
+        lv_obj_clear_flag(s_bat_mark, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(s_bat_mark, LV_OBJ_FLAG_HIDDEN);
+    }
+    lv_obj_clear_flag(s_bat_box, LV_OBJ_FLAG_HIDDEN);
+}
+
 /* BT starts as the dim rune. ui_set_bt swaps in the dotted mark once the radio is up. */
 static void build_status_bar(lv_obj_t *screen) {
     lv_obj_t *title;
@@ -2337,7 +2438,7 @@ static void build_status_bar(lv_obj_t *screen) {
     lv_obj_t *wifi;
     int i;
     lv_obj_t *bar;
-    static const int heights[3] = {6, 10, 14};
+    static const int heights[3] = {7, 11, 15};
     bar = lv_obj_create(screen);
     s_bar = bar;
     /* Strip meets the glass. Lamp and labels stay inside the 16px bezel. */
@@ -2364,7 +2465,8 @@ static void build_status_bar(lv_obj_t *screen) {
     lv_obj_clear_flag(s_lamp, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
     title = lv_label_create(bar);
-    lv_obj_set_width(title, 168);
+    /* The label is "ginger". Leave the width to the cluster. */
+    lv_obj_set_width(title, 136);
     lv_label_set_long_mode(title, LV_LABEL_LONG_DOT);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_16, 0);
     lv_obj_set_style_text_color(title, lv_color_hex(INK), 0);
@@ -2384,13 +2486,13 @@ static void build_status_bar(lv_obj_t *screen) {
     lv_obj_clear_flag(cluster, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
 
     wifi = lv_obj_create(cluster);
-    lv_obj_set_size(wifi, 16, 14);
+    lv_obj_set_size(wifi, 18, 15);
     flatten(wifi);
     lv_obj_clear_flag(wifi, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_CLICKABLE);
     for (i = 0; i < 3; i++) {
         s_wifi_bars[i] = lv_obj_create(wifi);
         lv_obj_set_size(s_wifi_bars[i], 4, heights[i]);
-        lv_obj_align(s_wifi_bars[i], LV_ALIGN_BOTTOM_LEFT, i * 6, 0);
+        lv_obj_align(s_wifi_bars[i], LV_ALIGN_BOTTOM_LEFT, i * 7, 0);
         lv_obj_set_style_radius(s_wifi_bars[i], 1, 0);
         lv_obj_set_style_border_width(s_wifi_bars[i], 0, 0);
         lv_obj_set_style_pad_all(s_wifi_bars[i], 0, 0);
@@ -2403,8 +2505,9 @@ static void build_status_bar(lv_obj_t *screen) {
     paint_bt();
 
     psram_objects_begin();
-    make_rot_symbol(cluster, DESK_ROT_PX, &s_rot_ring, &s_rot_lock);
+    make_rot_symbol(cluster, STATUS_ROT_PX, INK, &s_rot_ring, &s_rot_lock);
     psram_objects_end();
+    build_battery(cluster);
     paint_rotlock();
     paint_bars(0);
 }
