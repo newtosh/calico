@@ -18,6 +18,7 @@ static const uint8_t k_regs[5] = {0x00, 0x01, 0xA4, 0x34, 0x35};
 static SemaphoreHandle_t s_lock;
 static power_reading_t s_last;
 static power_listener_t s_listener;
+static uint8_t s_logged[3] = {0xFF, 0xFF, 0xFF};
 
 /* One register per transaction, as the probe did on the real board. */
 static int read_regs(i2c_master_dev_handle_t dev, uint8_t out[5]) {
@@ -62,6 +63,13 @@ static void power_task(void *arg) {
             }
         }
         if (dev && read_regs(dev, regs) == 0) {
+            /* Bytes 0 to 2 are the flags and percent. Log them when they change, so a
+             * board without a battery can be told apart from one that has it. */
+            if (memcmp(regs, s_logged, sizeof s_logged) != 0) {
+                memcpy(s_logged, regs, sizeof s_logged);
+                ESP_LOGI(TAG, "regs %02X %02X %02X %02X %02X", regs[0], regs[1], regs[2], regs[3],
+                         regs[4]);
+            }
             power_decode(regs, &fresh);
             power_hold(&hold, &fresh, &next);
         } else {
