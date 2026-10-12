@@ -10,6 +10,7 @@ Desktop companion and developer kit for ginger, an ESP32-S3 AMOLED desk panel th
 - Shows a dashboard of agents, events, and the panel's state.
 - Sets up the panel over USB or Bluetooth: Wi-Fi (tested before it is saved), companion URL, token, reboot.
 - Lives in the tray and starts at login, so the panel keeps working when the window is closed.
+- Optionally collects agent updates from a relay while the computer is off or on another network (see [Relay](#relay)).
 
 ![Dashboard](resources/screenshots/dashboard.png)
 ![Device setup](resources/screenshots/device.png)
@@ -58,6 +59,17 @@ Replace the version in both places. pacman fetches the `.sig` next to the packag
 The tray icon needs a StatusNotifier host. KDE and most panels have one. GNOME needs the AppIndicator extension.
 
 On Ubuntu 24.04 and later, install the deb. It adds an AppArmor profile so Chromium's sandbox works. The AppImage still runs there, but its launcher turns the sandbox off because Ubuntu blocks the user namespaces it needs, and it needs `libfuse2t64` installed. CI launches both on stock Ubuntu 24.04.
+
+## Relay
+
+Agents that run in the cloud cannot reach a computer whose address changes with the Wi-Fi network. A relay is a small mailbox on the public internet: agents post to it, it keeps a rolling window (24 hours, 200 messages), and Calico collects what is waiting when it is on. Replayed updates keep the time they were sent, so a stale one never makes an agent look Running.
+
+In Settings, Relay, either:
+
+- **Set up with Cloudflare**: Calico opens your browser, you approve one permission (Workers Admin) on Cloudflare's consent screen, and Calico deploys a Worker called `calico-relay` to your own free Cloudflare account, checks it, and revokes its own access. If anything fails it removes what it uploaded. Then **Copy for Grok Bot** copies the address and the send token. Agents must send a `User-Agent` header: Cloudflare turns away Python's default `Python-urllib`.
+- **Connect an existing relay**: an address and a read token, for the Worker above or a self-hosted [ntfy](https://ntfy.sh).
+
+The Worker's source is in [`tools/relay`](tools/relay), with its tests. Privacy and what the sign-in does are on the [project site](https://calico.newto.sh/#cloudflare).
 
 ## Develop
 

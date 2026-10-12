@@ -131,20 +131,24 @@
       <h2 id="privacy">Privacy</h2>
       <p>
         Calico keeps its data on your machine. It has no accounts, no analytics,
-        and no telemetry. The only outside address it ever contacts is
-        <code>api.cursor.com</code>, and only if you have given it a Cursor API
-        key.
+        and no telemetry. It contacts an outside address only when you turn a
+        feature on: <code>api.cursor.com</code> if you give it a Cursor API key,
+        and the relay address you set up or connect, if you use a relay. Setting
+        a relay up with Cloudflare is the one other case, described below.
       </p>
 
-      <h2>Signing in to Cloudflare (in development)</h2>
+      <h2 id="cloudflare">Signing in to Cloudflare</h2>
       <p>
-        We are building an optional relay, so agents that run in the cloud can
-        reach Calico even when your computer is asleep. When it ships, Calico
-        will ask you to sign in to Cloudflare so it can set the relay up for
-        you. It will deploy a small Worker to <em>your own</em> Cloudflare
-        account, which you can see and delete in your dashboard.
+        The relay is optional. It lets agents that run in the cloud reach Calico
+        even when your computer is asleep or on another network: they post to a
+        small mailbox, and Calico collects what is waiting when it is back. To
+        set it up for you, Calico asks you to sign in to Cloudflare and deploys
+        a small Worker to <em>your own</em> Cloudflare account, which you can
+        see and delete in your dashboard. A free Cloudflare account is enough.
+        You can also connect a relay you already run, such as a self-hosted
+        ntfy, without signing in to anything.
       </p>
-      <p>The sign-in is designed to work like this:</p>
+      <p>The sign-in works like this:</p>
       <ul>
         <li>
           You approve it on Cloudflare's own consent screen. Calico never sees
@@ -155,10 +159,16 @@
           requires to upload a Worker.
         </li>
         <li>
-          The access token lasts one hour, stays on your computer, and Calico
-          revokes it as soon as setup finishes.
+          The access token lasts one hour and stays on your computer. Calico
+          uses it to upload the Worker, then revokes it as soon as setup
+          finishes, or if setup fails or you cancel.
         </li>
-        <li>Nothing about your account is sent to the Calico project.</li>
+        <li>
+          Calico talks only to Cloudflare while setting up. Nothing about your
+          account is sent to the Calico project, and the relay's two secret
+          tokens are created on your computer and stored in its config file.
+        </li>
+        <li>If setup fails part way, Calico removes the Worker it uploaded.</li>
         <li>
           You can review or revoke the access at any time under Connected
           Applications in your Cloudflare profile.
