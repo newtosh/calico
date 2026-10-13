@@ -9,6 +9,7 @@ Desktop companion and developer kit for ginger, an ESP32-S3 AMOLED desk panel th
 - Runs the companion server the panel polls (`/api/status` on port 8787 by default) and receives agent webhooks.
 - Shows a dashboard of agents, events, and the panel's state.
 - Sets up the panel over USB or Bluetooth: Wi-Fi (tested before it is saved), companion URL, token, reboot.
+- Keeps the panel's Wi-Fi networks in one list on this computer, with passwords locked in the system keyring (GNOME Keyring or KWallet). Without a keyring, Calico refuses to save a password.
 - Lives in the tray and starts at login, so the panel keeps working when the window is closed.
 - Optionally collects agent updates from a relay while the computer is off or on another network (see [Relay](#relay)).
 
