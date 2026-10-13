@@ -26,7 +26,21 @@ export const UUID = {
   reboot: "8d7c4b15-6e2a-4f91-a3c5-67726f6b6465",
   scan: "8d7c4b16-6e2a-4f91-a3c5-67726f6b6465",
   verify: "8d7c4b17-6e2a-4f91-a3c5-67726f6b6465",
+  peer: "8d7c4b18-6e2a-4f91-a3c5-67726f6b6465",
 } as const;
+
+/**
+ * The panel's status says whether it pairs and whether this link is paired. A panel that does not
+ * report `pair=1` is firmware from before pairing: it gets no secret from us.
+ */
+export function requirePairing(statusBody: string): "paired" | "needs-pairing" {
+  const kv = parseKv(statusBody);
+  if (kv.pair !== "1")
+    throw new Error(
+      "This panel's firmware does not pair yet. Flash the latest firmware, then connect again.",
+    );
+  return kv.paired === "1" ? "paired" : "needs-pairing";
+}
 
 export interface Gatt {
   read(uuid: string): Promise<string>;
@@ -147,26 +161,49 @@ export class BleLink implements DeviceLink {
   }
 }
 
-export async function connectBle(onClosed: () => void): Promise<BleLink> {
+export const PAIR_FAILED =
+  "Pairing did not finish. Confirm the same code on the panel and on this computer, then try again. If no code appeared, remove ginger from this computer's Bluetooth settings and connect again.";
+export const LINK_FAILED =
+  "Could not talk to the panel over Bluetooth. Move closer and connect again.";
+
+/**
+ * Connects and, when the panel says this link is not paired, makes the OS pair. The OS shows its
+ * own dialog and the panel shows the same code with Yes and No; `onPairing` fires while that waits.
+ * `onClosed` only covers drops after this resolves: a drop while connecting is this call's error.
+ * `peerName` (this computer's name) goes to the panel, which shows it after a fresh pairing.
+ */
+export async function connectBle(
+  onClosed: () => void,
+  onPairing: () => void = () => undefined,
+  peerName = "",
+): Promise<BleLink> {
   const device = await navigator.bluetooth.requestDevice({
     filters: BLE_NAMES.map((name) => ({ name })),
     optionalServices: [UUID.svc],
   });
-  if (!device.gatt) throw new Error("This device has no GATT server.");
-  device.addEventListener("gattserverdisconnected", onClosed, { once: true });
-  const server = await device.gatt.connect();
-  const service = await server.getPrimaryService(UUID.svc);
+  const remote = device.gatt;
+  if (!remote) throw new Error("This device has no GATT server.");
+  // A refused code drops the link at once, while the OS read it started can hang for about 25 s.
+  // Failing on the drop ends this attempt then, so a late rejection never disconnects the next one.
+  let dropped: () => void = () => undefined;
+  const drop = new Promise<never>((_, reject) => {
+    dropped = () => reject(new Error("dropped"));
+  });
+  drop.catch(() => undefined);
+  device.addEventListener("gattserverdisconnected", dropped);
+  const decoder = new TextDecoder();
   const chars = new Map<string, BluetoothRemoteGATTCharacteristic>();
+  let service: BluetoothRemoteGATTService | null = null;
   const char = async (uuid: string) => {
     let c = chars.get(uuid);
     if (!c) {
+      if (!service) throw new Error("not connected");
       c = await service.getCharacteristic(uuid);
       chars.set(uuid, c);
     }
     return c;
   };
-  const decoder = new TextDecoder();
-  return new BleLink({
+  const gatt: Gatt = {
     async read(uuid) {
       const view = await (await char(uuid)).readValue();
       return decoder.decode(
@@ -176,6 +213,39 @@ export async function connectBle(onClosed: () => void): Promise<BleLink> {
     async write(uuid, data) {
       await (await char(uuid)).writeValueWithResponse(data);
     },
-    disconnect: () => server.disconnect(),
-  });
+    disconnect: () => remote.disconnect(),
+  };
+  // Raw GATT errors never reach the person. A known message passes through.
+  const step = async <T>(work: Promise<T>, message: string): Promise<T> => {
+    try {
+      return await Promise.race([work, drop]);
+    } catch {
+      throw new Error(message);
+    }
+  };
+  try {
+    const server = await step(remote.connect(), LINK_FAILED);
+    service = await step(server.getPrimaryService(UUID.svc), LINK_FAILED);
+    const status = await step(gatt.read(UUID.status), LINK_FAILED);
+    if (requirePairing(status) === "needs-pairing") {
+      onPairing();
+      // Reading a protected characteristic makes the OS pair.
+      await step(gatt.read(UUID.url), PAIR_FAILED);
+    }
+  } catch (e) {
+    // Release the panel's single BLE slot.
+    device.removeEventListener("gattserverdisconnected", dropped);
+    remote.disconnect();
+    throw e;
+  }
+  device.removeEventListener("gattserverdisconnected", dropped);
+  device.addEventListener("gattserverdisconnected", onClosed, { once: true });
+  if (peerName) {
+    try {
+      await gatt.write(UUID.peer, encode(peerName.slice(0, 32)));
+    } catch {
+      // Only a greeting on the glass. Older firmware has no peer characteristic.
+    }
+  }
+  return new BleLink(gatt);
 }

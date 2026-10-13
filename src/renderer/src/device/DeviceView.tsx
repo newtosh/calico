@@ -19,6 +19,8 @@ interface Props {
 
 export function DeviceView({ info, link, setLink, onLog }: Props) {
   const [error, setError] = useState("");
+  // Non-empty while a Connect is under way. Both Connect buttons wait for it.
+  const [progress, setProgress] = useState("");
   const [assist, setAssist] = useState<"firewall" | "serial" | null>(null);
   const manualClose = useRef(false);
   const [rebootAt, setRebootAt] = useState<number | null>(null);
@@ -54,15 +56,27 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
       }
       setError("Lost the connection to the desk. Connect again.");
     };
+    setProgress("Connecting.");
     try {
       setLink(
-        kind === "usb" ? await connectUsb(onLog, lost) : await connectBle(lost),
+        kind === "usb"
+          ? await connectUsb(onLog, lost)
+          : await connectBle(
+              lost,
+              () =>
+                setProgress(
+                  "Confirm the code on the panel and in the system dialog.",
+                ),
+              info.hostname,
+            ),
       );
     } catch (err) {
       const e = err as Error;
       if (e.name === "NotFoundError" || e.name === "AbortError") return; // picker cancelled
       setError(e.message);
       if (kind === "usb") setAssist("serial");
+    } finally {
+      setProgress("");
     }
   }
 
@@ -109,6 +123,7 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
             <button
               type="button"
               className="btn btn-primary"
+              disabled={progress !== ""}
               onClick={() => void open("usb")}
             >
               Connect over USB
@@ -116,11 +131,17 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
             <button
               type="button"
               className="btn"
+              disabled={progress !== ""}
               onClick={() => void open("ble")}
             >
               Connect over Bluetooth
             </button>
           </div>
+          {progress ? (
+            <p role="status" className="px-4 pt-2">
+              {progress}
+            </p>
+          ) : null}
           <p className="max-w-2xl px-4 pt-2 text-muted">
             USB works with any firmware that has the serial console and is the
             only way to recover a desk that will not boot. Bluetooth works

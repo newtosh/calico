@@ -22,6 +22,7 @@ const info: CalicoInfo = {
   serverError: null,
   autostart: { enabled: false, available: true },
   version: "0.1.1",
+  hostname: "test-host",
 };
 
 const WEBHOOK = "http://192.168.4.30:8787/api/webhook/grok-bot";
