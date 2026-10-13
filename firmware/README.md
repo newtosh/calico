@@ -98,7 +98,9 @@ idf.py -p PORT app-flash
 
 ## Provision over BLE
 
-A phone or laptop can write the same NVS `desk` keys without USB and without a joined network. The firmware starts NimBLE after the DMA stripe is pinned and before Wi-Fi. It advertises the complete local name `ginger`. Control Center can stop that advertisement and drop a connection. Off does not shut the controller down. One connection. The link is open: no pairing, no bonding, no encryption. Anyone in radio range can write the companion URL, replace the bearer, or add a Wi-Fi network. The bearer is write-only. Wi-Fi passwords are write-only. This is a desk PoC. A PIN on the glass is the upgrade when that stops being acceptable.
+A phone or laptop can write the same NVS `desk` keys without USB and without a joined network. The firmware starts NimBLE after the DMA stripe is pinned and before Wi-Fi. It advertises the complete local name `ginger`. Control Center can stop that advertisement and drop a connection. Off does not shut the controller down. One connection. The bearer is write-only. Wi-Fi passwords are write-only.
+
+Bluetooth requires pairing. A computer that connects sees only the name and firmware version until it pairs. Pairing is numeric comparison over LE Secure Connections: the panel shows a 6-digit code on its glass with Yes and No, and the computer's own Bluetooth dialog shows the same code. Check that the two match, tap Yes on the panel, and confirm in the system dialog. No, or no answer in 30 seconds, refuses the pairing. The app does not ask for the code: the OS pairs, and the app only says what to do and reports the result. The pairing is kept, so the computer reconnects later without a code. After Forget pairings on the glass (or an NVS erase) the computer still holds its old key and no code appears: remove ginger from this computer's Bluetooth settings and connect again. Right after a new pairing (not a reconnect on a stored bond) the glass shows "Paired with <name>" for 4 seconds, using the name the app writes to `peer` (its hostname, cut to 32 printable ASCII characters, other characters shown as `?`). If no name arrives within 3 seconds it shows "Paired". The panel remembers up to three computers. Settings has a Forget pairings button. Writes, scans and the full status need the paired link. The app refuses to send secrets to a panel flashed before pairing existed. After changing `firmware/sdkconfig.defaults`, delete `firmware/sdkconfig` and run `idf.py set-target esp32s3`. Do not erase NVS.
 
 Preferred ATT MTU is 256 (the NimBLE default). A URL or token is at most 127 bytes, so the central needs an MTU of at least 130. BlueZ does the exchange. A status read that is longer than one packet still completes: NimBLE serves the rest on Read Blob.
 
@@ -113,6 +115,7 @@ Service `8d7c4b10-6e2a-4f91-a3c5-67726f6b6465`:
 | reboot | `8d7c4b15-6e2a-4f91-a3c5-67726f6b6465` | write | `reboot` |
 | scan | `8d7c4b16-6e2a-4f91-a3c5-67726f6b6465` | read, write | write `scan`. Read the result |
 | verify | `8d7c4b17-6e2a-4f91-a3c5-67726f6b6465` | read, write | same body as `wifi`. Read the result |
+| peer | `8d7c4b18-6e2a-4f91-a3c5-67726f6b6465` | write | this computer's name, short UTF-8. After a fresh pairing the glass shows "Paired with <name>" |
 
 Status is UTF-8, one `key=value` per line, in this order: `name`, `fw` (git short SHA, or `unknown`), `ssid` (associated AP, or `none`), `url` (global companion URL), `token` (`set` or `none`). A rejected write is an ATT error and does not touch NVS. URL and token commits happen before the response. They do not restart the station. `ssid=none` means the STA is not associated. It does not mean NVS is empty.
 
@@ -130,7 +133,7 @@ On `aeeb737` the glass showed `SCAN FAILED` / `Could not scan for Wi-Fi` after a
 
 Wi-Fi upsert uses the same eight slots as settings. Updating an SSID replaces the password and keeps that slot's own URL and token. A new SSID follows the global URL. The controller may add its own NVS keys on first boot. That is not an erase, and it does not rewrite `desk`. The boot join and the verify probe use the same STA settings: WPA2 as the minimum when a password is set, PMF capable but not required, and SAE in both modes. An open network keeps the open threshold, so a typed password cannot succeed against an open AP. The give-up latch is cleared when that join starts.
 
-With no command the script opens a menu. It scans for `ginger` (or the old `grokbot-buddy`), shows status, and steps through the URL, the token, Wi-Fi, and reboot. Add Wi-Fi can take an SSID from the desk's scan or from the keyboard. y tries the join first. A miss prints the reason and does not save. A join saves and reboots. The OS Bluetooth pairing dialog does not connect. The link is GATT, and the client is bleak.
+With no command the script opens a menu. It scans for `ginger` (or the old `grokbot-buddy`), shows status, and steps through the URL, the token, Wi-Fi, and reboot. Add Wi-Fi can take an SSID from the desk's scan or from the keyboard. y tries the join first. A miss prints the reason and does not save. A join saves and reboots. The link is GATT, and the client is bleak. The script cannot answer a pairing request, so pair the computer first: run `bluetoothctl`, then `pair <panel address>`, check that the code it prints matches the glass, answer yes there and tap Yes on the panel. Or provision over USB with `provision-wifi.py`.
 
 ```bash
 .venv-ble/bin/pip install bleak prompt_toolkit
