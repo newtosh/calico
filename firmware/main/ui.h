@@ -28,6 +28,19 @@ void ui_set_known(const wifi_store_t *store);
 void ui_show_scanning(void);
 void ui_show_networks(const net_ap_t *aps, int count);
 void ui_set_settings_status(const char *text);
+
+/* The Bluetooth numeric comparison code, as "123 456", with Yes and No. Hidden on an answer,
+ * after 30 s (answered No), or when the link encrypts or drops. */
+void ui_show_pairing(const char *code_text);
+void ui_hide_pairing(void);
+void ui_bind_pair_answer(ui_toggle_fn on_answer);
+/* After a fresh pairing: wait up to 3 s for the computer's name, then show "Paired with <name>"
+ * (text from ble_pair_done_text) or "Paired" for 4 s. End hides it at once. */
+void ui_paired_begin(void);
+void ui_paired_name(const char *text);
+void ui_paired_end(void);
+typedef void (*ui_action_fn)(void);
+void ui_bind_forget_pairings(ui_action_fn fn);
 void ui_show_panel_note(const char *phase, const char *message);
 void ui_apply(const desk_view_t *view, int failures);
 /* 1 when this view and failure count are already on the face. */

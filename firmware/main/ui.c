@@ -227,6 +227,18 @@ static lv_obj_t *s_lamp;
 static lv_obj_t *s_wifi_bars[3];
 static lv_obj_t *s_bt_icon;
 static lv_obj_t *s_bat_box;
+static lv_obj_t *s_pair_card;
+static lv_obj_t *s_pair_code;
+static char s_pair_text[8];
+static lv_timer_t *s_pair_timer;
+/* "Paired with <name>" after a fresh pairing. Same card style as the code card. */
+static lv_obj_t *s_done_card;
+static lv_obj_t *s_done_label;
+static char s_done_text[48];
+static lv_timer_t *s_done_wait;
+static lv_timer_t *s_done_show;
+static ui_toggle_fn s_on_pair_answer;
+static ui_action_fn s_on_forget;
 static lv_obj_t *s_bat_pct;
 static lv_obj_t *s_bat_fill;
 static lv_obj_t *s_bat_mark;
@@ -2357,6 +2369,198 @@ static uint32_t battery_fill_color(power_fill_t fill) {
 
 /* Battery: number, then the outline with its nub on the left, a fill that
  * grows from the right, one mark. */
+/* The card's answer. The timer answers No after 30 s (BLE_PAIR_ASK_MS); ble_link also
+ * rejects a late Yes. */
+static void pair_answer(int yes) {
+    /* ble_link hides the card once the answer counts: a Yes in the first
+     * BLE_PAIR_ASK_MIN_MS is ignored and the card stays. */
+    if (!s_on_pair_answer) {
+        ui_hide_pairing();
+        return;
+    }
+    s_on_pair_answer(yes);
+}
+
+static void on_pair_yes(lv_event_t *event) {
+    (void)event;
+    pair_answer(1);
+}
+
+static void on_pair_no(lv_event_t *event) {
+    (void)event;
+    pair_answer(0);
+}
+
+static void on_pair_timeout(lv_timer_t *timer) {
+    (void)timer;
+    pair_answer(0);
+}
+
+/* Numeric comparison card on the top layer, so it sits over every screen. Built hidden at
+ * boot inside the PSRAM window: after Wi-Fi the internal heap has a few hundred bytes left,
+ * and the NimBLE host needs them. Showing it allocates nothing (static text, paused timer). */
+static void build_pairing(void) {
+    lv_obj_t *title;
+    lv_obj_t *hint;
+    lv_obj_t *no;
+    lv_obj_t *yes;
+    s_pair_card = lv_obj_create(lv_layer_top());
+    lv_obj_set_size(s_pair_card, 400, 300);
+    lv_obj_center(s_pair_card);
+    lv_obj_set_style_bg_color(s_pair_card, lv_color_hex(DOCK), 0);
+    lv_obj_set_style_bg_opa(s_pair_card, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(s_pair_card, 18, 0);
+    lv_obj_set_style_border_width(s_pair_card, 3, 0);
+    lv_obj_set_style_border_color(s_pair_card, lv_color_hex(FIELD_EDGE), 0);
+    lv_obj_clear_flag(s_pair_card, LV_OBJ_FLAG_SCROLLABLE);
+    title = lv_label_create(s_pair_card);
+    lv_label_set_text_static(title, "Pair with a computer");
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(title, lv_color_hex(INK_DIM), 0);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 4);
+    s_pair_code = lv_label_create(s_pair_card);
+    lv_label_set_text_static(s_pair_code, s_pair_text);
+    lv_obj_set_style_text_font(s_pair_code, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_color(s_pair_code, lv_color_hex(INK), 0);
+    lv_obj_set_style_text_letter_space(s_pair_code, 4, 0);
+    lv_obj_align(s_pair_code, LV_ALIGN_TOP_MID, 0, 44);
+    hint = lv_label_create(s_pair_card);
+    lv_label_set_text_static(hint, "Same code on the computer?");
+    lv_obj_set_style_text_font(hint, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_color(hint, lv_color_hex(INK_DIM), 0);
+    lv_obj_align(hint, LV_ALIGN_TOP_MID, 0, 118);
+    no = action_button(s_pair_card, "No", on_pair_no);
+    yes = action_button(s_pair_card, "Yes", on_pair_yes);
+    lv_obj_set_size(no, 160, SET_CONTROL);
+    lv_obj_set_size(yes, 160, SET_CONTROL);
+    lv_obj_set_style_border_color(yes, lv_color_hex(ROW_MARK), 0);
+    lv_obj_set_style_border_width(yes, 2, 0);
+    lv_obj_align(no, LV_ALIGN_BOTTOM_LEFT, 0, 0);
+    lv_obj_align(yes, LV_ALIGN_BOTTOM_RIGHT, 0, 0);
+    lv_obj_set_hidden(s_pair_card, true);
+    s_pair_timer = lv_timer_create(on_pair_timeout, 30000, NULL);
+    lv_timer_pause(s_pair_timer);
+}
+
+void ui_show_pairing(const char *code_text) {
+    if (!s_pair_card) {
+        return;
+    }
+    snprintf(s_pair_text, sizeof s_pair_text, "%s", code_text ? code_text : "");
+    lv_label_set_text_static(s_pair_code, s_pair_text);
+    lv_timer_reset(s_pair_timer);
+    lv_timer_resume(s_pair_timer);
+    lv_obj_set_hidden(s_pair_card, false);
+    lv_obj_move_foreground(s_pair_card);
+}
+
+void ui_hide_pairing(void) {
+    if (s_pair_card) {
+        lv_timer_pause(s_pair_timer);
+        lv_obj_set_hidden(s_pair_card, true);
+    }
+}
+
+static void done_show(const char *text) {
+    lv_timer_pause(s_done_wait);
+    snprintf(s_done_text, sizeof s_done_text, "%s", text);
+    lv_label_set_text_static(s_done_label, s_done_text);
+    lv_timer_reset(s_done_show);
+    lv_timer_resume(s_done_show);
+    lv_obj_set_hidden(s_done_card, false);
+    lv_obj_move_foreground(s_done_card);
+}
+
+static void on_done_wait(lv_timer_t *timer) {
+    (void)timer;
+    done_show("Paired");
+}
+
+static void on_done_show(lv_timer_t *timer) {
+    (void)timer;
+    ui_paired_end();
+}
+
+/* Built hidden in the PSRAM window with the code card. Showing it allocates nothing. */
+static void build_paired(void) {
+    lv_obj_t *rune;
+    s_done_card = lv_obj_create(lv_layer_top());
+    lv_obj_set_size(s_done_card, 400, 200);
+    lv_obj_center(s_done_card);
+    lv_obj_set_style_bg_color(s_done_card, lv_color_hex(DOCK), 0);
+    lv_obj_set_style_bg_opa(s_done_card, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(s_done_card, 18, 0);
+    lv_obj_set_style_border_width(s_done_card, 3, 0);
+    lv_obj_set_style_border_color(s_done_card, lv_color_hex(ROW_MARK), 0);
+    lv_obj_clear_flag(s_done_card, LV_OBJ_FLAG_SCROLLABLE);
+    /* The header's Bluetooth rune, 3x and sage like a live link. The 20x14 object scales about
+     * its center, so it sits 21 px (half the drawn height) under the top edge plus a margin. */
+    rune = lv_image_create(s_done_card);
+    lv_image_set_src(rune, &desk_icon_bt);
+    lv_image_set_scale(rune, 256 * 3);
+    lv_obj_set_style_image_recolor(rune, lv_color_hex(ROW_MARK), 0);
+    lv_obj_set_style_image_recolor_opa(rune, LV_OPA_COVER, 0);
+    lv_obj_clear_flag(rune, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_align(rune, LV_ALIGN_TOP_MID, 0, 22);
+    s_done_label = lv_label_create(s_done_card);
+    lv_label_set_text_static(s_done_label, s_done_text);
+    lv_label_set_long_mode(s_done_label, LV_LABEL_LONG_WRAP);
+    lv_obj_set_width(s_done_label, lv_pct(100));
+    lv_obj_set_style_text_font(s_done_label, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_color(s_done_label, lv_color_hex(INK), 0);
+    lv_obj_set_style_text_align(s_done_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_align(s_done_label, LV_ALIGN_CENTER, 0, 28);
+    lv_obj_set_hidden(s_done_card, true);
+    s_done_wait = lv_timer_create(on_done_wait, 3000, NULL);
+    lv_timer_pause(s_done_wait);
+    s_done_show = lv_timer_create(on_done_show, 4000, NULL);
+    lv_timer_pause(s_done_show);
+}
+
+void ui_paired_begin(void) {
+    if (!s_done_card) {
+        return;
+    }
+    ui_paired_end();
+    lv_timer_reset(s_done_wait);
+    lv_timer_resume(s_done_wait);
+}
+
+void ui_paired_name(const char *text) {
+    /* Only while waiting: a name after "Paired" already showed is late and dropped. */
+    if (!s_done_card || lv_timer_get_paused(s_done_wait)) {
+        return;
+    }
+    done_show(text);
+}
+
+void ui_paired_end(void) {
+    if (!s_done_card) {
+        return;
+    }
+    lv_timer_pause(s_done_wait);
+    lv_timer_pause(s_done_show);
+    lv_obj_set_hidden(s_done_card, true);
+}
+
+void ui_bind_pair_answer(ui_toggle_fn fn) {
+    s_on_pair_answer = fn;
+}
+
+void ui_bind_forget_pairings(ui_action_fn fn) {
+    s_on_forget = fn;
+}
+
+static void on_forget_clicked(lv_event_t *event) {
+    if (lv_event_get_code(event) != LV_EVENT_CLICKED) {
+        return;
+    }
+    if (s_on_forget) {
+        s_on_forget();
+    }
+    ui_set_settings_status("Bluetooth pairings cleared.");
+}
+
 static void build_battery(lv_obj_t *cluster) {
     lv_obj_t *body;
     lv_obj_t *nub;
@@ -2862,6 +3066,10 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     lv_obj_set_style_pad_column(actions, SET_GAP, 0);
     scan = action_button(actions, "Scan", on_scan_clicked);
     manual = action_button(actions, "Type SSID", on_manual);
+    /* PSRAM: at the 512-byte cut this button took the internal block the NimBLE host stack needs. */
+    psram_objects_begin();
+    (void)action_button(actions, "Forget pairings", on_forget_clicked);
+    psram_objects_end();
     lv_obj_set_flex_grow(scan, 1);
     lv_obj_set_flex_grow(manual, 1);
     lv_obj_set_height(scan, SET_CONTROL);
@@ -2890,6 +3098,8 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     lv_obj_add_event_cb(s_keyboard, on_keyboard, LV_EVENT_CANCEL, NULL);
     psram_objects_begin();
     build_control_center(screen);
+    build_pairing();
+    build_paired();
     psram_objects_end();
     layout_settings();
     ui_apply(&blank, 0);
