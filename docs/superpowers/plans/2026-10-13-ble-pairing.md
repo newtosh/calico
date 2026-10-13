@@ -1,5 +1,7 @@
 # Bluetooth Pairing (Phase 1) Implementation Plan
 
+> **Superseded in part (2026-10-13).** The typed-passkey design in this plan did not survive hardware testing: Electron's pairing handler is never called on Linux with BlueZ. Phase 1 shipped as OS-level numeric comparison, with a Yes and No confirm card on the panel, a "Paired with <computer>" card, and no in-app PIN prompt. Tasks that mention the passkey display, `setBluetoothPairingHandler` or the in-app PIN prompt describe the abandoned design. The final design is in the Phase 1 pull request.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The panel pairs with a computer over Bluetooth using a 6-digit PIN shown on its glass, and every write and the full status need the paired, encrypted link.
