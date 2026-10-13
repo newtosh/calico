@@ -5,8 +5,10 @@ import {
   BleLink,
   connectBle,
   type Gatt,
+  OLD_FIRMWARE,
   requirePairing,
   UUID,
+  wifiBody,
 } from "./ble";
 
 function fakeGatt(
@@ -117,6 +119,117 @@ describe("BleLink", () => {
     });
     expect(reply.ok).toBe(false);
     expect(writes).toEqual([]);
+  });
+
+  it("writes a password with quotes and non-ASCII as raw UTF-8", async () => {
+    const { gatt, writes } = fakeGatt({});
+    const pass = 'pla"ce\\hölder';
+    await new BleLink(gatt, instant).send({ op: "wifi", ssid: "café", pass });
+    expect(writes).toEqual([[UUID.wifi, `café\n${pass}`]]);
+  });
+
+  it("adds the network's own URL and token as two more lines", async () => {
+    const { gatt, writes } = fakeGatt({});
+    await new BleLink(gatt, instant).send({
+      op: "wifi",
+      ssid: "home",
+      pass: "placeholder-pass",
+      url: "http://10.0.0.8:8787",
+      token: "placeholder-token",
+    });
+    expect(writes).toEqual([
+      [
+        UUID.wifi,
+        "home\nplaceholder-pass\nhttp://10.0.0.8:8787\nplaceholder-token",
+      ],
+    ]);
+  });
+
+  it("sends both lines when only one is given, so the other clears", () => {
+    expect(
+      wifiBody({ op: "wifi", ssid: "home", pass: "", url: "http://h" }),
+    ).toBe("home\n\nhttp://h\n");
+    expect(wifiBody({ op: "wifi", ssid: "home", pass: "" })).toBe("home\n");
+  });
+
+  it("refuses a password with a newline before anything is sent", async () => {
+    const { gatt, writes } = fakeGatt({});
+    const reply = await new BleLink(gatt, instant).send({
+      op: "wifi",
+      ssid: "home",
+      pass: "placeholder\npass",
+    });
+    expect(reply.ok).toBe(false);
+    expect(writes).toEqual([]);
+  });
+
+  it("reads the panel's networks", async () => {
+    const { gatt } = fakeGatt({
+      [UUID.nets]: ["count=2\n11\thome\n00\tcafe\n"],
+    });
+    expect(await new BleLink(gatt, instant).send({ op: "nets" })).toEqual({
+      ok: true,
+      nets: [
+        { ssid: "home", has_url: true, has_token: true },
+        { ssid: "cafe", has_url: false, has_token: false },
+      ],
+    });
+  });
+
+  it("forgets one network by its SSID", async () => {
+    const { gatt, writes } = fakeGatt({});
+    expect(
+      await new BleLink(gatt, instant).send({ op: "forget", ssid: "home" }),
+    ).toEqual({ ok: true });
+    expect(writes).toEqual([[UUID.forget, "home"]]);
+  });
+
+  it("says the firmware is too old when the panel lacks the characteristic", async () => {
+    const gatt: Gatt = {
+      async read() {
+        throw Object.assign(new Error("No Characteristics matching UUID"), {
+          name: "NotFoundError",
+        });
+      },
+      async write() {},
+      disconnect() {},
+    };
+    expect(await new BleLink(gatt, instant).send({ op: "nets" })).toEqual({
+      ok: false,
+      error: OLD_FIRMWARE,
+    });
+  });
+
+  it("never writes a per-network wifi body to firmware without nets", async () => {
+    const writes: string[] = [];
+    const gatt: Gatt = {
+      async read() {
+        throw Object.assign(new Error("No Characteristics matching UUID"), {
+          name: "NotFoundError",
+        });
+      },
+      async write(uuid) {
+        writes.push(uuid);
+      },
+      disconnect() {},
+    };
+    expect(
+      await new BleLink(gatt, instant).send({
+        op: "wifi",
+        ssid: "home",
+        pass: "placeholder-pass",
+        token: "placeholder-token",
+      }),
+    ).toEqual({ ok: false, error: OLD_FIRMWARE });
+    expect(writes).toEqual([]);
+  });
+
+  it("names both causes of a missing characteristic and the fix for each", () => {
+    expect(OLD_FIRMWARE).toContain("flash the latest firmware");
+    expect(OLD_FIRMWARE).toContain(
+      "remove ginger in this computer's Bluetooth settings",
+    );
+    expect(OLD_FIRMWARE).not.toContain("\u2014");
   });
 
   it("matches the firmware's UUIDs", () => {

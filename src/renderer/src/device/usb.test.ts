@@ -173,4 +173,75 @@ describe("secret redaction across links", () => {
     usb.handleLine("a banana");
     expect(logs).toEqual(["a banana"]);
   });
+
+  it("frames a password with quotes, a backslash and non-ASCII as one JSON line", async () => {
+    const { usb, sent } = link();
+    const pass = 'pla"ce\\hölder';
+    const pending = usb.send({
+      op: "wifi",
+      ssid: "café",
+      pass,
+      url: "http://10.0.0.8:8787",
+      token: "placeholder-token",
+    });
+    await Promise.resolve();
+    expect(sent).toHaveLength(1);
+    const line = sent[0] ?? "";
+    expect(line.endsWith("\n")).toBe(true);
+    expect(line.slice(0, -1)).not.toContain("\n");
+    expect(JSON.parse(line)).toEqual({
+      id: 1,
+      op: "wifi",
+      ssid: "café",
+      pass,
+      url: "http://10.0.0.8:8787",
+      token: "placeholder-token",
+    });
+    usb.handleLine('{"id":1,"ok":true}');
+    expect(await pending).toEqual({ ok: true });
+  });
+
+  it("refuses a password with a newline before anything is sent", async () => {
+    const { usb, sent } = link();
+    const reply = await usb.send({
+      op: "wifi",
+      ssid: "home",
+      pass: "placeholder\npass",
+    });
+    expect(reply.ok).toBe(false);
+    expect(sent).toEqual([]);
+  });
+
+  it("redacts a network token the device echoes", async () => {
+    const { usb, logs } = link();
+    const pending = usb.send({
+      op: "wifi",
+      ssid: "home",
+      pass: "",
+      token: "placeholder-token",
+    });
+    await Promise.resolve();
+    usb.handleLine("I (5) desk: token placeholder-token");
+    usb.handleLine('{"id":1,"ok":true}');
+    await pending;
+    expect(logs).toEqual(["I (5) desk: token ••••"]);
+  });
+});
+
+describe("toReply nets", () => {
+  it("keeps only well-formed rows, at most eight, and never more than flags", () => {
+    const rows = [
+      { ssid: "home", has_url: true, has_token: false, token: "x" },
+      { ssid: "", has_url: true, has_token: true },
+      "junk",
+      ...Array.from({ length: 9 }, (_, i) => ({ ssid: `n${i}` })),
+    ];
+    const reply = toReply({ ok: true, nets: rows });
+    expect(reply.ok && reply.nets?.[0]).toEqual({
+      ssid: "home",
+      has_url: true,
+      has_token: false,
+    });
+    expect(reply.ok && reply.nets).toHaveLength(8);
+  });
 });

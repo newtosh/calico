@@ -3,6 +3,8 @@ import {
   type Cmd,
   type DeviceLink,
   FieldError,
+  NETWORKS_MAX,
+  type PanelNet,
   type Reply,
   secretsOf,
   timeoutFor,
@@ -56,6 +58,17 @@ export function toReply(obj: Record<string, unknown>): Reply {
         ? [{ rssi: (ap as Ap).rssi, ssid: (ap as Ap).ssid }]
         : [],
     );
+  }
+  if (Array.isArray(obj.nets)) {
+    reply.nets = obj.nets
+      .flatMap((n): PanelNet[] => {
+        if (!n || typeof n !== "object") return [];
+        const { ssid, has_url, has_token } = n as Record<string, unknown>;
+        return typeof ssid === "string" && ssid
+          ? [{ ssid, has_url: has_url === true, has_token: has_token === true }]
+          : [];
+      })
+      .slice(0, NETWORKS_MAX);
   }
   return reply;
 }

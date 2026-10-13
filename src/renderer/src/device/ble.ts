@@ -5,6 +5,7 @@ import {
   FieldError,
   infoFromKv,
   parseKv,
+  parseNets,
   parseProbe,
   parseScan,
   type Reply,
@@ -27,6 +28,8 @@ export const UUID = {
   scan: "8d7c4b16-6e2a-4f91-a3c5-67726f6b6465",
   verify: "8d7c4b17-6e2a-4f91-a3c5-67726f6b6465",
   peer: "8d7c4b18-6e2a-4f91-a3c5-67726f6b6465",
+  nets: "8d7c4b19-6e2a-4f91-a3c5-67726f6b6465",
+  forget: "8d7c4b1a-6e2a-4f91-a3c5-67726f6b6465",
 } as const;
 
 /**
@@ -40,6 +43,16 @@ export function requirePairing(statusBody: string): "paired" | "needs-pairing" {
       "This panel's firmware does not pair yet. Flash the latest firmware, then connect again.",
     );
   return kv.paired === "1" ? "paired" : "needs-pairing";
+}
+
+export const OLD_FIRMWARE =
+  "This panel did not offer that feature. Either flash the latest firmware, or if you just updated it, remove ginger in this computer's Bluetooth settings and connect again.";
+
+/** `ssid\npass`, or `ssid\npass\nurl\ntoken` to set this network's own URL and token (firmware ble_desk_parse_wifi_cfg). */
+export function wifiBody(cmd: Extract<Cmd, { op: "wifi" }>): string {
+  if (cmd.url === undefined && cmd.token === undefined)
+    return `${cmd.ssid}\n${cmd.pass}`;
+  return `${cmd.ssid}\n${cmd.pass}\n${cmd.url ?? ""}\n${cmd.token ?? ""}`;
 }
 
 export interface Gatt {
@@ -67,6 +80,9 @@ export class BleLink implements DeviceLink {
       return await this.run(cmd);
     } catch (err) {
       if (err instanceof FieldError) return { ok: false, error: err.message };
+      // A characteristic the panel does not have: firmware from before that command.
+      if ((err as Error).name === "NotFoundError")
+        return { ok: false, error: OLD_FIRMWARE };
       return { ok: false, error: `Bluetooth: ${(err as Error).message}` };
     }
   }
@@ -93,7 +109,16 @@ export class BleLink implements DeviceLink {
         );
         return { ok: true };
       case "wifi":
-        await this.gatt.write(UUID.wifi, encode(`${cmd.ssid}\n${cmd.pass}`));
+        // Firmware without nets also rejects the four-line form with a raw ATT error.
+        // Reading nets first turns that into NotFoundError, before any secret is written.
+        if (cmd.url !== undefined || cmd.token !== undefined)
+          await this.gatt.read(UUID.nets);
+        await this.gatt.write(UUID.wifi, encode(wifiBody(cmd)));
+        return { ok: true };
+      case "nets":
+        return { ok: true, nets: parseNets(await this.gatt.read(UUID.nets)) };
+      case "forget":
+        await this.gatt.write(UUID.forget, encode(cmd.ssid));
         return { ok: true };
       case "reboot":
         try {
