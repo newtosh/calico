@@ -1,5 +1,6 @@
 #pragma once
 
+#include "esp_err.h"
 #include "wifi_store.h"
 
 #include <stddef.h>
@@ -27,7 +28,8 @@ typedef struct {
 } net_link_t;
 
 void net_load(wifi_store_t *out);
-void net_save(const wifi_store_t *in);
+/* ESP_OK, or the first NVS error. A failure can leave the save partly written. */
+esp_err_t net_save(const wifi_store_t *in);
 void net_save_globals(const char *url, const char *token);
 void net_rotlock_load(char *out, size_t out_len);
 void net_rotlock_save(const char *value);

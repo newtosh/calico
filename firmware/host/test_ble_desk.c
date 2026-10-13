@@ -24,6 +24,10 @@ static int parse_wifi(const char *text, char *ssid, char *pass) {
     return ble_desk_parse_wifi((const uint8_t *)text, strlen(text), ssid, 33, pass, 65);
 }
 
+static int parse_cfg(const char *text, ble_desk_wifi_t *req) {
+    return ble_desk_parse_wifi_cfg((const uint8_t *)text, strlen(text), req);
+}
+
 int main(void) {
     char body[256];
     char field[128];
@@ -206,6 +210,148 @@ int main(void) {
 
     check(ble_desk_sta_authmode(0) == 0, "open threshold");
     check(ble_desk_sta_authmode(1) == 3, "wpa2 threshold");
+
+    {
+        char nets[BLE_DESK_NETS_TEXT];
+        int i;
+
+        wifi_store_init(&store);
+        n = ble_desk_format_nets(nets, sizeof(nets), &store);
+        check(n > 0 && strcmp(nets, "count=0\n") == 0, "nets empty");
+        check(wifi_upsert(&store, "home", "placeholder-pass", "http://10.0.0.8:8787",
+                          "placeholder-token") == 0,
+              "nets seed home");
+        check(wifi_upsert(&store, "cafe", "", "", "") == 0, "nets seed cafe");
+        n = ble_desk_format_nets(nets, sizeof(nets), &store);
+        check(n > 0 && strcmp(nets, "count=2\n11\thome\n00\tcafe\n") == 0, "nets rows");
+        check(strstr(nets, "placeholder-pass") == NULL && strstr(nets, "placeholder-token") == NULL &&
+                  strstr(nets, "10.0.0.8") == NULL,
+              "nets carries no password, token or url");
+
+        wifi_store_init(&store);
+        for (i = 0; i < WIFI_NET_MAX; i++) {
+            char ssid[BLE_DESK_SSID_MAX + 1];
+            memset(ssid, 'a' + i, BLE_DESK_SSID_MAX);
+            ssid[BLE_DESK_SSID_MAX] = '\0';
+            check(wifi_upsert(&store, ssid, "placeholder-pass", "http://10.0.0.8:8787",
+                              "placeholder-token") == 0,
+                  "nets fill");
+        }
+        n = ble_desk_format_nets(nets, sizeof(nets), &store);
+        check(n > 0 && n < BLE_DESK_NETS_TEXT, "eight 32-byte ssids fit the nets text");
+        check(strncmp(nets, "count=8\n", 8) == 0, "nets full count");
+        check(ble_desk_format_nets(nets, 16, &store) < 0 && nets[0] == '\0',
+              "nets refuses a small buffer");
+        n = ble_desk_format_nets(nets, sizeof(nets), NULL);
+        check(n > 0 && strcmp(nets, "count=0\n") == 0, "nets without a store");
+        memcpy(store.nets[0].ssid, "a\nb", 4);
+        check(ble_desk_format_nets(nets, sizeof(nets), &store) > 0 && strstr(nets, "\ta?b\n") != NULL,
+              "a newline in a saved ssid cannot add a row");
+    }
+    {
+        char name[BLE_DESK_SSID_MAX + 1];
+        /* U+1F4F6 is four UTF-8 bytes: eight fill an SSID, nine do not fit. */
+        const char *eight = "\xf0\x9f\x93\xb6\xf0\x9f\x93\xb6\xf0\x9f\x93\xb6\xf0\x9f\x93\xb6"
+                            "\xf0\x9f\x93\xb6\xf0\x9f\x93\xb6\xf0\x9f\x93\xb6\xf0\x9f\x93\xb6";
+        char nine[40];
+        snprintf(nine, sizeof(nine), "%s\xf0\x9f\x93\xb6", eight);
+        check(ble_desk_parse_forget((const uint8_t *)"home", 4, name, sizeof(name)) == 0 &&
+                  strcmp(name, "home") == 0,
+              "forget");
+        check(ble_desk_parse_forget((const uint8_t *)"home\r\n", 6, name, sizeof(name)) == 0 &&
+                  strcmp(name, "home") == 0,
+              "forget crlf");
+        check(ble_desk_parse_forget((const uint8_t *)"", 0, name, sizeof(name)) != 0, "forget empty");
+        check(ble_desk_parse_forget((const uint8_t *)"\n", 1, name, sizeof(name)) != 0,
+              "forget only a newline");
+        check(ble_desk_parse_forget((const uint8_t *)"ho\nme", 5, name, sizeof(name)) != 0,
+              "forget break");
+        check(ble_desk_parse_forget((const uint8_t *)"ho\0me", 5, name, sizeof(name)) != 0,
+              "forget nul");
+        check(ble_desk_parse_forget((const uint8_t *)eight, strlen(eight), name, sizeof(name)) == 0,
+              "forget a 32-byte emoji ssid");
+        check(ble_desk_parse_forget((const uint8_t *)nine, strlen(nine), name, sizeof(name)) != 0,
+              "forget refuses a 36-byte ssid");
+    }
+    {
+        ble_desk_wifi_t req;
+        char big[BLE_DESK_WIFI_CFG_MAX + 1];
+        int i;
+
+        check(parse_cfg("home\nplaceholder-pass", &req) == 0 && !req.has_cfg &&
+                  strcmp(req.ssid, "home") == 0 && strcmp(req.pass, "placeholder-pass") == 0,
+              "two-line wifi");
+        check(parse_cfg("open\n", &req) == 0 && !req.has_cfg && req.pass[0] == '\0', "open network");
+        check(parse_cfg("open\n\n", &req) == 0 && !req.has_cfg && req.pass[0] == '\0',
+              "open network and a trailing newline");
+        check(parse_cfg("home\nplaceholder-pass\n", &req) == 0 && !req.has_cfg,
+              "two lines and a trailing newline");
+        check(parse_cfg("home\nplaceholder-pass\nhttp://10.0.0.8:8787\nplaceholder-token", &req) == 0 &&
+                  req.has_cfg && strcmp(req.url, "http://10.0.0.8:8787") == 0 &&
+                  strcmp(req.token, "placeholder-token") == 0,
+              "four lines");
+        check(parse_cfg("home\nplaceholder-pass\nhttp://10.0.0.8:8787\nplaceholder-token\n", &req) == 0 &&
+                  req.has_cfg && strcmp(req.token, "placeholder-token") == 0,
+              "four lines and a trailing newline");
+        check(parse_cfg("home\nplaceholder-pass\n\n", &req) == 0 && req.has_cfg && req.url[0] == '\0' &&
+                  req.token[0] == '\0',
+              "empty url and token clear the slot's own");
+        check(parse_cfg("open\n\n\n", &req) == 0 && req.has_cfg && req.pass[0] == '\0',
+              "open network with cleared url and token");
+        check(parse_cfg("home\nplaceholder-pass\nhttp://x", &req) != 0, "three lines");
+        check(parse_cfg("home\nplaceholder-pass\nftp://x\nt", &req) != 0, "bad url");
+        check(req.pass[0] == '\0' && req.ssid[0] == '\0', "a refused write leaves no password behind");
+        check(parse_cfg("home\nplaceholder-pass\nhttp://x\nt\nextra", &req) != 0, "five lines");
+        check(parse_cfg("home\nplaceholder-pass\nhttp://x\nto\rken", &req) != 0, "cr in token");
+        check(parse_cfg("home\nshort\nhttp://x\nt", &req) != 0, "short wpa in four lines");
+
+        /* The longest legal write: 32 + 1 + 64 + 1 + 127 + 1 + 127 bytes and a trailing newline. */
+        i = 0;
+        memset(big + i, 's', 32);
+        i += 32;
+        big[i++] = '\n';
+        memset(big + i, 'p', 64);
+        i += 64;
+        big[i++] = '\n';
+        memcpy(big + i, "http://", 7);
+        memset(big + i + 7, 'u', 120);
+        i += 127;
+        big[i++] = '\n';
+        memset(big + i, 't', 127);
+        i += 127;
+        big[i++] = '\n';
+        big[i] = '\0';
+        check(i == BLE_DESK_WIFI_CFG_MAX, "the longest write is BLE_DESK_WIFI_CFG_MAX");
+        check(parse_cfg(big, &req) == 0 && req.has_cfg, "the longest write parses");
+
+        wifi_store_init(&store);
+        check(wifi_upsert(&store, "home", "placeholder-pass", "http://per-net/", "per-token") == 0,
+              "apply seed");
+        check(parse_cfg("home\nplaceholder-pass-2", &req) == 0 && ble_desk_apply_wifi(&store, &req) == 0,
+              "apply two-line");
+        check(strcmp(store.nets[0].url, "http://per-net/") == 0 &&
+                  strcmp(store.nets[0].token, "per-token") == 0,
+              "two-line keeps the slot's url and token");
+        check(parse_cfg("home\nplaceholder-pass-2\nhttp://10.0.0.9:8787\nnew-token", &req) == 0 &&
+                  ble_desk_apply_wifi(&store, &req) == 0,
+              "apply four-line");
+        check(store.count == 1 && strcmp(store.nets[0].url, "http://10.0.0.9:8787") == 0 &&
+                  strcmp(store.nets[0].token, "new-token") == 0,
+              "four-line replaces them in place");
+        for (i = 1; i < WIFI_NET_MAX; i++) {
+            char ssid[8];
+            snprintf(ssid, sizeof(ssid), "n%d", i);
+            check(wifi_upsert(&store, ssid, "placeholder-pass", "", "") == 0, "apply fill");
+        }
+        check(parse_cfg("ninth\nplaceholder-pass\nhttp://x\nt", &req) == 0 &&
+                  ble_desk_apply_wifi(&store, &req) != 0,
+              "apply refuses a ninth network");
+        check(store.count == WIFI_NET_MAX && strcmp(store.nets[0].ssid, "home") == 0,
+              "apply refuses a ninth network and keeps the eight");
+        check(ble_desk_apply_wifi(NULL, &req) != 0 && ble_desk_apply_wifi(&store, NULL) != 0,
+              "apply refuses null");
+        check(wifi_remove(&store, "home") == 0 && store.count == WIFI_NET_MAX - 1, "forget frees a slot");
+    }
 
     if (g_failed) {
         return 1;

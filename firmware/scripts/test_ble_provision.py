@@ -310,3 +310,36 @@ def test_names_match_the_apps_list():
     assert block, "BLE_NAMES not found in ble.ts"
     app_names = set(re.findall(r'"([^"]+)"', block.group(1)))
     assert app_names == {tool.NAME, *tool.LEGACY_NAMES}
+
+
+def test_only_status_is_open_and_scratch_is_psram():
+    """Every characteristic but status needs a paired link, nets and forget included.
+    The 354-byte write buffer and the nets text live in one PSRAM scratch, not on the host stack."""
+    link = LINK.read_text(encoding="utf-8")
+    entries = re.findall(r"\.uuid = &s_uuid_(\w+)\.u,[^{}]*?\.flags = ([^,]+),", link)
+    flags = dict(entries)
+    assert {"nets", "forget"} <= flags.keys()
+    assert flags["nets"].split() == ["BLE_GATT_CHR_F_READ", "|", "BLE_GATT_CHR_F_READ_AUTHEN"]
+    assert flags["forget"].split() == ["BLE_GATT_CHR_F_WRITE", "|", "BLE_GATT_CHR_F_WRITE_AUTHEN"]
+    for name, flag in flags.items():
+        if name == "status":
+            assert flag.strip() == "BLE_GATT_CHR_F_READ"
+            continue
+        assert ("READ" not in flag.replace("READ_AUTHEN", "")) or "READ_AUTHEN" in flag, name
+        assert ("WRITE" not in flag.replace("WRITE_AUTHEN", "")) or "WRITE_AUTHEN" in flag, name
+    for uuid in re.findall(r'BLE_DESK_UUID_(?:NETS|FORGET) "([0-9a-f-]+)"', HEADER.read_text()):
+        assert uuid_le(uuid) in "".join(link.split())
+    access = _c_fn(link, "static int access(")
+    assert "BLE_LINK_WRITE_MAX]" not in access
+    assert "MALLOC_CAP_SPIRAM" in _c_fn(link, "void ble_link_host_start(")
+    assert "#define BLE_LINK_WRITE_MAX BLE_DESK_WIFI_CFG_MAX" in link
+
+
+def test_join_selects_from_a_locked_snapshot():
+    """A BLE forget shifts nets[] under s_mu while the join scan held pointers into it.
+    The join copies the store under s_mu into PSRAM and selects from the copy."""
+    join = _c_fn((LINK.parent / "main.c").read_text(encoding="utf-8"), "static void join_task(")
+    assert "net_wifi_select(&s_store" not in join
+    enter, copy, leave = (join.index(s) for s in ("ble_link_enter()", "memcpy(snap, &s_store", "ble_link_leave()"))
+    assert enter < copy < leave < join.index("net_wifi_select(snap")
+    assert "MALLOC_CAP_SPIRAM" in join
