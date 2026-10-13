@@ -175,14 +175,14 @@
         </li>
       </ul>
       <p>
-        <strong>Whose data is this?</strong> Yours alone. Each relay is its own
-        Worker in your own Cloudflare account, with its own storage, its own
-        address, and its own two random tokens. There is no shared inbox and no
-        Calico server in the middle: events go from your agent to your Worker,
-        and your copy of Calico collects them from it. Messages expire after 24
-        hours, and only the newest 200 are kept. Every request needs a token and
-        a token that can post cannot read, so a leaked agent token cannot show
-        anyone your events.
+        <strong>Whose data is this?</strong> Yours. Each relay is its own Worker
+        in your own Cloudflare account, with its own storage, its own address,
+        and its own two random tokens. There is no shared inbox and no Calico
+        server in the middle: events go from your agent to your Worker, and your
+        copy of Calico collects them from it. By default messages expire after
+        24 hours and only the newest 200 are kept. Reading or posting needs a
+        token, and a token that can post cannot read, so a leaked agent token
+        cannot show anyone your events.
       </p>
       <p>
         It is not end-to-end encrypted. Traffic is HTTPS, but Cloudflare hosts

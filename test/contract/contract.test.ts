@@ -81,20 +81,19 @@ const fixture = JSON.parse(
 };
 
 // Where calico deliberately says more than the Python companion did. The recording stays
-// exactly as captured, so it is still the Python companion's word. Each entry names the
-// step, the status it must still have, and what calico now returns instead.
-const KNOWN_DIVERGENCES: Record<
-  number,
-  { method: string; path: string; status: number; json: unknown }
-> = {
-  // A token-only panel push says a URL is needed, where Python said "bad panel".
-  17: {
+// exactly as captured, so it is still the Python companion's word. A divergence is matched by
+// the whole request (method, path, body) and status, not by position, so a regenerated
+// fixture cannot let a different request through, and each one must be used exactly once.
+const KNOWN_DIVERGENCES = [
+  {
+    // A token-only panel push says a URL is needed, where Python said "bad panel".
     method: "PUT",
     path: "/api/panel",
+    body: { token: "t" },
     status: 400,
     json: { error: "a panel URL is required" },
   },
-};
+];
 
 describe("frozen HTTP contract", () => {
   it("matches the Python companion step for step, including key order", async () => {
@@ -112,18 +111,18 @@ describe("frozen HTTP contract", () => {
       server.listen(0, "127.0.0.1", resolve),
     );
     const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const used = new Set<(typeof KNOWN_DIVERGENCES)[number]>();
     try {
       for (const [index, recorded] of fixture.steps.entries()) {
         const { step, ...recordedResponse } = recorded;
-        const divergence = KNOWN_DIVERGENCES[index];
-        if (divergence) {
-          // A divergence must still be the same request with the same status.
-          expect([step.method, step.path, recordedResponse.status]).toEqual([
-            divergence.method,
-            divergence.path,
-            divergence.status,
-          ]);
-        }
+        const divergence = KNOWN_DIVERGENCES.find(
+          (d) =>
+            d.method === step.method &&
+            d.path === step.path &&
+            d.status === recordedResponse.status &&
+            JSON.stringify(d.body) === JSON.stringify(step.json),
+        );
+        if (divergence) used.add(divergence);
         const expected = divergence
           ? { ...recordedResponse, json: divergence.json }
           : recordedResponse;
@@ -134,6 +133,8 @@ describe("frozen HTTP contract", () => {
           `${index} ${step.method} ${step.path} ${JSON.stringify(normalize(expected))}`,
         );
       }
+      // A divergence nobody hit is a stale one: fail so it gets removed.
+      expect(used.size).toBe(KNOWN_DIVERGENCES.length);
     } finally {
       server.close();
     }
