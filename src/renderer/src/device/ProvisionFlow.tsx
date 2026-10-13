@@ -1,9 +1,12 @@
 import { useState } from "react";
 import type { CalicoInfo } from "../../../shared/ipc";
-import type { Ap, DeviceLink } from "./commands";
+import { validateCmd, type Cmd, type DeviceLink } from "./commands";
+import { OLD_FIRMWARE } from "./ble";
+import { NETWORKS_MAX } from "../../../shared/panel-fields";
+import { ScanSelect } from "./ScanSelect";
 import { ErrorNote } from "../shell/ErrorNote";
 
-type Stage = "idle" | "scanning" | "pick" | "verifying" | "saving";
+type Stage = "idle" | "verifying" | "saving";
 
 export function ProvisionFlow({
   info,
@@ -15,35 +18,52 @@ export function ProvisionFlow({
   onReboot: () => Promise<void>;
 }) {
   const [stage, setStage] = useState<Stage>("idle");
-  const [aps, setAps] = useState<Ap[]>([]);
+  const [scanning, setScanning] = useState(false);
   const [ssid, setSsid] = useState("");
   const [pass, setPass] = useState("");
+  const [ownUrl, setOwnUrl] = useState("");
+  const [ownToken, setOwnToken] = useState("");
   const [error, setError] = useState("");
-
-  async function scan() {
-    setError("");
-    setStage("scanning");
-    const reply = await link.send({ op: "scan" });
-    if (!reply.ok) {
-      setError(reply.error);
-      return setStage("idle");
-    }
-    setAps(reply.aps ?? []);
-    setStage("pick");
-  }
 
   async function connect() {
     setError("");
+    // Only a network with its own URL or token sends the four-line wifi.
+    const wifi: Cmd =
+      ownUrl || ownToken
+        ? { op: "wifi", ssid, pass, url: ownUrl, token: ownToken }
+        : { op: "wifi", ssid, pass };
+    // Refuse bad fields now, not after the 30 s network test.
+    try {
+      validateCmd(wifi);
+    } catch (e) {
+      return setError(e instanceof Error ? e.message : String(e));
+    }
     setStage("verifying");
+    // Read the panel's list first, so a full panel or old firmware says so now
+    // and not after the 30 s test. A failed read never blocks the setup.
+    const list = await link.send({ op: "nets" });
+    const own = wifi.op === "wifi" && wifi.url !== undefined;
+    const blocked = !list.ok
+      ? own && list.error === OLD_FIRMWARE
+        ? OLD_FIRMWARE
+        : ""
+      : (list.nets ?? []).length >= NETWORKS_MAX &&
+          !(list.nets ?? []).some((n) => n.ssid === ssid)
+        ? `The panel already has ${NETWORKS_MAX} networks. Forget one under Networks on the panel, then try again.`
+        : "";
+    if (blocked) {
+      setError(blocked);
+      return setStage("idle");
+    }
     const verify = await link.send({ op: "verify", ssid, pass });
     if (!verify.ok) {
       setError(verify.error);
-      return setStage("pick");
+      return setStage("idle");
     }
     setStage("saving");
     const lan = info.lanUrls[0];
     const steps = [
-      link.send.bind(link, { op: "wifi", ssid, pass }),
+      link.send.bind(link, wifi),
       ...(lan ? [link.send.bind(link, { op: "url", value: lan })] : []),
       link.send.bind(link, { op: "token", value: info.webhookToken }),
     ];
@@ -51,17 +71,17 @@ export function ProvisionFlow({
       const reply = await step();
       if (!reply.ok) {
         setError(reply.error);
-        return setStage("pick");
+        return setStage("idle");
       }
     }
     setPass("");
+    setOwnToken("");
     if (lan) await window.calico.adoptPort();
     setStage("idle");
     await onReboot();
   }
 
-  const busy =
-    stage === "scanning" || stage === "verifying" || stage === "saving";
+  const busy = scanning || stage !== "idle";
   return (
     <section>
       <h2 className="section-title">Set up Wi-Fi</h2>
@@ -71,31 +91,14 @@ export function ProvisionFlow({
         reboots the desk.
       </p>
       <div className="flex max-w-2xl flex-wrap items-end gap-3 px-4 pt-3">
-        <button
-          type="button"
-          className="btn"
+        <ScanSelect
+          link={link}
+          value={ssid}
+          onPick={setSsid}
+          onError={setError}
+          onBusy={setScanning}
           disabled={busy}
-          onClick={() => void scan()}
-        >
-          {stage === "scanning" ? "Scanning (up to 30 s)" : "Scan networks"}
-        </button>
-        {aps.length > 0 ? (
-          <label className="label">
-            Network
-            <select
-              className="field mt-1 w-56"
-              value={ssid}
-              onChange={(e) => setSsid(e.target.value)}
-            >
-              <option value="">Choose a network</option>
-              {aps.map((ap) => (
-                <option key={ap.ssid} value={ap.ssid}>
-                  {ap.ssid} ({ap.rssi} dBm)
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
+        />
         <label className="label">
           Or type an SSID
           <input
@@ -108,6 +111,7 @@ export function ProvisionFlow({
           Password
           <input
             type="password"
+            autoComplete="off"
             className="field mt-1 w-48"
             value={pass}
             onChange={(e) => setPass(e.target.value)}
@@ -126,6 +130,38 @@ export function ProvisionFlow({
               : "Test and save"}
         </button>
       </div>
+      <details className="max-w-2xl px-4 pt-3">
+        <summary className="cursor-pointer text-muted">
+          This network's own companion URL and token (optional)
+        </summary>
+        <p className="pt-2 text-muted">
+          Leave both empty to keep what this network already has. To clear them,
+          forget the network on the panel and set it up again.
+        </p>
+        <div className="grid grid-cols-2 gap-3 pt-2">
+          <label className="label">
+            Companion URL for this network
+            <input
+              className="field mt-1 font-mono"
+              autoComplete="off"
+              value={ownUrl}
+              placeholder="Default URL"
+              onChange={(e) => setOwnUrl(e.target.value)}
+            />
+          </label>
+          <label className="label">
+            Token for this network
+            <input
+              type="password"
+              autoComplete="off"
+              className="field mt-1"
+              value={ownToken}
+              placeholder="Default token"
+              onChange={(e) => setOwnToken(e.target.value)}
+            />
+          </label>
+        </div>
+      </details>
       <p role="status" className="px-4 pt-2">
         {error ? <ErrorNote>{error}</ErrorNote> : null}
       </p>
