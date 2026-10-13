@@ -40,6 +40,14 @@ typedef enum {
 
 power_fill_t power_fill(const power_reading_t *r);
 
+/* The battery's fill is 22 px wide at 100 percent and never under one. The charging bolt and
+ * the USB mark sit at the middle of the body, so they are dark over a fill that reaches them
+ * (16 px or more) and cream over the empty body, as in the desktop chip. */
+#define POWER_FILL_PX 22
+#define POWER_MARK_REACH_PX 16
+int power_fill_width(int percent);
+int power_mark_on_fill(int percent);
+
 /* One failed I2C read must not blank the widget: hold the last good reading
  * and report "absent" only after POWER_MISS_LIMIT failures in a row. */
 #define POWER_MISS_LIMIT 3

@@ -229,6 +229,9 @@ export function panelStatusField(
     : null;
 }
 
+/** The one panel error worth showing as written: everything else stays "bad panel". */
+export const PANEL_URL_REQUIRED = "a panel URL is required";
+
 export function mergePanel(
   current: CalicoConfig,
   patch: Record<string, unknown>,
@@ -239,7 +242,7 @@ export function mergePanel(
   if (patch.clear === true)
     return { ...merged, panel_url: "", panel_token: "" };
   if ("url" in patch) merged.panel_url = panelUrl(patch.url);
-  else if (!merged.panel_url) throw new BadInput("bad panel");
+  else if (!merged.panel_url) throw new BadInput(PANEL_URL_REQUIRED);
   if ("token" in patch)
     merged.panel_token = plainText(patch.token, PANEL_TOKEN_MAX);
   return merged;

@@ -139,6 +139,29 @@ describe("companion server", () => {
     expect(stats.lastPanelPoll).toBeNull();
   });
 
+  it("tells a token-only panel push that it needs a URL, and keeps other panel errors generic", async () => {
+    const { base } = await start();
+    const put = async (body: unknown) => {
+      const res = await fetch(`${base}/api/panel`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      return {
+        status: res.status,
+        body: (await res.json()) as { error: string },
+      };
+    };
+    expect(await put({ token: "abc" })).toEqual({
+      status: 400,
+      body: { error: "a panel URL is required" },
+    });
+    expect(await put({ url: "ftp://nope" })).toEqual({
+      status: 400,
+      body: { error: "bad panel" },
+    });
+  });
+
   it("does not record a battery from a loopback poll", async () => {
     const { base, stats } = await start();
     await fetch(`${base}/api/status?bat=81&chg=1&ext=1`);
