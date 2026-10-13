@@ -3,7 +3,12 @@
 
 The board advertises as ``ginger`` (``grokbot-buddy`` before the rename). URL, token, and a verified
 Wi-Fi network land in NVS namespace ``desk``. ``reboot`` soft-resets the
-board. The link is GATT. The OS pairing dialog does not connect.
+board. The link is GATT.
+
+The panel requires pairing (numeric comparison) and this script cannot answer
+a pairing request. Pair the computer first with ``bluetoothctl``, then
+``pair <panel address>``: confirm the code it prints matches the glass and tap
+Yes on the panel. Or provision over USB with provision-wifi.py.
 
 Wi-Fi is tried before it is saved. The desk associates with the candidate
 and reports ok or fail over BLE. A failure does not write NVS. Success
@@ -13,7 +18,7 @@ With no command this opens a menu: pick a desk, read status, set the URL,
 set or clear the token, add Wi-Fi from the desk's scan or by typing the
 SSID, and reboot. The named commands stay for scripts.
 
-Protocol, UUIDs, and the open-link posture: firmware/README.md.
+Protocol, UUIDs, and pairing: firmware/README.md.
 
 Needs ``bleak`` and ``prompt_toolkit`` on the machine with the radio.
 The password and the bearer are read from hidden prompts, not argv or

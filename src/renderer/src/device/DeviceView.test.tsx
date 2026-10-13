@@ -25,11 +25,17 @@ function fakeLink(): DeviceLink {
   };
 }
 
+let connectImpl: (
+  onClosed: () => void,
+  onPairing: () => void,
+) => Promise<DeviceLink> = async (onClosed) => {
+  dropLink = onClosed;
+  return fakeLink();
+};
+
 vi.mock("./ble", () => ({
-  connectBle: async (onClosed: () => void) => {
-    dropLink = onClosed;
-    return fakeLink();
-  },
+  connectBle: (onClosed: () => void, onPairing: () => void) =>
+    connectImpl(onClosed, onPairing),
 }));
 vi.mock("./usb", () => ({ connectUsb: vi.fn() }));
 
@@ -45,6 +51,7 @@ const info: CalicoInfo = {
   serverError: null,
   autostart: { enabled: false, available: false },
   version: "0.0.0-test",
+  hostname: "test-host",
 };
 
 afterEach(() => {
@@ -101,5 +108,48 @@ describe("DeviceView provisioning", () => {
     await screen.findByText(/Waiting up to 30 s/);
     await vi.advanceTimersByTimeAsync(31_000);
     expect(await screen.findByText(/has not reached calico/)).toBeTruthy();
+  });
+});
+
+describe("DeviceView Bluetooth pairing", () => {
+  it("guides while the OS pairs, blocks a second Connect, then shows the error", async () => {
+    window.calico = { info: async () => info } as unknown as CalicoApi;
+    let fail: (e: Error) => void = () => undefined;
+    const saved = connectImpl;
+    connectImpl = (_onClosed, onPairing) => {
+      onPairing();
+      return new Promise((_, reject) => {
+        fail = reject;
+      });
+    };
+    try {
+      render(<Harness />);
+      fireEvent.click(screen.getByText("Connect over Bluetooth"));
+      expect(
+        await screen.findByText(
+          "Confirm the code on the panel and in the system dialog.",
+        ),
+      ).toBeTruthy();
+      expect(
+        (screen.getByText("Connect over Bluetooth") as HTMLButtonElement)
+          .disabled,
+      ).toBe(true);
+      expect(
+        (screen.getByText("Connect over USB") as HTMLButtonElement).disabled,
+      ).toBe(true);
+      fail(new Error("Pairing did not finish."));
+      expect(await screen.findByText("Pairing did not finish.")).toBeTruthy();
+      expect(
+        screen.queryByText(
+          "Confirm the code on the panel and in the system dialog.",
+        ),
+      ).toBeNull();
+      expect(
+        (screen.getByText("Connect over Bluetooth") as HTMLButtonElement)
+          .disabled,
+      ).toBe(false);
+    } finally {
+      connectImpl = saved;
+    }
   });
 });

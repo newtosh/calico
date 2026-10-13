@@ -1,4 +1,5 @@
 #include "ble_link.h"
+#include "ble_pair.h"
 #include "dma_stripe.h"
 #include "net.h"
 #include "orient.h"
@@ -30,8 +31,11 @@ static desk_settings_t s_active;
 static int s_failures;
 /* 1 means the link is up and not retrying. RSSI is not part of it. -1 is unpublished. */
 static int s_lamp_key = -1;
-/* 24 agents with icons, plus last_event, before the events tail is cut. */
-static char s_status_body[16384];
+/* 24 agents with icons, plus last_event, before the events tail is cut. PSRAM, allocated by
+ * poll_task: as static .bss these 16 KB came out of internal DRAM, and the boot left the
+ * NimBLE host task and Wi-Fi's per-task semaphore a few hundred bytes to share. */
+#define DESK_STATUS_BODY 16384
+static char *s_status_body;
 static volatile int s_fetch_gen;
 static volatile int s_dismiss_gen;
 static volatile int s_scan_busy;
@@ -273,6 +277,12 @@ static void poll_task(void *arg) {
     static desk_view_t view;
     static desk_view_t next;
     (void)arg;
+    s_status_body = heap_caps_malloc(DESK_STATUS_BODY, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!s_status_body) {
+        ESP_LOGE("desk", "status body: no PSRAM");
+        vTaskDelete(NULL);
+        return;
+    }
     while (1) {
         net_link_t link;
         int fetched;
@@ -285,7 +295,7 @@ static void poll_task(void *arg) {
             continue;
         }
         s_fetch_gen++;
-        fetched = net_fetch_status(&s_active, s_status_body, sizeof(s_status_body)) == 0;
+        fetched = net_fetch_status(&s_active, s_status_body, DESK_STATUS_BODY) == 0;
         if (fetched) {
             net_mark_reachable();
             apply_panel_push(s_status_body);
@@ -567,6 +577,37 @@ static void on_power(const power_reading_t *reading) {
     }
 }
 
+static void on_pair_show(const char *code_text) {
+    if (lock_lvgl()) {
+        ui_show_pairing(code_text);
+        unlock_lvgl();
+    }
+}
+
+static void on_paired(int event, const char *name) {
+    char text[BLE_PAIR_DONE_MAX];
+    if (event == BLE_LINK_PAIRED_NAME) {
+        ble_pair_done_text(name, text, sizeof text);
+    }
+    if (lock_lvgl()) {
+        if (event == BLE_LINK_PAIRED_BEGIN) {
+            ui_paired_begin();
+        } else if (event == BLE_LINK_PAIRED_NAME) {
+            ui_paired_name(text);
+        } else {
+            ui_paired_end();
+        }
+        unlock_lvgl();
+    }
+}
+
+static void on_pair_hide(void) {
+    if (lock_lvgl()) {
+        ui_hide_pairing();
+        unlock_lvgl();
+    }
+}
+
 void app_main(void) {
     esp_err_t err = nvs_flash_init();
     desk_settings_t fields;
@@ -592,6 +633,8 @@ void app_main(void) {
         ui_init(save_and_restart, dismiss_alert, request_scan);
         ui_bind_unread(clear_unread);
         ui_bind_rotlock(s_rot_locked, on_rotlock);
+        ui_bind_forget_pairings(ble_link_forget_pairings);
+        ui_bind_pair_answer(ble_link_pair_answer);
         ui_set_fields(&fields);
         ui_set_known(&s_store);
         if (s_store.count == 0) {
@@ -602,6 +645,8 @@ void app_main(void) {
     /* After ui_init: the listener only fires on a change, so a reading that
      * lands before the widget exists would never be drawn. */
     power_start(on_power);
+    ble_link_set_pair_callbacks(on_pair_show, on_pair_hide);
+    ble_link_set_paired_callback(on_paired);
     ble_link_start(&s_store, on_ble_state, on_ble_restart);
     /* esp_wifi_init wants the DMA block logged after nimble_port_init.
      * The host task (6144) is the internal stack. wifi-join is PSRAM and

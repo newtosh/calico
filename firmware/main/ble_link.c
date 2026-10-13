@@ -1,12 +1,14 @@
 #include "ble_link.h"
 
 #include "ble_desk.h"
+#include "ble_pair.h"
 #include "dma_stripe.h"
 #include "net.h"
 
 #include "esp_err.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -26,6 +28,9 @@
 #include "nimble/nimble_port_freertos.h"
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
+
+/* ESP-IDF NimBLE does not declare this in a public header. */
+void ble_store_config_init(void);
 #endif
 
 #ifndef DESK_FW_SHA
@@ -72,8 +77,71 @@ static uint8_t s_own_addr_type;
 static int s_gatt_ok;
 static int s_host_up;
 /* NimBLE's none handle. A live connection is anything else. */
+static ble_link_pair_show_fn s_pair_show;
+static ble_link_pair_hide_fn s_pair_hide;
+
+void ble_link_set_pair_callbacks(ble_link_pair_show_fn show, ble_link_pair_hide_fn hide) {
+    s_pair_show = show;
+    s_pair_hide = hide;
+}
+
+static void pair_hide(void) {
+    if (s_pair_hide) {
+        s_pair_hide();
+    }
+}
+
+/* The code waiting for Yes or No on the glass. The host task opens and drops
+ * it; the LVGL task answers it. */
+static ble_pair_ask_t s_ask;
+static portMUX_TYPE s_ask_mux = portMUX_INITIALIZER_UNLOCKED;
+
+static uint32_t now_ms(void) {
+    return (uint32_t)(esp_timer_get_time() / 1000);
+}
+
+static void ask_drop(uint16_t conn) {
+    taskENTER_CRITICAL(&s_ask_mux);
+    ble_pair_ask_drop(&s_ask, conn);
+    taskEXIT_CRITICAL(&s_ask_mux);
+    pair_hide();
+}
+
+void ble_link_pair_answer(int yes) {
+    struct ble_sm_io io;
+    uint16_t conn = 0;
+    int accept;
+    int rc;
+    taskENTER_CRITICAL(&s_ask_mux);
+    accept = ble_pair_ask_answer(&s_ask, yes, now_ms(), &conn);
+    taskEXIT_CRITICAL(&s_ask_mux);
+    if (accept < 0) {
+        /* An early Yes keeps the card up. No with nothing open still clears it. */
+        if (!yes) {
+            pair_hide();
+        }
+        return;
+    }
+    pair_hide();
+    memset(&io, 0, sizeof io);
+    io.action = BLE_SM_IOACT_NUMCMP;
+    io.numcmp_accept = (uint8_t)accept;
+    rc = ble_sm_inject_io(conn, &io);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "numcmp inject %d", rc);
+    }
+}
+
 enum { BLE_LINK_NO_CONN = 0xFFFF, BLE_LINK_TERM_USER = 0x13 };
 static uint16_t s_conn = BLE_LINK_NO_CONN;
+/* The link that just paired fresh, until its peer name arrives. A reconnect on a stored
+ * bond never sets it, so the glass only greets a new pairing. Host task only. */
+static uint16_t s_fresh_conn = BLE_LINK_NO_CONN;
+static ble_link_paired_fn s_paired;
+
+void ble_link_set_paired_callback(ble_link_paired_fn fn) {
+    s_paired = fn;
+}
 static char s_scan_text[BLE_DESK_SCAN_TEXT];
 #define BLE_LINK_PROBE_TEXT 128
 static char s_probe_text[BLE_LINK_PROBE_TEXT];
@@ -97,7 +165,7 @@ enum {
 
 /* Little-endian UUID bytes. The 13th byte is the time_low LSB:
  * 0x10 service, 0x11 status, 0x12 url, 0x13 token, 0x14 wifi, 0x15 reboot,
- * 0x16 scan, 0x17 verify.
+ * 0x16 scan, 0x17 verify, 0x18 peer. Status is open; every other characteristic needs a paired link.
  * scripts/test_ble_provision.py checks these against the strings in ble_desk.h. */
 static const ble_uuid128_t s_uuid_svc =
     BLE_UUID128_INIT(0x65, 0x64, 0x6b, 0x6f, 0x72, 0x67, 0xc5, 0xa3, 0x91, 0x4f, 0x2a, 0x6e, 0x10,
@@ -123,6 +191,9 @@ static const ble_uuid128_t s_uuid_scan =
 static const ble_uuid128_t s_uuid_verify =
     BLE_UUID128_INIT(0x65, 0x64, 0x6b, 0x6f, 0x72, 0x67, 0xc5, 0xa3, 0x91, 0x4f, 0x2a, 0x6e, 0x17,
                      0x4b, 0x7c, 0x8d);
+static const ble_uuid128_t s_uuid_peer =
+    BLE_UUID128_INIT(0x65, 0x64, 0x6b, 0x6f, 0x72, 0x67, 0xc5, 0xa3, 0x91, 0x4f, 0x2a, 0x6e, 0x18,
+                     0x4b, 0x7c, 0x8d);
 
 static int access(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt *ctxt,
                   void *arg);
@@ -146,37 +217,43 @@ static const struct ble_gatt_svc_def s_svcs[] = {
                     .uuid = &s_uuid_url.u,
                     .access_cb = access,
                     .arg = (void *)(uintptr_t)BLE_DESK_OP_URL,
-                    .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE,
+                    .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_READ_AUTHEN | BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_AUTHEN,
                 },
                 {
                     .uuid = &s_uuid_token.u,
                     .access_cb = access,
                     .arg = (void *)(uintptr_t)BLE_DESK_OP_TOKEN,
-                    .flags = BLE_GATT_CHR_F_WRITE,
+                    .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_AUTHEN,
                 },
                 {
                     .uuid = &s_uuid_wifi.u,
                     .access_cb = access,
                     .arg = (void *)(uintptr_t)BLE_DESK_OP_WIFI,
-                    .flags = BLE_GATT_CHR_F_WRITE,
+                    .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_AUTHEN,
                 },
                 {
                     .uuid = &s_uuid_reboot.u,
                     .access_cb = access,
                     .arg = (void *)(uintptr_t)BLE_DESK_OP_REBOOT,
-                    .flags = BLE_GATT_CHR_F_WRITE,
+                    .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_AUTHEN,
                 },
                 {
                     .uuid = &s_uuid_scan.u,
                     .access_cb = access,
                     .arg = (void *)(uintptr_t)BLE_DESK_OP_SCAN,
-                    .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE,
+                    .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_READ_AUTHEN | BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_AUTHEN,
                 },
                 {
                     .uuid = &s_uuid_verify.u,
                     .access_cb = access,
                     .arg = (void *)(uintptr_t)BLE_DESK_OP_VERIFY,
-                    .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE,
+                    .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_READ_AUTHEN | BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_AUTHEN,
+                },
+                {
+                    .uuid = &s_uuid_peer.u,
+                    .access_cb = access,
+                    .arg = (void *)(uintptr_t)BLE_DESK_OP_PEER,
+                    .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_AUTHEN,
                 },
                 {
                     0,
@@ -218,12 +295,18 @@ static int append_text(struct os_mbuf *om, const char *text, int n) {
     return 0;
 }
 
-static int read_status(struct os_mbuf *om) {
+static int read_status(uint16_t conn_handle, struct os_mbuf *om) {
     char ssid[33];
     char url[128];
     char body[256];
+    struct ble_gap_conn_desc desc;
     int token_set = 0;
     int n;
+    /* Until the link is paired and authenticated, the status says only that this panel pairs. */
+    if (ble_gap_conn_find(conn_handle, &desc) != 0 || !desc.sec_state.authenticated) {
+        n = ble_desk_format_status_locked(body, sizeof(body), DESK_FW_SHA);
+        return append_text(om, body, n);
+    }
     ssid[0] = '\0';
     url[0] = '\0';
     ble_link_enter();
@@ -575,20 +658,33 @@ static int write_wifi(const uint8_t *buf, uint16_t len) {
     return 0;
 }
 
+/* Accepted on every paired link; only the write that follows a fresh pairing reaches the glass. */
+static int write_peer(uint16_t conn_handle, const uint8_t *buf, uint16_t len) {
+    char name[BLE_PAIR_PEER_MAX + 1];
+    if (conn_handle != s_fresh_conn) {
+        return 0;
+    }
+    s_fresh_conn = BLE_LINK_NO_CONN;
+    ble_pair_peer_name(buf, len, name, sizeof name);
+    if (s_paired) {
+        s_paired(BLE_LINK_PAIRED_NAME, name);
+    }
+    return 0;
+}
+
 static int access(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt *ctxt,
                   void *arg) {
     uintptr_t op = (uintptr_t)arg;
     uint8_t buf[BLE_LINK_WRITE_MAX];
     uint16_t len = 0;
     int rc;
-    (void)conn_handle;
     (void)attr_handle;
     if (!ctxt) {
         return BLE_ATT_ERR_UNLIKELY;
     }
     if (ctxt->op == BLE_GATT_ACCESS_OP_READ_CHR) {
         if (op == BLE_DESK_OP_STATUS) {
-            return read_status(ctxt->om);
+            return read_status(conn_handle, ctxt->om);
         }
         if (op == BLE_DESK_OP_URL) {
             return read_url(ctxt->om);
@@ -625,6 +721,9 @@ static int access(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_ac
     }
     if (op == BLE_DESK_OP_REBOOT) {
         return write_reboot(buf, len);
+    }
+    if (op == BLE_DESK_OP_PEER) {
+        return write_peer(conn_handle, buf, len);
     }
     return BLE_ATT_ERR_UNLIKELY;
 }
@@ -691,6 +790,55 @@ static void apply_bt_user(void) {
     advertise();
 }
 
+/* MITM-authenticated, 16-byte key: the person confirmed the code on the glass. */
+static int link_trusted(uint16_t conn) {
+    struct ble_gap_conn_desc desc;
+    if (ble_gap_conn_find(conn, &desc) != 0) {
+        return 0;
+    }
+    return ble_pair_link_trusted(desc.sec_state.encrypted, desc.sec_state.authenticated,
+                                 desc.sec_state.key_size);
+}
+
+_Static_assert(BLE_PAIR_STORE_OVERFLOW == BLE_STORE_EVENT_OVERFLOW, "store event codes");
+_Static_assert(BLE_PAIR_STORE_FULL == BLE_STORE_EVENT_FULL, "store event codes");
+
+static int is_bond_record(int obj_type) {
+    return obj_type == BLE_STORE_OBJ_TYPE_OUR_SEC || obj_type == BLE_STORE_OBJ_TYPE_PEER_SEC ||
+           obj_type == BLE_STORE_OBJ_TYPE_PEER_ADDR;
+}
+
+/* 1 when the computer on conn already has a bond here (a re-pair replaces it). */
+static int peer_bonded(uint16_t conn) {
+    struct ble_gap_conn_desc desc;
+    struct ble_store_key_sec key;
+    struct ble_store_value_sec value;
+    if (ble_gap_conn_find(conn, &desc) != 0) {
+        return 0;
+    }
+    memset(&key, 0, sizeof key);
+    key.peer_addr = desc.peer_id_addr;
+    return ble_store_read_peer_sec(&key, &value) == 0;
+}
+
+/* Never evict a bond to make room: the oldest could be the owner's. A full store refuses a new
+ * computer at its pairing request (before a code or a Paired card); Forget pairings makes room. */
+static int store_status(struct ble_store_status_event *event, void *arg) {
+    int bond = 0;
+    int bonded = 0;
+    if (event->event_code == BLE_STORE_EVENT_OVERFLOW) {
+        bond = is_bond_record(event->overflow.obj_type);
+    } else if (event->event_code == BLE_STORE_EVENT_FULL) {
+        bond = is_bond_record(event->full.obj_type);
+        bonded = bond && peer_bonded(event->full.conn_handle);
+    }
+    if (ble_pair_store_refuse(event->event_code, bond, bonded)) {
+        ESP_LOGW(TAG, "bond store full: Forget pairings to add a computer");
+        return BLE_HS_ESTORE_CAP;
+    }
+    return ble_store_util_status_rr(event, arg);
+}
+
 static int gap_event(struct ble_gap_event *event, void *arg) {
     (void)arg;
     switch (event->type) {
@@ -710,6 +858,11 @@ static int gap_event(struct ble_gap_event *event, void *arg) {
         note(BLE_LINK_CONN);
         return 0;
     case BLE_GAP_EVENT_DISCONNECT:
+        ask_drop(event->disconnect.conn.conn_handle);
+        s_fresh_conn = BLE_LINK_NO_CONN;
+        if (s_paired) {
+            s_paired(BLE_LINK_PAIRED_END, NULL);
+        }
         ESP_LOGI(TAG, "disconnect %d", event->disconnect.reason);
         s_conn = BLE_LINK_NO_CONN;
         resume_adv();
@@ -720,8 +873,86 @@ static int gap_event(struct ble_gap_event *event, void *arg) {
     case BLE_GAP_EVENT_MTU:
         ESP_LOGI(TAG, "mtu %d", event->mtu.value);
         return 0;
+    case BLE_GAP_EVENT_PASSKEY_ACTION: {
+        /* Numeric comparison: the glass shows the code with Yes and No, and
+         * ble_link_pair_answer sends the person's answer. No answer in 30 s is No. */
+        char text[BLE_PAIR_TEXT_MAX];
+        if (event->passkey.params.action != BLE_SM_IOACT_NUMCMP) {
+            return 0;
+        }
+        taskENTER_CRITICAL(&s_ask_mux);
+        ble_pair_ask_open(&s_ask, event->passkey.conn_handle, now_ms());
+        taskEXIT_CRITICAL(&s_ask_mux);
+        if (ble_pair_format(event->passkey.params.numcmp, text, sizeof text) == 0 || !s_pair_show) {
+            /* Nobody can compare the code: refuse. */
+            ble_link_pair_answer(0);
+            return 0;
+        }
+        s_pair_show(text);
+        return 0;
+    }
+    case BLE_GAP_EVENT_ENC_CHANGE:
+        ask_drop(event->enc_change.conn_handle);
+        /* NimBLE stored the keys just before this event. sm_mitm only asks for MITM: a central
+         * that says it has no display or keyboard still gets Just Works, with no code on the
+         * glass. Those keys and that link go, so only a confirmed code ever bonds. */
+        if (event->enc_change.status == 0 && !link_trusted(event->enc_change.conn_handle)) {
+            struct ble_gap_conn_desc desc;
+            ESP_LOGW(TAG, "unauthenticated pairing refused");
+            if (ble_gap_conn_find(event->enc_change.conn_handle, &desc) == 0) {
+                ble_store_util_delete_peer(&desc.peer_id_addr);
+            }
+            ble_gap_terminate(event->enc_change.conn_handle, BLE_ERR_AUTH_FAIL);
+            if (s_fresh_conn == event->enc_change.conn_handle) {
+                s_fresh_conn = BLE_LINK_NO_CONN;
+                if (s_paired) {
+                    s_paired(BLE_LINK_PAIRED_END, NULL);
+                }
+            }
+        }
+        return 0;
+    case BLE_GAP_EVENT_PARING_COMPLETE: /* sic, NimBLE spelling */
+        /* Only a new pairing raises this; a stored bond just encrypts. Just Works never
+         * greets: ENC_CHANGE drops it right after. */
+        if (event->pairing_complete.status == 0 && link_trusted(event->pairing_complete.conn_handle)) {
+            s_fresh_conn = event->pairing_complete.conn_handle;
+            if (s_paired) {
+                s_paired(BLE_LINK_PAIRED_BEGIN, NULL);
+            }
+        }
+        return 0;
+    case BLE_GAP_EVENT_REPEAT_PAIRING: {
+        /* The computer forgot its keys but the panel kept its half of the bond.
+         * NimBLE drops the pairing request unless this returns RETRY. Only a request whose
+         * method confirms a code (new_authenticated) may replace the bond: otherwise anyone
+         * spoofing the owner's address could swap it for a Just Works one. The bond is still
+         * deleted before the person taps Yes, so a spoofer who gets No costs the owner a
+         * re-pair. That denial of service is accepted; it grants no access. */
+        struct ble_gap_conn_desc desc;
+        int rc;
+        if (!event->repeat_pairing.new_authenticated) {
+            ESP_LOGW(TAG, "repeat pairing without a code ignored");
+            return BLE_GAP_REPEAT_PAIRING_IGNORE;
+        }
+        rc = ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc);
+        if (rc == 0) {
+            rc = ble_store_util_delete_peer(&desc.peer_id_addr);
+        }
+        if (rc != 0) {
+            ESP_LOGW(TAG, "repeat pairing %d", rc);
+            return BLE_GAP_REPEAT_PAIRING_IGNORE;
+        }
+        return BLE_GAP_REPEAT_PAIRING_RETRY;
+    }
     default:
         return 0;
+    }
+}
+
+void ble_link_forget_pairings(void) {
+    ble_store_clear();
+    if (s_conn != BLE_LINK_NO_CONN) {
+        ble_gap_terminate(s_conn, BLE_LINK_TERM_USER);
     }
 }
 
@@ -775,16 +1006,20 @@ static void start_radio(void) {
         return;
     }
     log_dma();
-    /* ponytail: open GATT, no pairing. Proximity is the gate until the glass can show a PIN. */
+    /* Numeric comparison: the glass and the computer show the same code and the person
+     * confirms it on both. MITM-protected LE Secure Connections, with the keys kept in NVS
+     * so a paired computer reconnects without a new code. */
     ble_hs_cfg.reset_cb = on_reset;
     ble_hs_cfg.sync_cb = on_sync;
-    ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
-#if CONFIG_BT_NIMBLE_SECURITY_ENABLE
-    ble_hs_cfg.sm_io_cap = BLE_HS_IO_NO_INPUT_OUTPUT;
-    ble_hs_cfg.sm_bonding = 0;
-    ble_hs_cfg.sm_mitm = 0;
-    ble_hs_cfg.sm_sc = 0;
-#endif
+    ble_hs_cfg.store_status_cb = store_status;
+    ble_hs_cfg.sm_io_cap = BLE_HS_IO_DISPLAY_YESNO;
+    ble_hs_cfg.sm_bonding = 1;
+    ble_hs_cfg.sm_mitm = 1;
+    ble_hs_cfg.sm_sc = 1;
+    ble_hs_cfg.sm_sc_only = 1;
+    ble_hs_cfg.sm_our_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
+    ble_hs_cfg.sm_their_key_dist = BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
+    ble_store_config_init();
     ble_svc_gap_init();
     ble_svc_gatt_init();
     rc = ble_gatts_count_cfg(s_svcs);
@@ -810,7 +1045,15 @@ void ble_link_host_start(void) {
     s_host_up = 1;
     /* Host stack first (6144, internal). The scan and reboot stacks are
      * PSRAM after that. A write only gives a semaphore. */
+    UBaseType_t tasks = uxTaskGetNumberOfTasks();
     nimble_port_freertos_init(host_task);
+    /* ESP-IDF drops the task-create result. Without the host task there is no sync and no
+     * advertising, and nothing else logs it: its stack needs internal RAM. Not xTaskGetHandle:
+     * it links ~300 B of IRAM out of the same DRAM, which was enough to stop the task starting.
+     * Not a heap delta either: other tasks free internal RAM meanwhile and it misfired. */
+    if (uxTaskGetNumberOfTasks() <= tasks) {
+        ESP_LOGE(TAG, "NimBLE host task did not start: no internal RAM for its stack");
+    }
     start_scan_task();
     start_reboot_task();
 }
@@ -852,4 +1095,15 @@ void ble_link_start(wifi_store_t *store, ble_link_state_fn on_state, ble_link_re
 
 #if !CONFIG_BT_NIMBLE_ENABLED
 void ble_link_host_start(void) {}
+void ble_link_set_pair_callbacks(ble_link_pair_show_fn show, ble_link_pair_hide_fn hide) {
+    (void)show;
+    (void)hide;
+}
+void ble_link_forget_pairings(void) {}
+void ble_link_pair_answer(int yes) {
+    (void)yes;
+}
+void ble_link_set_paired_callback(ble_link_paired_fn fn) {
+    (void)fn;
+}
 #endif

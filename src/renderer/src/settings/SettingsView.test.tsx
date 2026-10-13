@@ -23,6 +23,7 @@ const info: CalicoInfo = {
   serverError: null,
   autostart: { enabled: true, available: true },
   version: "0.1.9",
+  hostname: "test-host",
 };
 
 // The panel the person sees: the others are mounted but hidden. happy-dom does

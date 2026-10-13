@@ -40,8 +40,21 @@ int main(void) {
                  "fw=886dd11\n"
                  "ssid=none\n"
                  "url=http://192.168.4.30:8787\n"
-                 "token=none\n") == 0,
+                 "token=none\n"
+                 "pair=1\n"
+                 "paired=1\n") == 0,
           "status with no join and no token");
+    {
+        char locked[128];
+        int ln = ble_desk_format_status_locked(locked, sizeof locked, "abc1234");
+        check(ln > 0 && strcmp(locked, "name=ginger\nfw=abc1234\npair=1\npaired=0\n") == 0,
+              "locked status shows only name, fw and the pairing flags");
+        check(strstr(locked, "ssid=") == NULL && strstr(locked, "url=") == NULL &&
+                  strstr(locked, "token=") == NULL,
+              "locked status leaks no network detail");
+        check(ble_desk_format_status_locked(locked, 8, "abc1234") < 0,
+              "locked status refuses a small buffer");
+    }
     check(strstr(body, secret) == NULL, "status has no bearer");
 
     n = ble_desk_format_status(body, sizeof(body), "", "Cafe WiFi", "https://desk.local:8787", 1);

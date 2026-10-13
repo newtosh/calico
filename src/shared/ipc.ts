@@ -48,6 +48,8 @@ export interface CalicoInfo {
   autostart: { enabled: boolean; available: boolean };
   /** Release version from package.json. */
   version: string;
+  /** This computer's name, shown on the panel after it pairs. */
+  hostname: string;
 }
 
 export type FirewallKind = "ufw" | "firewalld" | "nftables" | "none";

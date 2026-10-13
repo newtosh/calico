@@ -19,6 +19,7 @@ run() { # test name, then the firmware sources it links
 }
 
 run test_ble_desk firmware/main/ble_desk.c firmware/main/wifi_store.c
+run test_ble_pair firmware/main/ble_pair.c
 run test_control_center firmware/main/control_center.c
 run test_desk_status firmware/main/desk_status.c
 run test_desk_view firmware/main/desk_view.c

@@ -1,3 +1,4 @@
+import { hostname } from "node:os";
 import { join } from "node:path";
 import { app, BrowserWindow, dialog, shell } from "electron";
 import {
@@ -169,6 +170,7 @@ async function start(): Promise<void> {
     autostart: autostartState(),
     // app.getVersion() returns Electron's version when launched from the entry file.
     version,
+    hostname: hostname(),
   });
 
   const relaySetup = new RelaySetupService(
