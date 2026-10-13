@@ -45,6 +45,21 @@ static void clean_field(char *dest, size_t dest_len, const char *src, const char
     dest[i] = '\0';
 }
 
+int ble_desk_format_status_locked(char *out, size_t cap, const char *fw) {
+    char fw_buf[48];
+    int n;
+    if (!out || cap == 0) {
+        return -1;
+    }
+    clean_field(fw_buf, sizeof(fw_buf), fw, "unknown");
+    n = snprintf(out, cap, "name=%s\nfw=%s\npair=1\npaired=0\n", BLE_DESK_NAME, fw_buf);
+    if (n < 0 || (size_t)n >= cap) {
+        out[0] = '\0';
+        return -1;
+    }
+    return n;
+}
+
 int ble_desk_format_status(char *out, size_t cap, const char *fw, const char *ssid, const char *url,
                            int token_set) {
     char fw_buf[48];
@@ -57,7 +72,7 @@ int ble_desk_format_status(char *out, size_t cap, const char *fw, const char *ss
     clean_field(fw_buf, sizeof(fw_buf), fw, "unknown");
     clean_field(ssid_buf, sizeof(ssid_buf), ssid, "none");
     clean_field(url_buf, sizeof(url_buf), url, "none");
-    n = snprintf(out, cap, "name=%s\nfw=%s\nssid=%s\nurl=%s\ntoken=%s\n", BLE_DESK_NAME, fw_buf,
+    n = snprintf(out, cap, "name=%s\nfw=%s\nssid=%s\nurl=%s\ntoken=%s\npair=1\npaired=1\n", BLE_DESK_NAME, fw_buf,
                  ssid_buf, url_buf, token_set ? "set" : "none");
     if (n < 0 || (size_t)n >= cap) {
         out[0] = '\0';

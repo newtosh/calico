@@ -18,6 +18,7 @@
  *   reboot  ...15  write
  *   scan    ...16  read, write
  *   verify  ...17  read, write
+ *   peer    ...18  write: the computer's name, shown on the glass after a fresh pairing
  * The node bytes 67726f6b6465 are "grokde".
  *
  * Scan write is the four bytes "scan". The read is one record per line:
@@ -40,6 +41,7 @@
 #define BLE_DESK_UUID_REBOOT "8d7c4b15-6e2a-4f91-a3c5-67726f6b6465"
 #define BLE_DESK_UUID_SCAN "8d7c4b16-6e2a-4f91-a3c5-67726f6b6465"
 #define BLE_DESK_UUID_VERIFY "8d7c4b17-6e2a-4f91-a3c5-67726f6b6465"
+#define BLE_DESK_UUID_PEER "8d7c4b18-6e2a-4f91-a3c5-67726f6b6465"
 
 /* Field sizes match wifi_store_t and the USB provisioner. */
 #define BLE_DESK_SSID_MAX 32
@@ -57,7 +59,8 @@ enum {
     BLE_DESK_OP_WIFI = 4,
     BLE_DESK_OP_REBOOT = 5,
     BLE_DESK_OP_SCAN = 6,
-    BLE_DESK_OP_VERIFY = 7
+    BLE_DESK_OP_VERIFY = 7,
+    BLE_DESK_OP_PEER = 8
 };
 
 enum {
@@ -82,6 +85,8 @@ typedef struct {
 /* NUL-terminated body. Returns the length without the NUL, or -1 if it
  * does not fit. ssid or url empty is written as "none". token_set is
  * "set" or "none". The bearer itself is not an argument. */
+/* Status for a link that is not paired yet: name, fw and the pairing flags only. */
+int ble_desk_format_status_locked(char *out, size_t cap, const char *fw);
 int ble_desk_format_status(char *out, size_t cap, const char *fw, const char *ssid, const char *url,
                            int token_set);
 
