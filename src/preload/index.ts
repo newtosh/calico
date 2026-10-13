@@ -33,6 +33,9 @@ const api: CalicoApi = {
     return () => ipcRenderer.off("relay:setup-changed", handler);
   },
   relayCopyForBot: () => ipcRenderer.invoke("relay:copy-bot"),
+  networksList: () => ipcRenderer.invoke("networks:list"),
+  networksSave: (input) => ipcRenderer.invoke("networks:save", input),
+  networksRemove: (ssid) => ipcRenderer.invoke("networks:remove", ssid),
 };
 
 contextBridge.exposeInMainWorld("calico", api);

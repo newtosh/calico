@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { userInfo } from "node:os";
 import { clipboard, ipcMain } from "electron";
 import type { CalicoInfo } from "../shared/ipc";
+import type { NetworkVault } from "./networks";
 import type { RelaySetupService } from "./relay/service";
 import {
   deniedSerialPorts,
@@ -31,6 +32,7 @@ export interface IpcDeps {
   relaySetup: RelaySetupService;
   /** The text for the bot, or null when calico did not make this relay. */
   botNote(): string | null;
+  networks: Pick<NetworkVault, "list" | "save" | "remove">;
 }
 
 export function registerIpc(deps: IpcDeps): void {
@@ -53,6 +55,14 @@ export function registerIpc(deps: IpcDeps): void {
     }, 60_000).unref();
     return true;
   });
+  // The window sends secrets here and gets back flags only (password_set, token_set).
+  ipcMain.handle("networks:list", () => deps.networks.list());
+  ipcMain.handle("networks:save", (_e, input: unknown) =>
+    deps.networks.save(input),
+  );
+  ipcMain.handle("networks:remove", (_e, ssid: unknown) =>
+    deps.networks.remove(ssid),
+  );
   ipcMain.handle("calico:set-autostart", (_e, on: unknown) =>
     autostartAvailable() ? setAutostart(on === true) : false,
   );

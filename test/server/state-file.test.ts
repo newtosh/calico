@@ -1,4 +1,5 @@
 import {
+  chmodSync,
   existsSync,
   mkdtempSync,
   readFileSync,
@@ -7,9 +8,31 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { loadSnapshot, saveSnapshot } from "../../src/server/state-file";
+import { describe, expect, it, vi } from "vitest";
+import {
+  loadSnapshot,
+  saveSnapshot,
+  writeAtomic,
+} from "../../src/server/state-file";
 import type { Snapshot } from "../../src/server/store";
+
+// Plants a symlink at the tmp path right after writeAtomic clears it, as a racing process could.
+const race = vi.hoisted(() => ({
+  link: null as { tmp: string; target: string } | null,
+}));
+vi.mock("node:fs", async (importOriginal) => {
+  const fs = await importOriginal<typeof import("node:fs")>();
+  return {
+    ...fs,
+    rmSync: (...args: Parameters<typeof fs.rmSync>) => {
+      fs.rmSync(...args);
+      if (race.link) {
+        fs.symlinkSync(race.link.target, race.link.tmp);
+        race.link = null;
+      }
+    },
+  };
+});
 
 const dir = () => mkdtempSync(join(tmpdir(), "calico-state-"));
 
@@ -89,5 +112,35 @@ describe("state file", () => {
     delete old.source;
     writeFileSync(path, JSON.stringify({ ...sample, agents: [old] }));
     expect(loadSnapshot(path)?.agents[0]?.source).toBe("");
+  });
+});
+
+describe("writeAtomic", () => {
+  it("writes 0600 even over a stale world-readable temp file", () => {
+    const path = join(dir(), "networks.json");
+    writeFileSync(`${path}.tmp`, "old");
+    chmodSync(`${path}.tmp`, 0o644);
+    writeAtomic(path, "{}");
+    expect(statSync(path).mode & 0o777).toBe(0o600);
+    expect(existsSync(`${path}.tmp`)).toBe(false);
+  });
+
+  it("writes 0600 when it replaces an older world-readable file", () => {
+    const path = join(dir(), "networks.json");
+    writeFileSync(path, "old");
+    chmodSync(path, 0o644);
+    writeAtomic(path, "{}");
+    expect(statSync(path).mode & 0o777).toBe(0o600);
+    expect(readFileSync(path, "utf8")).toBe("{}");
+  });
+
+  it("does not follow a symlink planted at the tmp path after it is cleared", () => {
+    const d = dir();
+    const path = join(d, "networks.json");
+    const target = join(d, "elsewhere");
+    writeFileSync(target, "keep");
+    race.link = { tmp: `${path}.tmp`, target };
+    expect(() => writeAtomic(path, "{}")).toThrow(/EEXIST/);
+    expect(readFileSync(target, "utf8")).toBe("keep");
   });
 });

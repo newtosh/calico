@@ -1,4 +1,10 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname } from "node:path";
 import type { AgentRecord, DeskEvent, Snapshot } from "./store";
 
@@ -8,7 +14,10 @@ import type { AgentRecord, DeskEvent, Snapshot } from "./store";
 export function writeAtomic(path: string, text: string): void {
   mkdirSync(dirname(path), { recursive: true });
   const tmp = `${path}.tmp`;
-  writeFileSync(tmp, text, { mode: 0o600 });
+  // writeFileSync's mode only applies to a new file: a stale tmp would keep its own.
+  rmSync(tmp, { force: true });
+  // "wx" refuses a tmp (or symlink) that reappears after the rm instead of following it.
+  writeFileSync(tmp, text, { mode: 0o600, flag: "wx" });
   renameSync(tmp, path);
 }
 

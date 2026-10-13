@@ -87,6 +87,32 @@ export type RelaySetupView =
       cancelled: boolean;
     };
 
+/** A saved Wi-Fi network as the window sees it. Never the password or token. */
+export interface SavedNetwork {
+  ssid: string;
+  url: string;
+  password_set: boolean;
+  token_set: boolean;
+}
+
+/** What the window sends. An absent password or token keeps the saved one; "" clears it. */
+export interface NetworkInput {
+  ssid: string;
+  url: string;
+  password?: string;
+  token?: string;
+  /** true changes a saved network, false adds one. */
+  edit: boolean;
+}
+
+export interface NetworksState {
+  networks: SavedNetwork[];
+  /** Why the last action failed, or "". Never contains a secret. */
+  error: string;
+  /** Something the person should know about the file, such as a set-aside copy. */
+  notice: string;
+}
+
 export interface CalicoApi {
   info(): Promise<CalicoInfo>;
   onBleCandidates(cb: (list: Candidate[]) => void): () => void;
@@ -111,6 +137,10 @@ export interface CalicoApi {
   onRelaySetup(cb: (view: RelaySetupView) => void): () => void;
   /** Puts the relay address and send token on the clipboard. The token never reaches the window. */
   relayCopyForBot(): Promise<boolean>;
+  networksList(): Promise<NetworksState>;
+  /** The password and token go to main only; the reply carries flags. */
+  networksSave(input: NetworkInput): Promise<NetworksState>;
+  networksRemove(ssid: string): Promise<NetworksState>;
 }
 
 declare global {
