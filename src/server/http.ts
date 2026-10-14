@@ -229,7 +229,11 @@ export function createCompanionServer(deps: ServerDeps): {
             req.socket.remoteAddress,
             req.socket.localAddress,
           );
-          if (seen) deps.onPanelPoll?.(seen);
+          try {
+            if (seen) deps.onPanelPoll?.(seen);
+          } catch {
+            // A consumer bug must not blind the panel's status poll.
+          }
         }
         const detail = params.get("detail") === "1";
         const body = store.status(detail);

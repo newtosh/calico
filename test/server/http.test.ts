@@ -1,4 +1,5 @@
 import { request } from "node:http";
+import { networkInterfaces } from "node:os";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { defaultConfig, type CalicoConfig } from "../../src/server/config";
@@ -22,6 +23,7 @@ async function start(
   cursorStatus?: () => CursorStatus,
   relayStatus?: () => RelayStatus,
   onPanelPoll?: (seen: PanelSeen) => void,
+  host = "127.0.0.1",
 ) {
   let current: CalicoConfig = { ...defaultConfig(), ...config };
   const store = new DeskStore();
@@ -36,10 +38,10 @@ async function start(
       current = next;
     },
   });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve) => server.listen(0, host, resolve));
   close = () => server.close();
   return {
-    base: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+    base: `http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${(server.address() as AddressInfo).port}`,
     store,
     stats,
   };
@@ -150,6 +152,46 @@ describe("companion server", () => {
     );
     await fetch(`${base}/api/status`);
     expect(seen).toEqual([]);
+  });
+
+  const lanIp = Object.values(networkInterfaces())
+    .flat()
+    .find((i) => i && i.family === "IPv4" && !i.internal)?.address;
+
+  it.skipIf(!lanIp)(
+    "reports a real non-loopback poll once, with both addresses",
+    async () => {
+      const seen: PanelSeen[] = [];
+      const { base } = await start(
+        {},
+        [],
+        undefined,
+        undefined,
+        (s) => seen.push(s),
+        "0.0.0.0",
+      );
+      const port = new URL(base).port;
+      const res = await fetch(`http://${lanIp}:${port}/api/status`);
+      expect(res.status).toBe(200);
+      expect(seen).toEqual([{ from: lanIp, via: lanIp }]);
+    },
+  );
+
+  it.skipIf(!lanIp)("keeps answering when onPanelPoll throws", async () => {
+    const { base } = await start(
+      {},
+      [],
+      undefined,
+      undefined,
+      () => {
+        throw new Error("consumer bug");
+      },
+      "0.0.0.0",
+    );
+    const port = new URL(base).port;
+    const res = await fetch(`http://${lanIp}:${port}/api/status`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toHaveProperty("unread");
   });
 
   it("reads where a panel poll came from, IPv4 only", () => {
