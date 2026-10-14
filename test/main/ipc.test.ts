@@ -39,6 +39,7 @@ function deps(window: { mainFrame: unknown } | null = contents) {
     botNote: () => null,
     networks,
     dismissAddress: vi.fn(),
+    askPush: vi.fn<IpcDeps["askPush"]>(async () => true),
     appContents: () => window,
   } satisfies IpcDeps;
   registerIpc(d);
@@ -76,12 +77,29 @@ describe("fromAppWindow", () => {
 });
 
 describe("push channels", () => {
-  it("confirm-push hands the SSIDs to the vault", () => {
+  it("confirm-push asks the person, then hands the SSIDs to the vault", async () => {
     const d = deps();
-    expect(call("networks:confirm-push", appFrame, ["Home"])).toEqual({
-      ok: true,
-    });
+    await expect(
+      call("networks:confirm-push", appFrame, ["Home"]),
+    ).resolves.toEqual({ ok: true });
+    expect(d.askPush).toHaveBeenCalledWith(["Home"]);
     expect(d.networks.confirmPush).toHaveBeenCalledWith(["Home"]);
+  });
+
+  it("confirm-push stops when the person declines the native dialog", async () => {
+    const d = deps();
+    d.askPush.mockResolvedValueOnce(false);
+    await expect(
+      call("networks:confirm-push", appFrame, ["Home"]),
+    ).resolves.toMatchObject({ ok: false });
+    expect(d.networks.confirmPush).not.toHaveBeenCalled();
+  });
+
+  it("confirm-push of nothing needs no dialog because no password can leave", async () => {
+    const d = deps();
+    await call("networks:confirm-push", appFrame, []);
+    expect(d.askPush).not.toHaveBeenCalled();
+    expect(d.networks.confirmPush).toHaveBeenCalledWith([]);
   });
 
   it("release returns the vault's one-shot release", () => {
@@ -112,9 +130,10 @@ describe("push channels", () => {
   ];
   for (const [channel, method, args] of channels)
     for (const [who, event, window] of strangers)
-      it(`${channel} refuses ${who} without touching the vault`, () => {
+      it(`${channel} refuses ${who} without touching the vault`, async () => {
         const d = deps(window);
-        const result = call(channel, event, ...args);
+        const result = await call(channel, event, ...args);
+        expect(d.askPush).not.toHaveBeenCalled();
         expect(result).toMatchObject({ ok: false });
         expect(result).not.toHaveProperty("password");
         for (const fn of Object.values(d.networks))

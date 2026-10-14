@@ -38,6 +38,8 @@ export interface IpcDeps {
   >;
   /** "Not now" on the address banner. */
   dismissAddress(): void;
+  /** A native dialog the window cannot draw or click: true only when the person sends them. */
+  askPush(ssids: string[]): Promise<boolean>;
   /** The app window's webContents, null while it does not exist. */
   appContents(): { mainFrame: unknown } | null;
 }
@@ -55,6 +57,7 @@ export function fromAppWindow(
 }
 
 const NOT_APP_WINDOW = "Only the Calico window can push networks.";
+const PUSH_DECLINED = "The push was cancelled.";
 
 export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle("calico:info", () => deps.info());
@@ -90,9 +93,18 @@ export function registerIpc(deps: IpcDeps): void {
     fromAppWindow(event, deps.appContents())
       ? run()
       : { ok: false as const, error: NOT_APP_WINDOW };
-  ipcMain.handle("networks:confirm-push", (e, ssids: unknown) =>
-    push(e, () => deps.networks.confirmPush(ssids)),
-  );
+  // A native dialog backs the window's own confirmation, so a compromised page cannot confirm
+  // its own plan. An empty plan releases no password and needs no dialog.
+  ipcMain.handle("networks:confirm-push", async (e, ssids: unknown) => {
+    if (!fromAppWindow(e, deps.appContents()))
+      return { ok: false as const, error: NOT_APP_WINDOW };
+    const names = Array.isArray(ssids)
+      ? ssids.filter((s): s is string => typeof s === "string")
+      : [];
+    if (names.length > 0 && !(await deps.askPush(names)))
+      return { ok: false as const, error: PUSH_DECLINED };
+    return deps.networks.confirmPush(ssids);
+  });
   ipcMain.handle("networks:release", (e, ssid: unknown) =>
     push(e, () => deps.networks.release(ssid)),
   );

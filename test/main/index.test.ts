@@ -64,6 +64,7 @@ vi.mock("electron", () => {
     BrowserWindow,
     clipboard: {},
     dialog: {
+      showMessageBox: vi.fn(async () => ({ response: 1 })),
       showErrorBox: (title: string, text: string) =>
         h.errors.push(`${title}: ${text}`),
     },
@@ -252,9 +253,9 @@ describe("push channels", () => {
 
   it("release a saved password once to the app window", async () => {
     await confirmed();
-    expect(call("networks:confirm-push", fromApp(), ["Home"])).toEqual({
-      ok: true,
-    });
+    await expect(
+      call("networks:confirm-push", fromApp(), ["Home"]),
+    ).resolves.toEqual({ ok: true });
     expect(call("networks:release", fromApp(), "Home")).toEqual({
       ok: true,
       password: "fake-pass-1",
@@ -267,7 +268,7 @@ describe("push channels", () => {
 
   it("end-push stops the release", async () => {
     await confirmed();
-    call("networks:confirm-push", fromApp(), ["Home"]);
+    await call("networks:confirm-push", fromApp(), ["Home"]);
     call("networks:end-push", fromApp());
     expect(call("networks:release", fromApp(), "Home")).toMatchObject({
       ok: false,
@@ -282,10 +283,10 @@ describe("push channels", () => {
       { sender: stranger, senderFrame: stranger.mainFrame },
       { sender: wc, senderFrame: {} },
     ]) {
-      expect(call("networks:confirm-push", event, ["Home"])).toMatchObject({
-        ok: false,
-      });
-      call("networks:confirm-push", fromApp(), ["Home"]);
+      await expect(
+        call("networks:confirm-push", event, ["Home"]),
+      ).resolves.toMatchObject({ ok: false });
+      await call("networks:confirm-push", fromApp(), ["Home"]);
       expect(call("networks:release", event, "Home")).toMatchObject({
         ok: false,
       });

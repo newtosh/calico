@@ -228,6 +228,22 @@ async function start(): Promise<void> {
   registerIpc({
     networks,
     dismissAddress: () => addressWatch.dismiss(),
+    askPush: async (ssids) => {
+      const box = {
+        type: "question" as const,
+        title: "Send passwords to the panel",
+        message: "Send these saved Wi-Fi passwords to the panel?",
+        detail: ssids.join("\n"),
+        buttons: ["Cancel", "Send"],
+        defaultId: 0,
+        cancelId: 0,
+      };
+      const { response } =
+        win && !win.isDestroyed()
+          ? await dialog.showMessageBox(win, box)
+          : await dialog.showMessageBox(box);
+      return response === 1;
+    },
     appContents: () => (win && !win.isDestroyed() ? win.webContents : null),
     relaySetup,
     botNote: () =>
