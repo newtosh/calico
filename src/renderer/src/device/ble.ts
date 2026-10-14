@@ -13,6 +13,7 @@ import {
   toReason,
   validateCmd,
 } from "./commands";
+import { WIFI_WRITE_MAX } from "../../../shared/panel-fields";
 
 // The first name is the firmware's (firmware/main/ble_desk.h, checked by a test).
 // A panel flashed before the rename still advertises the old one.
@@ -108,13 +109,20 @@ export class BleLink implements DeviceLink {
           encode(cmd.value === "" ? "\n" : cmd.value),
         );
         return { ok: true };
-      case "wifi":
+      case "wifi": {
+        const body = encode(wifiBody(cmd));
+        // The field limits keep this at 353 bytes and the panel's buffer is 354. Never send more.
+        if (body.length > WIFI_WRITE_MAX)
+          throw new FieldError(
+            `That network is longer than the panel's ${WIFI_WRITE_MAX}-byte Wi-Fi write.`,
+          );
         // Firmware without nets also rejects the four-line form with a raw ATT error.
         // Reading nets first turns that into NotFoundError, before any secret is written.
         if (cmd.url !== undefined || cmd.token !== undefined)
           await this.gatt.read(UUID.nets);
-        await this.gatt.write(UUID.wifi, encode(wifiBody(cmd)));
+        await this.gatt.write(UUID.wifi, body);
         return { ok: true };
+      }
       case "nets":
         return { ok: true, nets: parseNets(await this.gatt.read(UUID.nets)) };
       case "forget":

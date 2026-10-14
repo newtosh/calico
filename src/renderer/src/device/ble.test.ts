@@ -10,6 +10,8 @@ import {
   UUID,
   wifiBody,
 } from "./ble";
+import { PASS_MAX, SSID_MAX, TOKEN_MAX, URL_MAX } from "./commands";
+import { WIFI_WRITE_MAX } from "../../../shared/panel-fields";
 
 function fakeGatt(
   reads: Record<string, string[]>,
@@ -36,6 +38,23 @@ const instant = async () => undefined;
 afterEach(() => vi.unstubAllGlobals());
 
 describe("BleLink", () => {
+  it("writes the longest legal network in at most 354 bytes", async () => {
+    const { gatt, writes } = fakeGatt({ [UUID.nets]: ["count=0\n"] });
+    const reply = await new BleLink(gatt, instant).send({
+      op: "wifi",
+      ssid: "s".repeat(SSID_MAX),
+      pass: "p".repeat(PASS_MAX),
+      url: `http://${"u".repeat(URL_MAX - 7)}`,
+      token: "t".repeat(TOKEN_MAX),
+    });
+    expect(reply).toEqual({ ok: true });
+    expect(WIFI_WRITE_MAX).toBe(354);
+    expect(new TextEncoder().encode(writes[0]?.[1] ?? "").length).toBe(
+      WIFI_WRITE_MAX - 1,
+    );
+    expect(header).toContain("#define BLE_DESK_WIFI_CFG_MAX");
+  });
+
   it("reads status", async () => {
     const { gatt } = fakeGatt({
       [UUID.status]: ["name=ginger\nfw=1\nssid=home\nurl=none\ntoken=none\n"],

@@ -5,6 +5,9 @@ export const PASS_MAX = 64;
 export const URL_MAX = 127;
 export const TOKEN_MAX = 127;
 export const NETWORKS_MAX = 8;
+/** The longest wifi write the panel takes: ssid\npass\nurl\ntoken\n at full size (BLE_DESK_WIFI_CFG_MAX). */
+export const WIFI_WRITE_MAX =
+  SSID_MAX + 1 + PASS_MAX + 1 + URL_MAX + 1 + TOKEN_MAX + 1;
 
 /** A field the panel would refuse. The message names the field, never its value. */
 export class FieldError extends Error {}
