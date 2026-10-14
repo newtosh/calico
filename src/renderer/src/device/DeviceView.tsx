@@ -6,6 +6,7 @@ import { FirewallAssist } from "./FirewallAssist";
 import { LinkActions } from "./LinkActions";
 import { PanelNetworks } from "./PanelNetworks";
 import { ProvisionFlow } from "./ProvisionFlow";
+import { PushNetworks } from "./PushNetworks";
 import { RebootWait } from "./RebootWait";
 import { SerialAssist } from "./SerialAssist";
 import { connectUsb } from "./usb";
@@ -25,6 +26,8 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
   const [assist, setAssist] = useState<"firewall" | "serial" | null>(null);
   const manualClose = useRef(false);
   const [rebootAt, setRebootAt] = useState<number | null>(null);
+  // The push's outcome. Here, not in PushNetworks: a dropped link unmounts that section.
+  const [pushNote, setPushNote] = useState("");
   const showFirewall = useCallback(() => setAssist("firewall"), []);
 
   // The desk resets as it takes the command, so the link drop that follows is
@@ -49,6 +52,7 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
   async function open(kind: "usb" | "ble") {
     setError("");
     setRebootAt(null);
+    setPushNote("");
     const lost = () => {
       setLink(null);
       if (manualClose.current) {
@@ -110,6 +114,13 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
             onReboot={() => reboot(link)}
           />
           <PanelNetworks link={link} />
+          <PushNetworks
+            link={link}
+            onFinished={(message, restart) => {
+              setPushNote(message);
+              if (restart) void reboot(link);
+            }}
+          />
           <button
             type="button"
             className="btn mx-4 mt-4"
@@ -154,6 +165,11 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
       {error ? (
         <p role="alert" className="px-4 pt-2">
           <ErrorNote>{error}</ErrorNote>
+        </p>
+      ) : null}
+      {pushNote ? (
+        <p role="status" className="max-w-2xl px-4 pt-2">
+          {pushNote}
         </p>
       ) : null}
       {rebootAt !== null ? (
