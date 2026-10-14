@@ -74,6 +74,36 @@ describe("buildPlan", () => {
     expect(plan.remove).toEqual(["home"]);
   });
 
+  it("treats leading and trailing spaces as part of the SSID", () => {
+    const plan = buildPlan(
+      [net("home ")],
+      [onPanel("home"), onPanel(" lab")],
+      "",
+    );
+    expect(plan.add.map((n) => n.ssid)).toEqual(["home "]);
+    expect(plan.remove).toEqual(["home", " lab"]);
+  });
+
+  it("keeps a network literally named none when the panel has one, since status says none for no network too", () => {
+    const plan = buildPlan([net("lab")], [onPanel("none")], "");
+    expect(plan.current).toBe("none");
+    expect(planSteps(plan, false).steps).toEqual([
+      { op: "wifi", net: net("lab") },
+    ]);
+    expect(planSteps(plan, true).steps[0]).toEqual({
+      op: "forget",
+      ssid: "none",
+    });
+  });
+
+  it("reads an empty current as disconnected when the panel has no network named none", () => {
+    expect(buildPlan([net("lab")], [onPanel("old")], "").current).toBe("");
+    expect(buildPlan([], [onPanel("old")], "old").current).toBe("old");
+    expect(
+      buildPlan([], [onPanel("none"), onPanel("cafe")], "cafe").current,
+    ).toBe("cafe");
+  });
+
   it("after a push that stopped halfway, plans the rest again", () => {
     // The first run resent home and removed old, then the link dropped before lab.
     expect(
@@ -335,6 +365,23 @@ describe("runPush secrets", () => {
       quiet,
     );
     expect(result).toEqual({ done: 0, total: 1, error: "ipc closed" });
+    expect(sent).toEqual([]);
+  });
+});
+
+describe("runPush onStep", () => {
+  it("stops with a message when the progress callback throws", async () => {
+    const { link, sent } = fakeLink();
+    const { release } = releaser();
+    const result = await runPush(
+      link,
+      [{ op: "forget", ssid: "old" }],
+      release,
+      () => {
+        throw new Error("render failed");
+      },
+    );
+    expect(result).toEqual({ done: 0, total: 1, error: "render failed" });
     expect(sent).toEqual([]);
   });
 });

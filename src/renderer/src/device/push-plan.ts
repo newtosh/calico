@@ -37,7 +37,9 @@ export function buildPlan(
     add: vault.filter((n) => !onPanel.has(n.ssid)),
     update: vault.filter((n) => onPanel.has(n.ssid)),
     remove: panel.map((n) => n.ssid).filter((ssid) => !saved.has(ssid)),
-    current,
+    // Status reports "none" for no network, which a network named "none" also looks like.
+    // When the panel holds one, assume it may be the current one and keep it.
+    current: current === "" && onPanel.has("none") ? "none" : current,
   };
 }
 
@@ -76,7 +78,8 @@ export function planSteps(
 /**
  * Applies the steps in order and stops at the first failure. Each password comes from main once
  * and goes straight into the write. Every write is idempotent, so pushing again after a stop
- * finishes the job.
+ * finishes the job. The CALLER must call networksEndPush in a finally after this returns or
+ * throws, so main stops releasing passwords.
  */
 export async function runPush(
   link: DeviceLink,
@@ -86,7 +89,11 @@ export async function runPush(
 ): Promise<PushResult> {
   const total = steps.length;
   for (const [i, step] of steps.entries()) {
-    onStep(i, step);
+    try {
+      onStep(i, step);
+    } catch (e) {
+      return { done: i, total, error: message(e) };
+    }
     let reply: Reply;
     if (step.op === "forget") {
       try {
