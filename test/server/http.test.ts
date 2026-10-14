@@ -6,6 +6,8 @@ import {
   asciiJson,
   createCompanionServer,
   isLoopback,
+  type PanelSeen,
+  panelSeen,
 } from "../../src/server/http";
 import type { CursorStatus } from "../../src/server/cursor-poll";
 import type { RelayStatus } from "../../src/server/relay";
@@ -19,6 +21,7 @@ async function start(
   allowedOrigins: string[] = [],
   cursorStatus?: () => CursorStatus,
   relayStatus?: () => RelayStatus,
+  onPanelPoll?: (seen: PanelSeen) => void,
 ) {
   let current: CalicoConfig = { ...defaultConfig(), ...config };
   const store = new DeskStore();
@@ -27,6 +30,7 @@ async function start(
     allowedOrigins,
     ...(cursorStatus ? { cursorStatus } : {}),
     ...(relayStatus ? { relayStatus } : {}),
+    ...(onPanelPoll ? { onPanelPoll } : {}),
     getConfig: () => current,
     setConfig: (next) => {
       current = next;
@@ -137,6 +141,30 @@ describe("companion server", () => {
     const { base, stats } = await start();
     await fetch(`${base}/api/status`);
     expect(stats.lastPanelPoll).toBeNull();
+  });
+
+  it("does not report a loopback poll as the panel's", async () => {
+    const seen: PanelSeen[] = [];
+    const { base } = await start({}, [], undefined, undefined, (s) =>
+      seen.push(s),
+    );
+    await fetch(`${base}/api/status`);
+    expect(seen).toEqual([]);
+  });
+
+  it("reads where a panel poll came from, IPv4 only", () => {
+    expect(panelSeen("::ffff:192.168.4.31", "::ffff:192.168.4.30")).toEqual({
+      from: "192.168.4.31",
+      via: "192.168.4.30",
+    });
+    expect(panelSeen("192.168.4.31", "192.168.4.30")).toEqual({
+      from: "192.168.4.31",
+      via: "192.168.4.30",
+    });
+    expect(panelSeen("fe80::1", "fe80::2")).toBeNull();
+    expect(panelSeen("192.168.4.31", "fe80::2")).toBeNull();
+    expect(panelSeen("192.168.4.31", undefined)).toBeNull();
+    expect(panelSeen(undefined, "192.168.4.30")).toBeNull();
   });
 
   it("tells a token-only panel push that it needs a URL, and keeps other panel errors generic", async () => {
