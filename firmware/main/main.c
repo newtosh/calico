@@ -109,7 +109,7 @@ static void save_and_restart(const char *ssid, const char *pass, const char *url
         ui_set_settings_status("Could not save that network.");
         return;
     }
-    net_save(&s_store);
+    ESP_ERROR_CHECK(net_save(&s_store));
     ble_link_leave();
     esp_restart();
 }
@@ -357,14 +357,29 @@ static void poll_task(void *arg) {
  * not fit. The task stays blocked between scans so Control Center can
  * ask again without a second create, and without freeing the TCB. */
 static void join_task(void *arg) {
+    /* The select scans for seconds and keeps pointers into nets[]. A BLE forget shifts nets[]
+     * and a failed save rewrites the store, both under s_mu, so the select reads a copy taken
+     * under s_mu. PSRAM, once: about 3 KB, too much for internal RAM. */
+    wifi_store_t *snap = NULL;
     (void)arg;
     for (;;) {
-        int selected;
+        int selected = -1;
         if (!s_join_go || xSemaphoreTake(s_join_go, portMAX_DELAY) != pdTRUE) {
             continue;
         }
         ESP_LOGI("desk", "wifi-join");
-        selected = net_wifi_select(&s_store, &s_active);
+        if (!snap) {
+            snap = heap_caps_malloc(sizeof(*snap), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        }
+        if (snap) {
+            ble_link_enter();
+            memcpy(snap, &s_store, sizeof(*snap));
+            ble_link_leave();
+            selected = net_wifi_select(snap, &s_active);
+            memset(snap, 0, sizeof(*snap));
+        } else {
+            ESP_LOGE("desk", "wifi-join snapshot PSRAM missing");
+        }
         if (selected == 0 && net_sta_enabled()) {
             net_wifi_start(&s_active);
             if (!s_poll_started) {

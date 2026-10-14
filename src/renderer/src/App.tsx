@@ -45,7 +45,9 @@ export function App() {
               onSetup={() => setView("settings")}
             />
           ) : null}
-          {view === "settings" && info ? <SettingsView info={info} /> : null}
+          {view === "settings" && info ? (
+            <SettingsView info={info} link={link} />
+          ) : null}
           {view === "device" && info ? (
             <DeviceView
               info={info}

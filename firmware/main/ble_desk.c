@@ -10,6 +10,9 @@ _Static_assert(sizeof(((wifi_store_t *)0)->token) == BLE_DESK_TOKEN_MAX + 1, "to
 _Static_assert(BLE_DESK_SCAN_TEXT >= (sizeof("state=ready\n") - 1) +
                        BLE_DESK_SCAN_MAX * ((sizeof("-128") - 1) + 1 + BLE_DESK_SSID_MAX + 1) + 1,
                "scan text");
+_Static_assert(BLE_DESK_NETS_TEXT >= (sizeof("count=8\n") - 1) +
+                       WIFI_NET_MAX * (2 + 1 + BLE_DESK_SSID_MAX + 1) + 1,
+               "nets text");
 
 static void copy_field(char *dest, size_t dest_len, const char *src) {
     size_t i;
@@ -359,4 +362,114 @@ int ble_desk_upsert_wifi(wifi_store_t *store, const char *ssid, const char *pass
         }
     }
     return wifi_upsert(store, ssid, pass, url, token);
+}
+
+int ble_desk_format_nets(char *out, size_t cap, const wifi_store_t *store) {
+    char ssid[BLE_DESK_SSID_MAX + 1];
+    size_t used;
+    int count = 0;
+    int n;
+    int i;
+    if (!out || cap == 0) {
+        return -1;
+    }
+    if (store && store->count > 0) {
+        count = store->count > WIFI_NET_MAX ? WIFI_NET_MAX : store->count;
+    }
+    n = snprintf(out, cap, "count=%d\n", count);
+    if (n < 0 || (size_t)n >= cap) {
+        out[0] = '\0';
+        return -1;
+    }
+    used = (size_t)n;
+    for (i = 0; i < count; i++) {
+        const wifi_net_t *net = &store->nets[i];
+        clean_field(ssid, sizeof(ssid), net->ssid, "");
+        n = snprintf(out + used, cap - used, "%c%c\t%s\n", net->url[0] ? '1' : '0',
+                     net->token[0] ? '1' : '0', ssid);
+        if (n < 0 || (size_t)n >= cap - used) {
+            out[0] = '\0';
+            return -1;
+        }
+        used += (size_t)n;
+    }
+    return (int)used;
+}
+
+int ble_desk_parse_forget(const uint8_t *in, size_t len, char *ssid, size_t cap) {
+    size_t n;
+    if (strip_tail(in, len, &n) != 0 || has_break(in, n) || n == 0 || n > BLE_DESK_SSID_MAX) {
+        return -1;
+    }
+    return copy_out(ssid, cap, in, n);
+}
+
+static int wifi_cfg_fail(ble_desk_wifi_t *out) {
+    memset(out, 0, sizeof(*out));
+    return -1;
+}
+
+int ble_desk_parse_wifi_cfg(const uint8_t *in, size_t len, ble_desk_wifi_t *out) {
+    size_t start[5];
+    size_t end[5];
+    size_t at = 0;
+    size_t i;
+    int parts = 0;
+    if (!out) {
+        return -1;
+    }
+    memset(out, 0, sizeof(*out));
+    if (len > 0 && !in) {
+        return -1;
+    }
+    for (i = 0; i <= len; i++) {
+        if (i < len && in[i] != '\n') {
+            continue;
+        }
+        if (parts == 5) {
+            return -1;
+        }
+        start[parts] = at;
+        end[parts] = i;
+        parts++;
+        at = i + 1;
+    }
+    /* One trailing newline ends the write and leaves an empty last part. */
+    if ((parts == 3 || parts == 5) && start[parts - 1] == end[parts - 1]) {
+        parts--;
+    }
+    if (parts == 2) {
+        if (ble_desk_parse_wifi(in, len, out->ssid, sizeof(out->ssid), out->pass,
+                                sizeof(out->pass)) != 0) {
+            return wifi_cfg_fail(out);
+        }
+        return 0;
+    }
+    if (parts != 4) {
+        return -1;
+    }
+    /* "ssid\npass" is the two-line body; the url and token parts follow it. */
+    if (ble_desk_parse_wifi(in, end[1], out->ssid, sizeof(out->ssid), out->pass, sizeof(out->pass)) !=
+        0) {
+        return wifi_cfg_fail(out);
+    }
+    if (end[2] > start[2] &&
+        ble_desk_parse_url(in + start[2], end[2] - start[2], out->url, sizeof(out->url)) != 0) {
+        return wifi_cfg_fail(out);
+    }
+    if (ble_desk_parse_token(in + start[3], end[3] - start[3], out->token, sizeof(out->token)) != 0) {
+        return wifi_cfg_fail(out);
+    }
+    out->has_cfg = 1;
+    return 0;
+}
+
+int ble_desk_apply_wifi(wifi_store_t *store, const ble_desk_wifi_t *req) {
+    if (!store || !req) {
+        return -1;
+    }
+    if (req->has_cfg) {
+        return wifi_upsert(store, req->ssid, req->pass, req->url, req->token);
+    }
+    return ble_desk_upsert_wifi(store, req->ssid, req->pass);
 }

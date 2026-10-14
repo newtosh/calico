@@ -1,12 +1,14 @@
 import type { ReactNode } from "react";
 import { useState } from "react";
 import type { CalicoInfo } from "../../../shared/ipc";
+import type { DeviceLink } from "../device/commands";
 import { loadTab, saveTab, type SettingsTab } from "../lib/settings-tab";
 import { AboutSection } from "./AboutSection";
 import { AgentUpdatesSection } from "./AgentUpdatesSection";
 import { AutostartSection } from "./AutostartSection";
 import { ConfigSection } from "./ConfigSection";
 import { CursorStatus } from "./CursorStatus";
+import { NetworksSection } from "./NetworksSection";
 import { PanelSection } from "./PanelSection";
 import { PortSection } from "./PortSection";
 import { RelaySection } from "./RelaySection";
@@ -42,7 +44,13 @@ function Panel({
   );
 }
 
-export function SettingsView({ info }: { info: CalicoInfo }) {
+export function SettingsView({
+  info,
+  link = null,
+}: {
+  info: CalicoInfo;
+  link?: DeviceLink | null;
+}) {
   const [tab, setTab] = useState<SettingsTab>(loadTab);
   const choose = (next: SettingsTab) => {
     setTab(next);
@@ -71,6 +79,7 @@ export function SettingsView({ info }: { info: CalicoInfo }) {
             Connectivity settings need calico's server, which is not running.
           </p>
         )}
+        <NetworksSection link={link} />
       </Panel>
       <Panel id="app" current={tab}>
         <AutostartSection autostart={info.autostart} />

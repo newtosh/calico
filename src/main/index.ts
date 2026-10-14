@@ -1,6 +1,6 @@
 import { hostname } from "node:os";
 import { join } from "node:path";
-import { app, BrowserWindow, dialog, shell } from "electron";
+import { app, BrowserWindow, dialog, safeStorage, shell } from "electron";
 import {
   ConfigError,
   type CalicoConfig,
@@ -8,6 +8,7 @@ import {
   saveConfig,
 } from "../server/config";
 import { version } from "../../package.json";
+import { NetworkVault } from "./networks";
 import { CursorState, startCursorPoll } from "../server/cursor-poll";
 import { RelayState, startRelayPoll } from "../server/relay";
 import { createCompanionServer } from "../server/http";
@@ -187,7 +188,18 @@ async function start(): Promise<void> {
       if (!w.isDestroyed()) w.webContents.send("relay:setup-changed", view);
   });
 
+  // After app ready, so safeStorage knows its backend. Linux is the only target for now.
+  const networks = new NetworkVault(join(userData, "networks.json"), {
+    backend: () =>
+      process.platform === "linux"
+        ? safeStorage.getSelectedStorageBackend()
+        : "os",
+    available: () => safeStorage.isEncryptionAvailable(),
+    encrypt: (text) => safeStorage.encryptString(text),
+  });
+
   registerIpc({
+    networks,
     relaySetup,
     botNote: () =>
       config.relay_url && config.relay_send_token

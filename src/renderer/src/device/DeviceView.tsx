@@ -4,6 +4,7 @@ import { connectBle } from "./ble";
 import type { DeviceLink } from "./commands";
 import { FirewallAssist } from "./FirewallAssist";
 import { LinkActions } from "./LinkActions";
+import { PanelNetworks } from "./PanelNetworks";
 import { ProvisionFlow } from "./ProvisionFlow";
 import { RebootWait } from "./RebootWait";
 import { SerialAssist } from "./SerialAssist";
@@ -108,6 +109,7 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
             link={link}
             onReboot={() => reboot(link)}
           />
+          <PanelNetworks link={link} />
           <button
             type="button"
             className="btn mx-4 mt-4"

@@ -88,16 +88,18 @@ static void slot_key(char *dest, size_t dest_len, int index, const char *field) 
     snprintf(dest, dest_len, "n%d%s", index, field);
 }
 
-static void set_or_erase(nvs_handle_t handle, const char *key, const char *value, int keep_empty) {
+static esp_err_t try_set_or_erase(nvs_handle_t handle, const char *key, const char *value,
+                                  int keep_empty) {
     esp_err_t err;
     if (value && (value[0] || keep_empty)) {
-        ESP_ERROR_CHECK(nvs_set_str(handle, key, value ? value : ""));
-        return;
+        return nvs_set_str(handle, key, value);
     }
     err = nvs_erase_key(handle, key);
-    if (err != ESP_OK && err != ESP_ERR_NVS_NOT_FOUND) {
-        ESP_ERROR_CHECK(err);
-    }
+    return err == ESP_ERR_NVS_NOT_FOUND ? ESP_OK : err;
+}
+
+static void set_or_erase(nvs_handle_t handle, const char *key, const char *value, int keep_empty) {
+    ESP_ERROR_CHECK(try_set_or_erase(handle, key, value, keep_empty));
 }
 
 void net_load(wifi_store_t *out) {
@@ -137,28 +139,45 @@ void net_load(wifi_store_t *out) {
     nvs_close(handle);
 }
 
-void net_save(const wifi_store_t *in) {
+/* Skips every key after the first failure, so *err keeps that first error. */
+static void save_key(nvs_handle_t handle, const char *key, const char *value, int keep_empty,
+                     esp_err_t *err) {
+    if (*err == ESP_OK) {
+        *err = try_set_or_erase(handle, key, value, keep_empty);
+    }
+}
+
+/* NVS writes land in flash as they go, so a failure can leave earlier keys of this save
+ * written and later ones old: the caller decides what to do about it. */
+esp_err_t net_save(const wifi_store_t *in) {
     nvs_handle_t handle;
     char key[16];
+    esp_err_t err;
     int i;
-    ESP_ERROR_CHECK(nvs_open("desk", NVS_READWRITE, &handle));
-    set_or_erase(handle, "url", in->url, 0);
-    set_or_erase(handle, "token", in->token, 1);
-    set_or_erase(handle, "ssid", "", 0);
-    set_or_erase(handle, "pass", "", 0);
+    err = nvs_open("desk", NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        return err;
+    }
+    save_key(handle, "url", in->url, 0, &err);
+    save_key(handle, "token", in->token, 1, &err);
+    save_key(handle, "ssid", "", 0, &err);
+    save_key(handle, "pass", "", 0, &err);
     for (i = 0; i < WIFI_NET_MAX; i++) {
         const wifi_net_t *net = i < in->count ? &in->nets[i] : NULL;
         slot_key(key, sizeof(key), i, "ssid");
-        set_or_erase(handle, key, net ? net->ssid : "", 0);
+        save_key(handle, key, net ? net->ssid : "", 0, &err);
         slot_key(key, sizeof(key), i, "pass");
-        set_or_erase(handle, key, net ? net->pass : "", net != NULL);
+        save_key(handle, key, net ? net->pass : "", net != NULL, &err);
         slot_key(key, sizeof(key), i, "url");
-        set_or_erase(handle, key, net ? net->url : "", 0);
+        save_key(handle, key, net ? net->url : "", 0, &err);
         slot_key(key, sizeof(key), i, "token");
-        set_or_erase(handle, key, net && net->token[0] ? net->token : "", 0);
+        save_key(handle, key, net && net->token[0] ? net->token : "", 0, &err);
     }
-    ESP_ERROR_CHECK(nvs_commit(handle));
+    if (err == ESP_OK) {
+        err = nvs_commit(handle);
+    }
     nvs_close(handle);
+    return err;
 }
 
 void net_save_globals(const char *url, const char *token) {
@@ -289,6 +308,10 @@ static void on_ip(void *arg, esp_event_base_t base, int32_t id, void *data) {
     s_wifi_retries = 0;
     s_wifi_has_ip = 1;
     s_wifi_gave_up = 0;
+    /* The internal RAM left once the station is up. Compared before and after firmware changes. */
+    ESP_LOGI(TAG, "got ip, internal free %u, largest internal %u",
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+             (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
 }
 
 static int sta_has_address(void) {

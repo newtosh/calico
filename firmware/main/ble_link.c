@@ -37,8 +37,11 @@ void ble_store_config_init(void);
 #define DESK_FW_SHA "unknown"
 #endif
 
-/* One write is a URL or token (127) or SSID, a newline, and a password (32+1+64). */
-#define BLE_LINK_WRITE_MAX 160
+/* The longest write is wifi with this network's own url and token (354 bytes).
+ * That is longer than one ATT packet, so the central sends it as a long write:
+ * at MTU 256 two of the four prepare entries (CONFIG_BT_NIMBLE_ATT_MAX_PREP_ENTRIES). */
+#define BLE_LINK_WRITE_MAX BLE_DESK_WIFI_CFG_MAX
+_Static_assert(BLE_LINK_WRITE_MAX >= 160, "a write still fits a url, a token and a two-line wifi");
 
 static const char *TAG = "desk-ble";
 static wifi_store_t *s_store;
@@ -145,6 +148,18 @@ void ble_link_set_paired_callback(ble_link_paired_fn fn) {
 static char s_scan_text[BLE_DESK_SCAN_TEXT];
 #define BLE_LINK_PROBE_TEXT 128
 static char s_probe_text[BLE_LINK_PROBE_TEXT];
+/* GATT access runs only on the NimBLE host task, so one scratch serves every write and the
+ * nets read. It is PSRAM, allocated once at host start: on the host task's 6144-byte internal
+ * stack the 354-byte write, the parsed network and the nets text would take about 1 KB of
+ * headroom, and as static .bss they would take internal RAM the station needs. `before` is the
+ * saved networks as they were, put back if the NVS save fails. */
+typedef struct {
+    uint8_t write[BLE_LINK_WRITE_MAX];
+    ble_desk_wifi_t wifi;
+    char nets[BLE_DESK_NETS_TEXT];
+    wifi_store_t before;
+} ble_link_scratch_t;
+static ble_link_scratch_t *s_scratch;
 static int s_scan_busy;
 static int s_job;
 static char s_verify_ssid[33];
@@ -165,7 +180,7 @@ enum {
 
 /* Little-endian UUID bytes. The 13th byte is the time_low LSB:
  * 0x10 service, 0x11 status, 0x12 url, 0x13 token, 0x14 wifi, 0x15 reboot,
- * 0x16 scan, 0x17 verify, 0x18 peer. Status is open; every other characteristic needs a paired link.
+ * 0x16 scan, 0x17 verify, 0x18 peer, 0x19 nets, 0x1a forget. Status is open; every other characteristic needs a paired link.
  * scripts/test_ble_provision.py checks these against the strings in ble_desk.h. */
 static const ble_uuid128_t s_uuid_svc =
     BLE_UUID128_INIT(0x65, 0x64, 0x6b, 0x6f, 0x72, 0x67, 0xc5, 0xa3, 0x91, 0x4f, 0x2a, 0x6e, 0x10,
@@ -193,6 +208,12 @@ static const ble_uuid128_t s_uuid_verify =
                      0x4b, 0x7c, 0x8d);
 static const ble_uuid128_t s_uuid_peer =
     BLE_UUID128_INIT(0x65, 0x64, 0x6b, 0x6f, 0x72, 0x67, 0xc5, 0xa3, 0x91, 0x4f, 0x2a, 0x6e, 0x18,
+                     0x4b, 0x7c, 0x8d);
+static const ble_uuid128_t s_uuid_nets =
+    BLE_UUID128_INIT(0x65, 0x64, 0x6b, 0x6f, 0x72, 0x67, 0xc5, 0xa3, 0x91, 0x4f, 0x2a, 0x6e, 0x19,
+                     0x4b, 0x7c, 0x8d);
+static const ble_uuid128_t s_uuid_forget =
+    BLE_UUID128_INIT(0x65, 0x64, 0x6b, 0x6f, 0x72, 0x67, 0xc5, 0xa3, 0x91, 0x4f, 0x2a, 0x6e, 0x1a,
                      0x4b, 0x7c, 0x8d);
 
 static int access(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt *ctxt,
@@ -253,6 +274,18 @@ static const struct ble_gatt_svc_def s_svcs[] = {
                     .uuid = &s_uuid_peer.u,
                     .access_cb = access,
                     .arg = (void *)(uintptr_t)BLE_DESK_OP_PEER,
+                    .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_AUTHEN,
+                },
+                {
+                    .uuid = &s_uuid_nets.u,
+                    .access_cb = access,
+                    .arg = (void *)(uintptr_t)BLE_DESK_OP_NETS,
+                    .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_READ_AUTHEN,
+                },
+                {
+                    .uuid = &s_uuid_forget.u,
+                    .access_cb = access,
+                    .arg = (void *)(uintptr_t)BLE_DESK_OP_FORGET,
                     .flags = BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_WRITE_AUTHEN,
                 },
                 {
@@ -641,21 +674,77 @@ static int write_reboot(const uint8_t *buf, uint16_t len) {
     return 0;
 }
 
+/* Under s_mu, with s_scratch->before holding the store from before this change. On an NVS
+ * failure the RAM store goes back to `before` and is saved again, so the panel and the peer
+ * agree nothing changed. NVS has no transaction: if that second save fails too, flash can keep
+ * a half-written slot until the next good save, and the log says so. */
+static int save_store(void) {
+    esp_err_t err = net_save(s_store);
+    if (err == ESP_OK) {
+        return 0;
+    }
+    ESP_LOGE(TAG, "save networks: %s, change undone", esp_err_to_name(err));
+    memcpy(s_store, &s_scratch->before, sizeof(*s_store));
+    err = net_save(s_store);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "restore networks: %s, NVS may hold a half-written slot", esp_err_to_name(err));
+    }
+    return -1;
+}
+
 static int write_wifi(const uint8_t *buf, uint16_t len) {
-    char ssid[33];
-    char pass[65];
-    if (ble_desk_parse_wifi(buf, len, ssid, sizeof(ssid), pass, sizeof(pass)) != 0 || !s_store) {
+    ble_desk_wifi_t *req = &s_scratch->wifi;
+    int rc;
+    if (!s_store || ble_desk_parse_wifi_cfg(buf, len, req) != 0) {
+        memset(req, 0, sizeof(*req));
         return BLE_ATT_ERR_UNLIKELY;
     }
     ble_link_enter();
-    if (ble_desk_upsert_wifi(s_store, ssid, pass) != 0) {
-        ble_link_leave();
+    memcpy(&s_scratch->before, s_store, sizeof(*s_store));
+    rc = ble_desk_apply_wifi(s_store, req);
+    if (rc == 0) {
+        rc = save_store();
+    }
+    memset(&s_scratch->before, 0, sizeof(s_scratch->before));
+    ble_link_leave();
+    if (rc == 0) {
+        ESP_LOGI(TAG, "wifi %s%s", req->ssid, req->has_cfg ? ", own url and token" : "");
+    }
+    memset(req, 0, sizeof(*req));
+    return rc == 0 ? 0 : BLE_ATT_ERR_UNLIKELY;
+}
+
+static int read_nets(struct os_mbuf *om) {
+    int n;
+    if (!s_scratch) {
+        return BLE_ATT_ERR_INSUFFICIENT_RES;
+    }
+    ble_link_enter();
+    n = ble_desk_format_nets(s_scratch->nets, sizeof(s_scratch->nets), s_store);
+    ble_link_leave();
+    return append_text(om, s_scratch->nets, n);
+}
+
+/* An SSID that is not saved is still success: a retried forget must not look like a failure. */
+static int write_forget(const uint8_t *buf, uint16_t len) {
+    char ssid[BLE_DESK_SSID_MAX + 1];
+    int rc = 0;
+    int removed;
+    if (!s_store || ble_desk_parse_forget(buf, len, ssid, sizeof(ssid)) != 0) {
         return BLE_ATT_ERR_UNLIKELY;
     }
-    net_save(s_store);
+    ble_link_enter();
+    memcpy(&s_scratch->before, s_store, sizeof(*s_store));
+    removed = wifi_remove(s_store, ssid) == 0;
+    if (removed) {
+        rc = save_store();
+    }
+    memset(&s_scratch->before, 0, sizeof(s_scratch->before));
     ble_link_leave();
-    ESP_LOGI(TAG, "wifi %s", ssid);
-    return 0;
+    if (removed && rc == 0) {
+        ESP_LOGI(TAG, "forget %s", ssid);
+    }
+    return rc == 0 ? 0 : BLE_ATT_ERR_UNLIKELY;
 }
 
 /* Accepted on every paired link; only the write that follows a fresh pairing reaches the glass. */
@@ -675,7 +764,7 @@ static int write_peer(uint16_t conn_handle, const uint8_t *buf, uint16_t len) {
 static int access(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt *ctxt,
                   void *arg) {
     uintptr_t op = (uintptr_t)arg;
-    uint8_t buf[BLE_LINK_WRITE_MAX];
+    uint8_t *buf;
     uint16_t len = 0;
     int rc;
     (void)attr_handle;
@@ -695,11 +784,18 @@ static int access(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_ac
         if (op == BLE_DESK_OP_VERIFY) {
             return read_verify(ctxt->om);
         }
+        if (op == BLE_DESK_OP_NETS) {
+            return read_nets(ctxt->om);
+        }
         return BLE_ATT_ERR_READ_NOT_PERMITTED;
     }
     if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) {
         return BLE_ATT_ERR_UNLIKELY;
     }
+    if (!s_scratch) {
+        return BLE_ATT_ERR_INSUFFICIENT_RES;
+    }
+    buf = s_scratch->write;
     rc = read_flat(ctxt->om, buf, &len);
     if (rc != 0) {
         return rc;
@@ -724,6 +820,9 @@ static int access(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_ac
     }
     if (op == BLE_DESK_OP_PEER) {
         return write_peer(conn_handle, buf, len);
+    }
+    if (op == BLE_DESK_OP_FORGET) {
+        return write_forget(buf, len);
     }
     return BLE_ATT_ERR_UNLIKELY;
 }
@@ -1043,6 +1142,11 @@ void ble_link_host_start(void) {
         return;
     }
     s_host_up = 1;
+    /* Before the host task can call access(). PSRAM: see ble_link_scratch_t. */
+    s_scratch = heap_caps_calloc(1, sizeof(*s_scratch), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!s_scratch) {
+        ESP_LOGE(TAG, "GATT scratch PSRAM missing: writes and nets are refused");
+    }
     /* Host stack first (6144, internal). The scan and reboot stacks are
      * PSRAM after that. A write only gives a semaphore. */
     UBaseType_t tasks = uxTaskGetNumberOfTasks();

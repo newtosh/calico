@@ -1,7 +1,19 @@
-export const SSID_MAX = 32;
-export const PASS_MAX = 64;
-export const URL_MAX = 127;
-export const TOKEN_MAX = 127;
+import {
+  checkPass,
+  checkSsid,
+  checkToken,
+  checkUrl,
+  NETWORKS_MAX,
+} from "../../../shared/panel-fields";
+
+export {
+  FieldError,
+  NETWORKS_MAX,
+  PASS_MAX,
+  SSID_MAX,
+  TOKEN_MAX,
+  URL_MAX,
+} from "../../../shared/panel-fields";
 
 export interface DeskInfo {
   name: string;
@@ -18,17 +30,26 @@ export interface Ap {
 
 export type ProbeReason = "auth" | "missing" | "timeout" | "radio" | "other";
 
+export interface PanelNet {
+  ssid: string;
+  has_url: boolean;
+  has_token: boolean;
+}
+
 export type Cmd =
   | { op: "status" }
   | { op: "scan" }
   | { op: "verify"; ssid: string; pass: string }
-  | { op: "wifi"; ssid: string; pass: string }
+  // url and token travel together: sending either writes both to this network's slot.
+  | { op: "wifi"; ssid: string; pass: string; url?: string; token?: string }
   | { op: "url"; value: string }
   | { op: "token"; value: string }
-  | { op: "reboot" };
+  | { op: "reboot" }
+  | { op: "nets" }
+  | { op: "forget"; ssid: string };
 
 export type Reply =
-  | { ok: true; info?: DeskInfo; aps?: Ap[] }
+  | { ok: true; info?: DeskInfo; aps?: Ap[]; nets?: PanelNet[] }
   | { ok: false; error: string; reason?: ProbeReason };
 
 export interface DeviceLink {
@@ -37,57 +58,27 @@ export interface DeviceLink {
   close(): void;
 }
 
-export class FieldError extends Error {}
-
-const bytes = (s: string) => new TextEncoder().encode(s).length;
-
-function noBreaks(value: string, label: string): void {
-  if (/[\r\n\0]/.test(value))
-    throw new FieldError(`${label} cannot contain a newline or NUL.`);
-}
-
-function checkSsid(ssid: string): void {
-  noBreaks(ssid, "SSID");
-  if (!ssid) throw new FieldError("SSID is required.");
-  if (bytes(ssid) > SSID_MAX)
-    throw new FieldError(`SSID must be at most ${SSID_MAX} bytes.`);
-}
-
-function checkPass(pass: string): void {
-  noBreaks(pass, "Password");
-  const n = bytes(pass);
-  if (n > PASS_MAX)
-    throw new FieldError(`Password must be at most ${PASS_MAX} bytes.`);
-  if (n > 0 && n < 8)
-    throw new FieldError(
-      "Password must be empty (open network) or 8 to 64 bytes.",
-    );
-}
-
 export function validateCmd(cmd: Cmd): void {
   switch (cmd.op) {
-    case "url": {
-      noBreaks(cmd.value, "URL");
-      const ok =
-        (cmd.value.startsWith("http://") && cmd.value.length > 7) ||
-        (cmd.value.startsWith("https://") && cmd.value.length > 8);
-      if (!ok)
-        throw new FieldError(
-          "URL must start with http:// or https:// and name a host.",
-        );
-      if (bytes(cmd.value) > URL_MAX)
-        throw new FieldError(`URL must be at most ${URL_MAX} bytes.`);
+    case "url":
+      checkUrl(cmd.value);
       return;
-    }
     case "token":
-      noBreaks(cmd.value, "Token");
-      if (bytes(cmd.value) > TOKEN_MAX)
-        throw new FieldError(`Token must be at most ${TOKEN_MAX} bytes.`);
+      checkToken(cmd.value);
       return;
     case "verify":
+      checkSsid(cmd.ssid);
+      checkPass(cmd.pass);
+      return;
     case "wifi":
       checkSsid(cmd.ssid);
       checkPass(cmd.pass);
+      // An empty URL means this network uses the panel's global one.
+      if (cmd.url) checkUrl(cmd.url);
+      if (cmd.token !== undefined) checkToken(cmd.token);
+      return;
+    case "forget":
+      checkSsid(cmd.ssid);
       return;
     default:
       return;
@@ -99,8 +90,8 @@ export function timeoutFor(cmd: Cmd): number {
 }
 
 export function secretsOf(cmd: Cmd): string[] {
-  if (cmd.op === "verify" || cmd.op === "wifi")
-    return cmd.pass ? [cmd.pass] : [];
+  if (cmd.op === "verify") return cmd.pass ? [cmd.pass] : [];
+  if (cmd.op === "wifi") return [cmd.pass, cmd.token ?? ""].filter(Boolean);
   if (cmd.op === "token") return cmd.value ? [cmd.value] : [];
   return [];
 }
@@ -139,6 +130,23 @@ export function parseScan(body: string): { state: string; aps: Ap[] } {
   }
   aps.sort((a, b) => b.rssi - a.rssi);
   return { state: parseKv(body).state ?? "", aps };
+}
+
+/** The panel's nets read: "count=N", then "<url><token>\t<ssid>" with 1 or 0 flags. */
+export function parseNets(body: string): PanelNet[] {
+  const nets: PanelNet[] = [];
+  for (const line of body.split("\n")) {
+    const tab = line.indexOf("\t");
+    const flags = line.slice(0, tab);
+    const ssid = line.slice(tab + 1).replace(/\r$/, "");
+    if (tab !== 2 || !/^[01]{2}$/.test(flags) || !ssid) continue;
+    nets.push({
+      ssid,
+      has_url: flags[0] === "1",
+      has_token: flags[1] === "1",
+    });
+  }
+  return nets.slice(0, NETWORKS_MAX);
 }
 
 export function parseProbe(body: string): {

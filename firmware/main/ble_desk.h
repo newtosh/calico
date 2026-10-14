@@ -19,6 +19,8 @@
  *   scan    ...16  read, write
  *   verify  ...17  read, write
  *   peer    ...18  write: the computer's name, shown on the glass after a fresh pairing
+ *   nets    ...19  read: saved networks, flags and SSIDs only
+ *   forget  ...1a  write: an SSID to remove from the saved networks
  * The node bytes 67726f6b6465 are "grokde".
  *
  * Scan write is the four bytes "scan". The read is one record per line:
@@ -26,6 +28,13 @@
  * that contains a tab or a newline is left out, because the central writes
  * that text back as the network name. At most BLE_DESK_SCAN_MAX rows.
  *
+ * Nets read is "count=N", then one line per saved slot: two flags, "1" or
+ * "0" for the slot's own url and own token, a tab, and the SSID. A CR or LF
+ * in a stored SSID is shown as '?'. Never a password, token or url.
+ *
+ * Wifi write is "ssid\npass", which keeps the slot's own url and token, or
+ * "ssid\npass\nurl\ntoken", which replaces them (empty means the global one).
+ * Either may end in one newline.
  * Verify write is the same body as wifi. The desk associates in RAM and
  * does not touch NVS. The read is "state=idle|busy|ok|fail", then ssid,
  * and on failure "reason=auth|missing|timeout|radio|other".
@@ -42,6 +51,8 @@
 #define BLE_DESK_UUID_SCAN "8d7c4b16-6e2a-4f91-a3c5-67726f6b6465"
 #define BLE_DESK_UUID_VERIFY "8d7c4b17-6e2a-4f91-a3c5-67726f6b6465"
 #define BLE_DESK_UUID_PEER "8d7c4b18-6e2a-4f91-a3c5-67726f6b6465"
+#define BLE_DESK_UUID_NETS "8d7c4b19-6e2a-4f91-a3c5-67726f6b6465"
+#define BLE_DESK_UUID_FORGET "8d7c4b1a-6e2a-4f91-a3c5-67726f6b6465"
 
 /* Field sizes match wifi_store_t and the USB provisioner. */
 #define BLE_DESK_SSID_MAX 32
@@ -51,6 +62,11 @@
 /* Same cap as net_wifi_scan. 16 rows of "-128\t" + 32-byte SSID fit in the text buffer. */
 #define BLE_DESK_SCAN_MAX 16
 #define BLE_DESK_SCAN_TEXT (12 + BLE_DESK_SCAN_MAX * (4 + 1 + BLE_DESK_SSID_MAX + 1) + 1)
+/* "count=8\n" plus 8 rows of two flags, a tab, a 32-byte SSID and a newline, plus the NUL. */
+#define BLE_DESK_NETS_TEXT (8 + WIFI_NET_MAX * (2 + 1 + BLE_DESK_SSID_MAX + 1) + 1)
+/* ssid\npass\nurl\ntoken\n at full size: the longest write any characteristic takes. */
+#define BLE_DESK_WIFI_CFG_MAX                                                                    \
+    (BLE_DESK_SSID_MAX + 1 + BLE_DESK_PASS_MAX + 1 + BLE_DESK_URL_MAX + 1 + BLE_DESK_TOKEN_MAX + 1)
 
 enum {
     BLE_DESK_OP_STATUS = 1,
@@ -60,7 +76,9 @@ enum {
     BLE_DESK_OP_REBOOT = 5,
     BLE_DESK_OP_SCAN = 6,
     BLE_DESK_OP_VERIFY = 7,
-    BLE_DESK_OP_PEER = 8
+    BLE_DESK_OP_PEER = 8,
+    BLE_DESK_OP_NETS = 9,
+    BLE_DESK_OP_FORGET = 10
 };
 
 enum {
@@ -81,6 +99,15 @@ typedef struct {
     char ssid[BLE_DESK_SSID_MAX + 1];
     int8_t rssi;
 } ble_desk_ap_t;
+
+/* One parsed wifi write. has_cfg is 1 when it carried the slot's own url and token. */
+typedef struct {
+    char ssid[BLE_DESK_SSID_MAX + 1];
+    char pass[BLE_DESK_PASS_MAX + 1];
+    char url[BLE_DESK_URL_MAX + 1];
+    char token[BLE_DESK_TOKEN_MAX + 1];
+    int has_cfg;
+} ble_desk_wifi_t;
 
 /* NUL-terminated body. Returns the length without the NUL, or -1 if it
  * does not fit. ssid or url empty is written as "none". token_set is
@@ -123,3 +150,12 @@ int ble_desk_set_token(wifi_store_t *store, const char *token);
 /* Updates the password of an existing SSID and keeps that slot's url
  * and token. A new SSID is appended with an empty per-network url and token. */
 int ble_desk_upsert_wifi(wifi_store_t *store, const char *ssid, const char *pass);
+
+/* NUL-terminated nets body. Length without the NUL, or -1 (out emptied). A NULL store is count=0. */
+int ble_desk_format_nets(char *out, size_t cap, const wifi_store_t *store);
+/* An SSID of 1 to 32 bytes. One trailing CR/LF run is ignored. Embedded CR, LF or NUL is -1. */
+int ble_desk_parse_forget(const uint8_t *in, size_t len, char *ssid, size_t cap);
+/* Two or four lines, see above. On -1 *out is zeroed, so no password is left behind. */
+int ble_desk_parse_wifi_cfg(const uint8_t *in, size_t len, ble_desk_wifi_t *out);
+/* has_cfg writes the slot's url and token too; otherwise ble_desk_upsert_wifi. -1 when full. */
+int ble_desk_apply_wifi(wifi_store_t *store, const ble_desk_wifi_t *req);

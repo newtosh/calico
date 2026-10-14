@@ -1,8 +1,21 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CalicoInfo } from "../../../shared/ipc";
 import { SettingsView } from "./SettingsView";
+
+beforeEach(() => {
+  // Connectivity lists the saved networks on mount, with or without the server.
+  Object.assign(window, {
+    calico: {
+      networksList: vi.fn(async () => ({
+        networks: [],
+        error: "",
+        notice: "",
+      })),
+    },
+  });
+});
 
 afterEach(() => {
   cleanup();
@@ -35,6 +48,13 @@ const panel = () => {
 };
 
 describe("SettingsView", () => {
+  it("shows the Wi-Fi networks under Connectivity even without the server", async () => {
+    render(<SettingsView info={info} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Connectivity" }));
+    expect(panel().textContent).toContain("Wi-Fi networks");
+    expect(await screen.findByText("No networks saved.")).toBeTruthy();
+  });
+
   it("opens on Agents and shows only that category", () => {
     render(<SettingsView info={info} />);
     expect(

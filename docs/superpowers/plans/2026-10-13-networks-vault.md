@@ -125,7 +125,7 @@ git commit --no-gpg-sign -m "Log the internal heap when Wi-Fi gets an address"
 - Produces (in `ble_desk.h`):
   - `#define BLE_DESK_UUID_NETS "8d7c4b19-6e2a-4f91-a3c5-67726f6b6465"`, `#define BLE_DESK_UUID_FORGET "8d7c4b1a-6e2a-4f91-a3c5-67726f6b6465"`
   - `BLE_DESK_OP_NETS = 9`, `BLE_DESK_OP_FORGET = 10`
-  - `#define BLE_DESK_NETS_TEXT 297`, `#define BLE_DESK_WIFI_CFG_MAX 355`
+  - `#define BLE_DESK_NETS_TEXT 297`, `#define BLE_DESK_WIFI_CFG_MAX 354`
   - `typedef struct { char ssid[33]; char pass[65]; char url[128]; char token[128]; int has_cfg; } ble_desk_wifi_t;`
   - `int ble_desk_format_nets(char *out, size_t cap, const wifi_store_t *store);` body `count=N\n` then `<u><t>\t<ssid>\n` per slot, `u`/`t` are `1` or `0`. Returns length or -1 (out emptied).
   - `int ble_desk_parse_forget(const uint8_t *in, size_t len, char *ssid, size_t cap);` 0 or -1.
@@ -515,7 +515,7 @@ git commit --no-gpg-sign -m "Format saved networks and parse forget and per-netw
 **Interfaces:**
 
 - Consumes: everything Task 2 produces; `net_save` (`net.h`), `wifi_remove`.
-- Produces: GATT characteristics `nets` (`8d7c4b19-...`, read, authenticated) and `forget` (`8d7c4b1a-...`, write, authenticated); `wifi` accepts up to `BLE_DESK_WIFI_CFG_MAX` (355) bytes as a long write.
+- Produces: GATT characteristics `nets` (`8d7c4b19-...`, read, authenticated) and `forget` (`8d7c4b1a-...`, write, authenticated); `wifi` accepts up to `BLE_DESK_WIFI_CFG_MAX` (354) bytes as a long write.
 
 - [ ] **Step 1: Record the static RAM baseline**
 
@@ -527,7 +527,7 @@ Expected: the DRAM/DIRAM used bytes and the `.data` and `.bss` sizes. Keep the f
 Replace `ble_link.c:40-41` with:
 
 ```c
-/* The longest write is wifi with this network's own url and token (355 bytes).
+/* The longest write is wifi with this network's own url and token (354 bytes).
  * That is longer than one ATT packet, so the central sends it as a long write:
  * at MTU 256 two of the four prepare entries (CONFIG_BT_NIMBLE_ATT_MAX_PREP_ENTRIES). */
 #define BLE_LINK_WRITE_MAX BLE_DESK_WIFI_CFG_MAX
@@ -541,7 +541,7 @@ After `static char s_probe_text[BLE_LINK_PROBE_TEXT];` add:
 ```c
 /* GATT access runs only on the NimBLE host task, so one scratch serves every write and the
  * nets read. It is PSRAM, allocated once at host start: on the host task's 6144-byte internal
- * stack the 355-byte write, the parsed network and the nets text would take about 1 KB of
+ * stack the 354-byte write, the parsed network and the nets text would take about 1 KB of
  * headroom, and as static .bss they would take internal RAM the station needs. */
 typedef struct {
     uint8_t write[BLE_LINK_WRITE_MAX];
@@ -691,7 +691,7 @@ Expected: all `ok`; pytest passes (it checks `ble_link_host_start` keeps `start_
 In `firmware/README.md`, in the pairing paragraph (line 103), change "Writes, scans and the full status need the paired link." to "Writes, scans, the network list and the full status need the paired link." Replace the `wifi` row and add two rows after `peer` in the table at lines 109-118:
 
 ```markdown
-| wifi | `8d7c4b14-6e2a-4f91-a3c5-67726f6b6465` | write | `SSID\npassword`, which keeps this network's own URL and token, or `SSID\npassword\nurl\ntoken`, which sets them (empty uses the global one). Empty password is an open network. Optional trailing newline. The four-line form can be 355 bytes: a long write |
+| wifi | `8d7c4b14-6e2a-4f91-a3c5-67726f6b6465` | write | `SSID\npassword`, which keeps this network's own URL and token, or `SSID\npassword\nurl\ntoken`, which sets them (empty uses the global one). Empty password is an open network. Optional trailing newline. The four-line form can be 354 bytes: a long write |
 | nets | `8d7c4b19-6e2a-4f91-a3c5-67726f6b6465` | read | `count=N`, then per saved network two flags (`1` or `0`: own URL, own token), a tab, and the SSID. At most 8 rows, 297 bytes. Never a password, token, or URL |
 | forget | `8d7c4b1a-6e2a-4f91-a3c5-67726f6b6465` | write | an SSID to remove from the saved networks. Optional trailing newline. An SSID that is not saved is not an error. The panel stays on its current network until it restarts |
 ```
