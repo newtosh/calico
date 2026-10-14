@@ -12,7 +12,10 @@ export function LinkActions({
   onReboot: () => Promise<void>;
 }) {
   const [desk, setDesk] = useState<DeskInfo | null>(null);
-  const [url, setUrl] = useState(info.lanUrls[0] ?? "");
+  // The address banner sends the person here with a link open: start at the address it offered.
+  const [url, setUrl] = useState(
+    info.addressChange?.url ?? info.lanUrls[0] ?? "",
+  );
   const [notice, setNotice] = useState("");
 
   const refresh = async () => {
