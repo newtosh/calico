@@ -50,6 +50,11 @@ export interface CalicoInfo {
   version: string;
   /** This computer's name, shown on the panel after it pairs. */
   hostname: string;
+  /**
+   * Set when the panel has been silent for 60 s and the address of this computer it last polled
+   * is gone: the companion URL to give the panel. Null otherwise.
+   */
+  addressChange: { url: string } | null;
 }
 
 export type FirewallKind = "ufw" | "firewalld" | "nftables" | "none";
@@ -151,6 +156,14 @@ export interface CalicoApi {
   /** The password and token go to main only; the reply carries flags. */
   networksSave(input: NetworkInput): Promise<NetworksState>;
   networksRemove(ssid: string): Promise<NetworksState>;
+  /** The person confirmed the push plan: main may release these SSIDs' passwords, once each. */
+  networksConfirmPush(ssids: string[]): Promise<PushConfirm>;
+  /** One saved password and token, once, for a confirmed SSID. Pass it to the write, then drop it. */
+  networksRelease(ssid: string): Promise<PushRelease>;
+  /** The push ended: main releases nothing more. */
+  networksEndPush(): Promise<void>;
+  /** "Not now" on the address banner. */
+  dismissAddress(): Promise<void>;
 }
 
 declare global {

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { userInfo } from "node:os";
-import { clipboard, ipcMain } from "electron";
+import { clipboard, ipcMain, type IpcMainInvokeEvent } from "electron";
 import type { CalicoInfo } from "../shared/ipc";
 import type { NetworkVault } from "./networks";
 import type { RelaySetupService } from "./relay/service";
@@ -32,8 +32,29 @@ export interface IpcDeps {
   relaySetup: RelaySetupService;
   /** The text for the bot, or null when calico did not make this relay. */
   botNote(): string | null;
-  networks: Pick<NetworkVault, "list" | "save" | "remove">;
+  networks: Pick<
+    NetworkVault,
+    "list" | "save" | "remove" | "confirmPush" | "release" | "endPush"
+  >;
+  /** "Not now" on the address banner. */
+  dismissAddress(): void;
+  /** The app window's webContents, null while it does not exist. */
+  appContents(): { mainFrame: unknown } | null;
 }
+
+/** True only for the top frame of the app's own window: no other window or iframe. */
+export function fromAppWindow(
+  event: { sender: unknown; senderFrame: unknown },
+  contents: { mainFrame: unknown } | null,
+): boolean {
+  return (
+    contents !== null &&
+    event.sender === contents &&
+    event.senderFrame === contents.mainFrame
+  );
+}
+
+const NOT_APP_WINDOW = "Only the Calico window can push networks.";
 
 export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle("calico:info", () => deps.info());
@@ -63,6 +84,22 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle("networks:remove", (_e, ssid: unknown) =>
     deps.networks.remove(ssid),
   );
+  // The one path a saved password takes to the window: once, for an SSID in the plan the person
+  // confirmed (NetworkVault.release). An invoke reply, never an event, never logged or kept here.
+  const push = <T>(event: IpcMainInvokeEvent, run: () => T) =>
+    fromAppWindow(event, deps.appContents())
+      ? run()
+      : { ok: false as const, error: NOT_APP_WINDOW };
+  ipcMain.handle("networks:confirm-push", (e, ssids: unknown) =>
+    push(e, () => deps.networks.confirmPush(ssids)),
+  );
+  ipcMain.handle("networks:release", (e, ssid: unknown) =>
+    push(e, () => deps.networks.release(ssid)),
+  );
+  ipcMain.handle("networks:end-push", (e) =>
+    push(e, () => deps.networks.endPush()),
+  );
+  ipcMain.handle("calico:dismiss-address", () => deps.dismissAddress());
   ipcMain.handle("calico:set-autostart", (_e, on: unknown) =>
     autostartAvailable() ? setAutostart(on === true) : false,
   );

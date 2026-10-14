@@ -52,6 +52,7 @@ const info: CalicoInfo = {
   autostart: { enabled: false, available: false },
   version: "0.0.0-test",
   hostname: "test-host",
+  addressChange: null,
 };
 
 afterEach(() => {

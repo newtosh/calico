@@ -36,6 +36,11 @@ const api: CalicoApi = {
   networksList: () => ipcRenderer.invoke("networks:list"),
   networksSave: (input) => ipcRenderer.invoke("networks:save", input),
   networksRemove: (ssid) => ipcRenderer.invoke("networks:remove", ssid),
+  networksConfirmPush: (ssids) =>
+    ipcRenderer.invoke("networks:confirm-push", ssids),
+  networksRelease: (ssid) => ipcRenderer.invoke("networks:release", ssid),
+  networksEndPush: () => ipcRenderer.invoke("networks:end-push"),
+  dismissAddress: () => ipcRenderer.invoke("calico:dismiss-address"),
 };
 
 contextBridge.exposeInMainWorld("calico", api);
