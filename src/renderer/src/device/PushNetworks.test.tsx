@@ -18,6 +18,12 @@ const DROP = "Bluetooth: GATT Server is disconnected.";
 
 afterEach(cleanup);
 
+const backdrop = (): Element => {
+  const el = document.querySelector("[data-open].fixed.inset-0");
+  if (!el) throw new Error("no backdrop");
+  return el;
+};
+
 const saved = (ssid: string): SavedNetwork => ({
   ssid,
   url: "",
@@ -163,7 +169,7 @@ describe("PushNetworks", () => {
       "The panel would need 9 networks and holds 8.",
     );
     expect(
-      (screen.getByText("Nothing to push") as HTMLButtonElement).disabled,
+      (screen.getByText("Too many networks") as HTMLButtonElement).disabled,
     ).toBe(true);
     fireEvent.click(screen.getByLabelText("Also remove cafe"));
     expect(
@@ -343,6 +349,85 @@ describe("PushNetworks", () => {
     expect((await screen.findByRole("alert")).textContent).toContain(
       "not allowed",
     );
+  });
+
+  it("a double click confirms and releases once, and Cancel or Escape wait for the confirm", async () => {
+    const { api, sent } = setup(["home", "lab"], [], "");
+    let ok: () => void = () => {};
+    api.networksConfirmPush.mockImplementation(
+      () =>
+        new Promise((r) => {
+          ok = () => r({ ok: true as const });
+        }),
+    );
+    fireEvent.click(screen.getByText("Push to panel"));
+    const push = await screen.findByText("Push 2 changes");
+    fireEvent.click(push);
+    fireEvent.click(push);
+    expect(api.networksConfirmPush).toHaveBeenCalledTimes(1);
+    expect((screen.getByText("Cancel") as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    fireEvent.click(backdrop());
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(api.networksEndPush).not.toHaveBeenCalled();
+    ok();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(api.networksRelease).toHaveBeenCalledTimes(2);
+    expect(sent.filter((c) => c.op === "wifi")).toHaveLength(2);
+  });
+
+  it("Escape, a backdrop click and the checkbox are locked while pushing", async () => {
+    const { api } = setup(["lab"], ["cafe"], "cafe");
+    let go: () => void = () => {};
+    api.networksRelease.mockImplementation(
+      () =>
+        new Promise((r) => {
+          go = () => r({ ok: true, password: PASS, token: TOKEN });
+        }),
+    );
+    fireEvent.click(screen.getByText("Push to panel"));
+    const box = (await screen.findByLabelText(
+      "Also remove cafe",
+    )) as HTMLInputElement;
+    fireEvent.click(box);
+    fireEvent.click(screen.getByText("Push 2 changes"));
+    await screen.findByText("Pushing");
+    expect(box.disabled).toBe(true);
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    fireEvent.pointerDown(backdrop());
+    fireEvent.click(backdrop());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(api.networksEndPush).not.toHaveBeenCalled();
+    go();
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("refuses when the panel's current network cannot be read", async () => {
+    const { api, sent } = setup(["home"], [], "", {
+      status: { ok: true },
+    });
+    fireEvent.click(screen.getByText("Push to panel"));
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "which network the panel is on",
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(api.networksRelease).not.toHaveBeenCalled();
+    expect(sent.some((c) => c.op === "nets")).toBe(false);
+  });
+
+  it("shows an error and re-enables the button when a read throws", async () => {
+    const { api } = setup(["home"], [], "");
+    api.networksList.mockRejectedValueOnce(new Error("ipc gone"));
+    fireEvent.click(screen.getByText("Push to panel"));
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "ipc gone",
+    );
+    expect(
+      (screen.getByText("Push to panel") as HTMLButtonElement).disabled,
+    ).toBe(false);
   });
 
   it("warns in amber before the current network can be removed", async () => {

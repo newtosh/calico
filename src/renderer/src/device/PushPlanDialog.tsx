@@ -122,7 +122,9 @@ export function PushPlanDialog({
               {running
                 ? "Pushing"
                 : count === 0
-                  ? "Nothing to push"
+                  ? error
+                    ? "Too many networks"
+                    : "Nothing to push"
                   : `Push ${count} ${count === 1 ? "change" : "changes"}`}
             </button>
             <button

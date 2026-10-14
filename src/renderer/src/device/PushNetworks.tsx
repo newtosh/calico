@@ -26,6 +26,9 @@ export function pushStopped(
   return `Stopped after ${done} of ${total} changes. ${error} The panel keeps what was already sent and was not restarted. Connect again and push again to finish.`;
 }
 
+const errorText = (e: unknown): string =>
+  e instanceof Error ? e.message : "The push stopped unexpectedly.";
+
 const stepText = (step: PushStep) =>
   step.op === "forget" ? `removing ${step.ssid}` : `sending ${step.net.ssid}`;
 
@@ -48,6 +51,9 @@ export function PushNetworks({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const opener = useRef<HTMLButtonElement>(null);
+  // Set synchronously on the first Push click: a second click, Cancel or Escape must not
+  // start or stop a push while the first is waiting on main.
+  const busy = useRef(false);
 
   async function open() {
     setReading(true);
@@ -59,39 +65,44 @@ export function PushNetworks({
       // Without the current network a removal could cut the panel off, so status must read.
       const status = await link.send({ op: "status" });
       if (!status.ok) return setError(status.error);
+      if (!status.info)
+        return setError(
+          "Calico could not read which network the panel is on. Connect again, then push.",
+        );
       // The nets read is the old-firmware and stale-cache check: no password is released before it.
       const nets = await link.send({ op: "nets" });
       if (!nets.ok) return setError(nets.error);
-      const next = buildPlan(
-        vault.networks,
-        nets.nets ?? [],
-        status.info?.ssid ?? "",
-      );
+      const next = buildPlan(vault.networks, nets.nets ?? [], status.info.ssid);
       if (planSize(next) === 0) return setNotice(NOTHING_TO_PUSH);
       setRemoveCurrent(false);
       setPlan(next);
+    } catch (e) {
+      setError(errorText(e));
     } finally {
       setReading(false);
     }
   }
 
   function cancel() {
+    if (busy.current) return;
     void window.calico.networksEndPush();
     setPlan(null);
     setError("");
   }
 
   async function confirm() {
-    if (!plan) return;
+    if (!plan || busy.current) return;
     const { steps, error: refused } = planSteps(plan, removeCurrent);
     if (refused) return setError(refused);
+    busy.current = true;
     setError("");
+    // Running from here: the dialog locks before the first await.
+    setProgress("Starting the push.");
     const ssids = steps.flatMap((s) => (s.op === "wifi" ? [s.net.ssid] : []));
     // endPush runs on every path, so main stops releasing passwords even when something throws.
     try {
       const confirmed = await window.calico.networksConfirmPush(ssids);
       if (!confirmed.ok) return setError(confirmed.error);
-      setProgress("Starting the push.");
       const result = await runPush(
         link,
         steps,
@@ -105,10 +116,9 @@ export function PushNetworks({
       else onFinished(pushedAll(result.total), result.total > 0);
     } catch (e) {
       setPlan(null);
-      const why =
-        e instanceof Error ? e.message : "The push stopped unexpectedly.";
-      onFinished(pushStopped(0, steps.length, why), false);
+      onFinished(pushStopped(0, steps.length, errorText(e)), false);
     } finally {
+      busy.current = false;
       setProgress("");
       await window.calico.networksEndPush().catch(() => undefined);
     }
