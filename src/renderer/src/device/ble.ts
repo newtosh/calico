@@ -197,7 +197,9 @@ export class BleLink implements DeviceLink {
 export const PAIR_FAILED =
   "Pairing did not finish. Confirm the same code on the panel and on this computer, then try again. If no code appeared, remove ginger from this computer's Bluetooth settings and connect again.";
 export const LINK_FAILED =
-  "Could not talk to the panel over Bluetooth. Move closer and connect again.";
+  "Could not reach the panel over Bluetooth. If it just restarted, wait a few seconds and try again. Otherwise move closer.";
+// BlueZ can abort the first connect after a panel restart or a stale link. One retry clears it.
+const CONNECT_RETRY_MS = 2000;
 
 /**
  * Connects and, when the panel says this link is not paired, makes the OS pair. The OS shows its
@@ -209,6 +211,8 @@ export async function connectBle(
   onClosed: () => void,
   onPairing: () => void = () => undefined,
   peerName = "",
+  sleep: (ms: number) => Promise<void> = (ms) =>
+    new Promise((resolve) => setTimeout(resolve, ms)),
 ): Promise<BleLink> {
   const device = await navigator.bluetooth.requestDevice({
     filters: BLE_NAMES.map((name) => ({ name })),
@@ -257,7 +261,13 @@ export async function connectBle(
     }
   };
   try {
-    const server = await step(remote.connect(), LINK_FAILED);
+    const server = await step(
+      remote.connect().catch(async () => {
+        await sleep(CONNECT_RETRY_MS);
+        return remote.connect();
+      }),
+      LINK_FAILED,
+    );
     service = await step(server.getPrimaryService(UUID.svc), LINK_FAILED);
     const status = await step(gatt.read(UUID.status), LINK_FAILED);
     if (requirePairing(status) === "needs-pairing") {
