@@ -107,46 +107,48 @@ export function AddressBanner({
     <div
       role="status"
       aria-live="polite"
-      className="flex flex-wrap items-center gap-3 border-b border-amber/60 bg-surface px-4 py-2"
+      className="flex flex-col gap-3 border-b border-amber/60 bg-surface px-4 py-3"
     >
       <span className="min-w-0 text-amber">
         The panel's address may have changed. This computer is now at{" "}
         <span className="break-all font-mono">{url}</span>.
       </span>
-      {!waiting && link ? (
-        <button
-          type="button"
-          className="btn"
-          disabled={working}
-          onClick={onOpenDevice}
-        >
-          Update on the Device page
-        </button>
-      ) : null}
-      {!waiting && !link ? (
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={working}
-          onClick={() => void update()}
-        >
-          Update over Bluetooth
-        </button>
-      ) : null}
-      {!waiting && !error ? (
-        <button
-          type="button"
-          className="btn"
-          disabled={working}
-          onClick={() => {
-            setDismissedAt(info);
-            void window.calico.dismissAddress();
-          }}
-        >
-          Not now
-        </button>
-      ) : null}
-      {working ? <span>{progress}</span> : null}
+      <div className="flex flex-wrap items-center gap-3">
+        {!waiting && link ? (
+          <button
+            type="button"
+            className="btn"
+            disabled={working}
+            onClick={onOpenDevice}
+          >
+            Update on the Device page
+          </button>
+        ) : null}
+        {!waiting && !link ? (
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={working}
+            onClick={() => void update()}
+          >
+            Update over Bluetooth
+          </button>
+        ) : null}
+        {!waiting && !error ? (
+          <button
+            type="button"
+            className="btn"
+            disabled={working}
+            onClick={() => {
+              setDismissedAt(info);
+              void window.calico.dismissAddress();
+            }}
+          >
+            Not now
+          </button>
+        ) : null}
+        {working ? <span>{progress}</span> : null}
+      </div>
       <div
         ref={result}
         tabIndex={-1}
