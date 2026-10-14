@@ -16,6 +16,14 @@ export interface CalicoConfig {
   relay_cursor: string;
   /** Only set when calico made the relay. Lets "Copy for Grok Bot" work later. */
   relay_send_token: string;
+  /** Outbound webhook. Empty means off. */
+  notify_url: string;
+  /** Keyring ciphertext for the sender key. Never the raw key. */
+  notify_key: string;
+  /** Empty means `Authorization: Bearer <key>`. Any other name sends the raw key. */
+  notify_header: string;
+  /** Seconds without a panel poll before the next poll counts as coming back. */
+  notify_offline_seconds: number;
 }
 
 export const DEFAULT_PORT = 8787;
@@ -25,6 +33,10 @@ export class ConfigError extends Error {}
 export const DEFAULT_RUNNING_TIMEOUT = 120;
 export const MIN_RUNNING_TIMEOUT = 30;
 export const MAX_RUNNING_TIMEOUT = 3600;
+export const DEFAULT_NOTIFY_OFFLINE = 180;
+export const MIN_NOTIFY_OFFLINE = 30;
+export const MAX_NOTIFY_OFFLINE = 86_400;
+const NOTIFY_URL_MAX = 2048;
 
 /** A request body the HTTP layer answers with 400. */
 export class BadInput extends Error {}
@@ -42,6 +54,10 @@ export function defaultConfig(): CalicoConfig {
     relay_token: "",
     relay_cursor: "",
     relay_send_token: "",
+    notify_url: "",
+    notify_key: "",
+    notify_header: "",
+    notify_offline_seconds: DEFAULT_NOTIFY_OFFLINE,
   };
 }
 
@@ -127,6 +143,18 @@ export function loadConfig(path: string): {
         relay_token: str(data, "relay_token"),
         relay_cursor: str(data, "relay_cursor"),
         relay_send_token: str(data, "relay_send_token"),
+        notify_url: loadNotifyUrl(data),
+        notify_key: str(data, "notify_key"),
+        notify_header: loadNotifyHeader(data),
+        notify_offline_seconds:
+          "notify_offline_seconds" in data
+            ? boundedInt(
+                data.notify_offline_seconds,
+                MIN_NOTIFY_OFFLINE,
+                MAX_NOTIFY_OFFLINE,
+                "notify_offline_seconds",
+              )
+            : base.notify_offline_seconds,
       },
     };
   } catch (err) {
@@ -303,4 +331,79 @@ export function mergeRelay(
     relay_cursor: same ? current.relay_cursor : "",
     relay_send_token: same ? current.relay_send_token : "",
   };
+}
+
+function visible(value: string, limit: number): string {
+  if (value.length > limit) throw new BadInput("bad notify");
+  for (const ch of value) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (code <= 32 || code > 126 || ch === '"' || ch === "\\")
+      throw new BadInput("bad notify");
+  }
+  return value;
+}
+
+/** http or https, no userinfo. A fragment is dropped by clients, so it is refused. */
+export function notifyUrl(value: unknown): string {
+  if (typeof value !== "string") throw new BadInput("bad notify");
+  const url = visible(value.replace(/\/+$/, ""), NOTIFY_URL_MAX);
+  const [scheme, rest = ""] = url.split("://", 2);
+  const host = rest.split("/", 1)[0]?.split("?", 1)[0] ?? "";
+  if (!host || host.includes("@") || host.startsWith(":"))
+    throw new BadInput("bad notify");
+  if (scheme !== "https" && scheme !== "http") throw new BadInput("bad notify");
+  if (url.includes("#")) throw new BadInput("bad notify");
+  return url;
+}
+
+const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+
+/**
+ * Empty, or the default Authorization name, means `Authorization: Bearer <key>`.
+ * Any other name is stored as given and the raw key is the header value.
+ */
+export function notifyHeader(value: unknown): string {
+  if (typeof value !== "string") throw new BadInput("bad notify");
+  const name = value.trim();
+  if (!name || name.toLowerCase() === "authorization") return "";
+  if (name.length > 64 || !HEADER_NAME.test(name))
+    throw new BadInput("bad notify");
+  return name;
+}
+
+export function notifyOffline(value: unknown): number {
+  return boundedInt(
+    value,
+    MIN_NOTIFY_OFFLINE,
+    MAX_NOTIFY_OFFLINE,
+    "notify_offline_seconds",
+  );
+}
+
+/** A sender key that can sit in a header. Empty is not a key. */
+export function notifyKey(value: unknown): string {
+  if (typeof value !== "string") throw new BadInput("bad notify");
+  return visible(value, 512);
+}
+
+function loadNotifyUrl(data: Record<string, unknown>): string {
+  const url = str(data, "notify_url");
+  if (!url) return "";
+  try {
+    return notifyUrl(url);
+  } catch (err) {
+    if (err instanceof BadInput) throw new BadInput("notify_url");
+    throw err;
+  }
+}
+
+function loadNotifyHeader(data: Record<string, unknown>): string {
+  const name = str(data, "notify_header");
+  if (!name) return "";
+  try {
+    return notifyHeader(name);
+  } catch (err) {
+    if (err instanceof BadInput) throw new BadInput("notify_header");
+    throw err;
+  }
 }

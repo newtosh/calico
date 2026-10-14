@@ -33,6 +33,7 @@ import {
   resolvePort,
 } from "../server/port";
 import { loadSnapshot, saveSnapshot } from "../server/state-file";
+import { OutboundNotifier } from "../server/notify";
 import { DeskStore } from "../server/store";
 import type { CalicoInfo, ServerErrorInfo } from "../shared/ipc";
 import { execFileP, portHolders } from "./assist";
@@ -126,21 +127,41 @@ async function start(): Promise<void> {
     config = holder.get();
   };
 
+  // After app ready, so safeStorage knows its backend. Linux is the only target for now.
+  const secretBox = {
+    backend: () =>
+      process.platform === "linux"
+        ? safeStorage.getSelectedStorageBackend()
+        : "os",
+    available: () => safeStorage.isEncryptionAvailable(),
+    encrypt: (text: string) => safeStorage.encryptString(text),
+    decrypt: (sealed: Buffer) => safeStorage.decryptString(sealed),
+  };
+  const notify = new OutboundNotifier({
+    getConfig: () => config,
+    box: secretBox,
+    version,
+  });
+
   const store = new DeskStore({
     runningTtlMs: () => config.running_timeout_seconds * 1000,
     snapshot: loadSnapshot(statePath),
     onChange: (s) => saveSnapshot(statePath, s),
+    onDismissed: (ids, at) => notify.dismissed(ids, at),
   });
   const { server, stats } = createCompanionServer({
     store,
     getConfig: () => config,
     setConfig: save,
+    notify,
     // Dev serves the renderer over http, so it sends an Origin. Packaged builds load file:// and send none.
     cursorStatus: () => cursorState.snapshot(config.cursor_api_key !== ""),
     relayStatus: () => relayState.snapshot(config.relay_url !== ""),
     // Saved only when the poll came from somewhere new, not on every poll.
-    onPanelPoll: (seen) => {
+    // previousPoll is the gap: lastPanelPoll is already this poll.
+    onPanelPoll: (seen, previousPoll) => {
       if (addressWatch.polled(seen)) saveSeen(seenPath, seen);
+      notify.notePoll(previousPoll, stats.panelBattery);
     },
     allowedOrigins:
       !app.isPackaged && process.env.ELECTRON_RENDERER_URL
@@ -214,16 +235,7 @@ async function start(): Promise<void> {
       if (!w.isDestroyed()) w.webContents.send("relay:setup-changed", view);
   });
 
-  // After app ready, so safeStorage knows its backend. Linux is the only target for now.
-  const networks = new NetworkVault(join(userData, "networks.json"), {
-    backend: () =>
-      process.platform === "linux"
-        ? safeStorage.getSelectedStorageBackend()
-        : "os",
-    available: () => safeStorage.isEncryptionAvailable(),
-    encrypt: (text) => safeStorage.encryptString(text),
-    decrypt: (sealed) => safeStorage.decryptString(sealed),
-  });
+  const networks = new NetworkVault(join(userData, "networks.json"), secretBox);
 
   registerIpc({
     networks,

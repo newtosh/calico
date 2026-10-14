@@ -13,6 +13,7 @@ Desktop companion and developer kit for ginger, an ESP32-S3 AMOLED desk panel th
 - Pushes the saved networks to the panel over Bluetooth after showing exactly what it will add, update and remove, and offers a one-click Bluetooth fix when this computer's address changes and the panel goes quiet. A push releases one saved password at a time to the app window for the moment of the write, a deliberate exception to "the window never sees a password"; the vault list and every other call expose only whether a password or token is set.
 - Lives in the tray and starts at login, so the panel keeps working when the window is closed.
 - Optionally collects agent updates from a relay while the computer is off or on another network (see [Relay](#relay)).
+- Optionally POSTs to one outbound webhook when the panel comes back and when a needs-you is dismissed (see [Outbound webhook](#outbound-webhook)).
 
 ![Dashboard](resources/screenshots/dashboard.png)
 ![Device setup](resources/screenshots/device.png)
@@ -72,6 +73,40 @@ In Settings, Relay, either:
 - **Connect an existing relay**: an address and a read token, for the Worker above or a self-hosted [ntfy](https://ntfy.sh).
 
 The Worker's source is in [`tools/relay`](tools/relay), with its tests. Privacy and what the sign-in does are on the [project site](https://calico.newto.sh/#cloudflare).
+
+## Outbound webhook
+
+Calico can POST to one webhook you run. It sends `calico.online` when the panel polls again after being quiet for a threshold (180 seconds unless you change it), and once on the first poll after Calico starts. It sends `needs_you.dismissed` when you dismiss an agent that was waiting. Dismiss-all sends one POST for each agent whose lamp actually went out, and sends nothing when nothing was waiting.
+
+In Settings, Connectivity, next to Relay:
+
+- **Address**: an `http` or `https` URL.
+- **Sender key**: sealed with the system keyring (GNOME Keyring or KWallet), the same way Wi-Fi passwords are. Calico refuses to save it if there is no keyring, because the alternative is plain text. The key is never shown again, never logged, and never returned by `GET /api/config`, `/api/panel`, `/api/relay`, or `/api/notify`. Settings shows only that a key is set.
+- **Header**: leave it blank for `Authorization: Bearer <key>`. A custom header name sends the raw key as that header's value, with no `Bearer` prefix.
+- **Offline threshold**: seconds without a panel poll before the next poll counts as coming back. Default 180, from 30 to 86400.
+
+The POST uses `Content-Type: application/json` and `User-Agent: calico/<version>`, with a 5 second timeout. Calico does not wait for the reply, so a slow webhook cannot stall the panel or the window. It retries twice, waiting 0.5s and then 2s, on a network error, a timeout, HTTP 429, or HTTP 5xx. Any other HTTP 4xx is final. Settings shows the last result, without the key.
+
+`calico.online` (the battery is `null` until the panel has reported one; on the first poll after startup, `offline_seconds` is how long this process has been up):
+
+```json
+{
+  "type": "calico.online",
+  "at": "2026-10-14T20:41:00Z",
+  "offline_seconds": 180,
+  "battery": { "pct": 81, "charging": true, "external": true }
+}
+```
+
+`needs_you.dismissed`:
+
+```json
+{
+  "type": "needs_you.dismissed",
+  "agent_id": "grok",
+  "at": "2026-10-14T20:41:00Z"
+}
+```
 
 ## Develop
 

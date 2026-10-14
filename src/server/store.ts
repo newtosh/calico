@@ -93,6 +93,11 @@ export interface StoreOptions {
   runningTtlMs?: () => number;
   snapshot?: Snapshot | null;
   onChange?: (snapshot: Snapshot) => void;
+  /**
+   * Agents whose attention this dismiss actually cleared. Called once, not per
+   * agent. Must return immediately: the notifier posts in the background.
+   */
+  onDismissed?: (agentIds: string[], at: string) => void;
 }
 
 const STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
@@ -172,11 +177,13 @@ export class DeskStore {
   private readonly now: () => Date;
   private readonly runningTtlMs: () => number;
   private readonly onChange: (snapshot: Snapshot) => void;
+  private readonly onDismissed: (agentIds: string[], at: string) => void;
 
   constructor(opts: StoreOptions = {}) {
     this.now = opts.now ?? (() => new Date());
     this.runningTtlMs = opts.runningTtlMs ?? (() => RUNNING_TTL_MS);
     this.onChange = opts.onChange ?? (() => undefined);
+    this.onDismissed = opts.onDismissed ?? (() => undefined);
     if (opts.snapshot) {
       this.events = opts.snapshot.events
         .slice(0, EVENT_CAP)
@@ -281,6 +288,7 @@ export class DeskStore {
   dismiss(agentId = ""): void {
     const at = this.stamp();
     let cleared = false;
+    const clearedIds: string[] = [];
     for (const agent of this.agents.values()) {
       if (!agent.attention) continue;
       if (agentId && agent.id !== agentId) continue;
@@ -288,10 +296,18 @@ export class DeskStore {
       agent.message = "";
       if (agent.status === "running") agent.updated_at = at;
       cleared = true;
+      clearedIds.push(agent.id);
     }
     const still = [...this.agents.values()].some((a) => a.attention);
     // A named dismiss that matched nobody must not clear the others.
     if (agentId && !cleared) return;
+    if (clearedIds.length) {
+      try {
+        this.onDismissed(clearedIds, at);
+      } catch {
+        // A notifier bug must not undo a dismiss the person already made.
+      }
+    }
     if (still) {
       this.persist();
       return;

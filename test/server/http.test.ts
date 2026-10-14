@@ -22,7 +22,7 @@ async function start(
   allowedOrigins: string[] = [],
   cursorStatus?: () => CursorStatus,
   relayStatus?: () => RelayStatus,
-  onPanelPoll?: (seen: PanelSeen) => void,
+  onPanelPoll?: (seen: PanelSeen, previousPoll: number | null) => void,
   host = "127.0.0.1",
 ) {
   let current: CalicoConfig = { ...defaultConfig(), ...config };
@@ -174,6 +174,38 @@ describe("companion server", () => {
       const res = await fetch(`http://${lanIp}:${port}/api/status`);
       expect(res.status).toBe(200);
       expect(seen).toEqual([{ from: lanIp, via: lanIp }]);
+    },
+  );
+
+  it.skipIf(!lanIp)(
+    "tells onPanelPoll the previous poll time and the battery just recorded",
+    async () => {
+      const seen: { previous: number | null; pct: number | null }[] = [];
+      let statsRef: {
+        panelBattery: { pct: number } | null;
+        lastPanelPoll: number | null;
+      } | null = null;
+      const started = await start(
+        {},
+        [],
+        undefined,
+        undefined,
+        (_seen, previous) => {
+          seen.push({
+            previous,
+            pct: statsRef?.panelBattery?.pct ?? null,
+          });
+        },
+        "0.0.0.0",
+      );
+      statsRef = started.stats;
+      const port = new URL(started.base).port;
+      await fetch(`http://${lanIp}:${port}/api/status?bat=81&chg=1&ext=1`);
+      const first = started.stats.lastPanelPoll;
+      await fetch(`http://${lanIp}:${port}/api/status?bat=80&chg=0&ext=1`);
+      expect(seen[0]).toEqual({ previous: null, pct: 81 });
+      expect(seen[1]?.previous).toBe(first);
+      expect(seen[1]?.pct).toBe(80);
     },
   );
 

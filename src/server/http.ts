@@ -19,12 +19,18 @@ import type {
   WebhookActivity,
 } from "../shared/ipc";
 import { type CursorStatus, EMPTY_CURSOR_STATUS } from "./cursor-poll";
+import { NO_KEYRING, type OutboundNotifier, notifyPublicView } from "./notify";
 import { recordPanelBattery } from "./panel-battery";
 import { EMPTY_RELAY_STATUS, type RelayStatus } from "./relay";
 import { type DeskStore, eventIn, FRAME_MAX, StoreError } from "./store";
 
 const JSON_MAX = 1024 * 1024;
-const PUT_PATHS = new Set(["/api/config", "/api/panel", "/api/relay"]);
+const PUT_PATHS = new Set([
+  "/api/config",
+  "/api/panel",
+  "/api/relay",
+  "/api/notify",
+]);
 const POST_PATHS = new Set([
   "/api/webhook/grok-bot",
   "/api/dismiss",
@@ -41,10 +47,17 @@ export interface ServerDeps {
   cursorStatus?(): CursorStatus;
   /** Relay polling health, for the app's Settings. Empty when not wired. */
   relayStatus?(): RelayStatus;
+  /** Outbound webhook settings and the last delivery. Absent in tests that never send. */
+  notify?: OutboundNotifier;
   /** Origins allowed to call the server, such as the dev renderer. */
   allowedOrigins?: string[];
-  /** Each non-loopback status poll, with where it came from. Must not throw. */
-  onPanelPoll?(seen: PanelSeen): void;
+  /**
+   * Each non-loopback IPv4 status poll. `previousPoll` is `stats.lastPanelPoll`
+   * from before this request, null on the first. The field itself is already
+   * this poll by the time the hook runs, so the gap has to come from the
+   * argument. Must not throw, and must not wait on anything.
+   */
+  onPanelPoll?(seen: PanelSeen, previousPoll: number | null): void;
 }
 
 /** Where a panel poll came from, and the local address it arrived on. */
@@ -223,14 +236,17 @@ export function createCompanionServer(deps: ServerDeps): {
       if (path === "/api/status") {
         const params = new URL(req.url ?? "/", "http://calico").searchParams;
         if (!isLoopback(req.socket.remoteAddress)) {
-          stats.lastPanelPoll = Date.now();
-          recordPanelBattery(stats, params, Date.now());
+          // Captured first: the hook below runs after lastPanelPoll moves to now.
+          const previousPoll = stats.lastPanelPoll;
+          const now = Date.now();
+          stats.lastPanelPoll = now;
+          recordPanelBattery(stats, params, now);
           const seen = panelSeen(
             req.socket.remoteAddress,
             req.socket.localAddress,
           );
           try {
-            if (seen) deps.onPanelPoll?.(seen);
+            if (seen) deps.onPanelPoll?.(seen, previousPoll);
           } catch {
             // A consumer bug must not blind the panel's status poll.
           }
@@ -255,6 +271,13 @@ export function createCompanionServer(deps: ServerDeps): {
           ...relayPublicView(deps.getConfig()),
           status: deps.relayStatus?.() ?? EMPTY_RELAY_STATUS,
         });
+      if (path === "/api/notify")
+        return json(
+          res,
+          200,
+          deps.notify?.view(deps.getConfig()) ??
+            notifyPublicView(deps.getConfig(), null),
+        );
       if (path === "/api/cursor")
         return json(res, 200, deps.cursorStatus?.() ?? EMPTY_CURSOR_STATUS);
       return json(res, 404, { error: "not found" });
@@ -347,6 +370,18 @@ export function createCompanionServer(deps: ServerDeps): {
           throw err;
         }
         return json(res, 200, relayPublicView(deps.getConfig()));
+      }
+      if (path === "/api/notify") {
+        if (!deps.notify) return json(res, 400, { error: NO_KEYRING });
+        try {
+          const next = deps.notify.apply(deps.getConfig(), payload);
+          deps.setConfig(next);
+          return json(res, 200, deps.notify.view(next));
+        } catch (err) {
+          if (err instanceof BadInput)
+            return json(res, 400, { error: err.message });
+          throw err;
+        }
       }
       if (path === "/api/panel") {
         try {
