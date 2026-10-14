@@ -37,7 +37,8 @@ export function AddressBanner({
   const [dismissedAt, setDismissedAt] = useState<CalicoInfo | null>(null);
   const result = useRef<HTMLDivElement>(null);
   const offered = info.addressChange?.url ?? "";
-  const url = target || offered;
+  // A new attempt takes the current offer; the first URL stays only while it is being written.
+  const url = working || since !== null ? target : offered || target;
 
   // After a click the outcome is what matters: land on it.
   useEffect(() => {

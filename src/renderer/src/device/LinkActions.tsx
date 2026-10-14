@@ -12,10 +12,9 @@ export function LinkActions({
   onReboot: () => Promise<void>;
 }) {
   const [desk, setDesk] = useState<DeskInfo | null>(null);
-  // The address banner sends the person here with a link open: start at the address it offered.
-  const [url, setUrl] = useState(
-    info.addressChange?.url ?? info.lanUrls[0] ?? "",
-  );
+  // Follows the address banner's offer, even when already open, until the person types.
+  const [typed, setTyped] = useState<string | null>(null);
+  const url = typed ?? info.addressChange?.url ?? info.lanUrls[0] ?? "";
   const [notice, setNotice] = useState("");
 
   const refresh = async () => {
@@ -78,7 +77,7 @@ export function LinkActions({
           <input
             className="field mt-1 font-mono"
             value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            onChange={(e) => setTyped(e.target.value)}
           />
         </label>
         <button

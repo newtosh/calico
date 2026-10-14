@@ -252,6 +252,30 @@ describe("AddressBanner", () => {
     expect(close).toHaveBeenCalled();
   });
 
+  it("a retry after an error writes the address offered now, not the first one", async () => {
+    const NEXT = "http://192.168.4.31:8787";
+    panel({
+      reply: (cmd) =>
+        cmd.op === "url" ? { ok: false, error: "Bluetooth: gone" } : undefined,
+    });
+    const { rerender } = show();
+    fireEvent.click(screen.getByText("Update over Bluetooth"));
+    await screen.findByRole("alert");
+    rerender(
+      <AddressBanner
+        info={{ ...info, addressChange: { url: NEXT } }}
+        link={null}
+        onOpenDevice={() => undefined}
+      />,
+    );
+    expect(screen.getByRole("status").textContent).toContain(NEXT);
+    const { sent } = panel();
+    fireEvent.click(screen.getByText("Update over Bluetooth"));
+    await waitFor(() =>
+      expect(sent).toContainEqual({ op: "url", value: NEXT }),
+    );
+  });
+
   it("a link that throws is released and the button comes back", async () => {
     const { close } = panel({
       reply: () => {
