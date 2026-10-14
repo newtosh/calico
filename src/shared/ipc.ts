@@ -113,6 +113,16 @@ export interface NetworksState {
   notice: string;
 }
 
+/** The reply to confirming a push plan. */
+export type PushConfirm = { ok: true } | { ok: false; error: string };
+
+/**
+ * One saved network's password and token, released once for a confirmed push. The only IPC reply
+ * that carries a secret: the window passes it straight to the panel write and drops it.
+ */
+export type PushRelease =
+  { ok: true; password: string; token: string } | { ok: false; error: string };
+
 export interface CalicoApi {
   info(): Promise<CalicoInfo>;
   onBleCandidates(cb: (list: Candidate[]) => void): () => void;

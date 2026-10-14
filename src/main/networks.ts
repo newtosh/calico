@@ -1,7 +1,13 @@
 import { readFileSync, renameSync } from "node:fs";
 import { basename } from "node:path";
 import { writeAtomic } from "../server/state-file";
-import type { NetworkInput, NetworksState, SavedNetwork } from "../shared/ipc";
+import type {
+  NetworkInput,
+  NetworksState,
+  PushConfirm,
+  PushRelease,
+  SavedNetwork,
+} from "../shared/ipc";
 import {
   checkPass,
   checkSsid,
@@ -17,6 +23,8 @@ export interface SecretBox {
   backend(): string;
   available(): boolean;
   encrypt(text: string): Buffer;
+  /** safeStorage.decryptString. Throws when the keyring is locked or did not seal it. */
+  decrypt(sealed: Buffer): string;
 }
 
 interface StoredNetwork {
@@ -33,6 +41,18 @@ export const PLAINTEXT_KEYRING =
   "This desktop gives Calico no keyring, so the password would be stored as plain text. Calico did not save it. Install GNOME Keyring or KWallet, then try again.";
 const BAD_INPUT = "That network could not be saved.";
 const BAD_REMOVE = "That network could not be removed.";
+/** How long a confirmed plan may release passwords. Pushing 8 networks takes well under this. */
+export const PUSH_WINDOW_MS = 120_000;
+export const PLAN_EXPIRED =
+  "The confirmed plan has expired. Push to the panel again.";
+export const NOT_IN_PLAN =
+  "That network is not in the plan you confirmed, or it was already sent. Push to the panel again.";
+const BAD_PLAN =
+  "That plan names a network that is not saved on this computer. Push to the panel again.";
+
+export function keyringChanged(ssid: string): string {
+  return `Calico could not unlock the saved password for ${ssid}. The system keyring is locked or has changed. Unlock it, or edit ${ssid} in Settings and type its password again.`;
+}
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -119,10 +139,13 @@ export class NetworkVault {
   private notice = "";
   /** Set when networks.json exists but cannot be read: saving would overwrite it. */
   private blocked = "";
+  /** The SSIDs the person confirmed for one push, each released at most once, until `until`. */
+  private plan: { ssids: Set<string>; until: number } | null = null;
 
   constructor(
     private readonly path: string,
     private readonly box: SecretBox,
+    private readonly now: () => number = Date.now,
   ) {
     this.load();
   }
@@ -180,6 +203,61 @@ export class NetworkVault {
     if (typeof raw !== "string") return this.state(BAD_REMOVE);
     if (!this.nets.some((n) => n.ssid === raw)) return this.state("");
     return this.write(this.nets.filter((n) => n.ssid !== raw));
+  }
+
+  /** The person confirmed a push. Only these SSIDs may release a password, once each. */
+  confirmPush(raw: unknown): PushConfirm {
+    this.plan = null;
+    if (!Array.isArray(raw)) return { ok: false, error: BAD_PLAN };
+    const list: unknown[] = raw;
+    if (
+      list.length > NETWORKS_MAX ||
+      !list.every((s): s is string => typeof s === "string")
+    )
+      return { ok: false, error: BAD_PLAN };
+    const ssids = new Set(list);
+    if (
+      ssids.size !== list.length ||
+      !list.every((s) => this.nets.some((n) => n.ssid === s))
+    )
+      return { ok: false, error: BAD_PLAN };
+    this.plan = { ssids, until: this.now() + PUSH_WINDOW_MS };
+    return { ok: true };
+  }
+
+  /**
+   * The one place a saved password leaves main: once, for an SSID in the confirmed plan, while
+   * the plan is fresh. Never throws and never puts the password in an error.
+   */
+  release(raw: unknown): PushRelease {
+    const plan = this.plan;
+    if (!plan || this.now() > plan.until) {
+      this.plan = null;
+      return { ok: false, error: PLAN_EXPIRED };
+    }
+    // Deleted before decrypting, so a refused or failed release is still used up.
+    if (typeof raw !== "string" || !plan.ssids.delete(raw))
+      return { ok: false, error: NOT_IN_PLAN };
+    const net = this.nets.find((n) => n.ssid === raw);
+    if (!net) return { ok: false, error: NOT_IN_PLAN };
+    if (net.password === "")
+      return { ok: true, password: "", token: net.token };
+    try {
+      if (keyringRefusal(this.box))
+        return { ok: false, error: keyringChanged(net.ssid) };
+      return {
+        ok: true,
+        password: this.box.decrypt(Buffer.from(net.password, "base64")),
+        token: net.token,
+      };
+    } catch {
+      return { ok: false, error: keyringChanged(net.ssid) };
+    }
+  }
+
+  /** The push finished or was cancelled: nothing more may be released. */
+  endPush(): void {
+    this.plan = null;
   }
 
   private write(nets: StoredNetwork[]): NetworksState {

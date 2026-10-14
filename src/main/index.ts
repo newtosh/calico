@@ -196,6 +196,7 @@ async function start(): Promise<void> {
         : "os",
     available: () => safeStorage.isEncryptionAvailable(),
     encrypt: (text) => safeStorage.encryptString(text),
+    decrypt: (sealed) => safeStorage.decryptString(sealed),
   });
 
   registerIpc({
