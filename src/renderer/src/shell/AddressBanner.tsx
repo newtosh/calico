@@ -107,13 +107,13 @@ export function AddressBanner({
     <div
       role="status"
       aria-live="polite"
-      className="flex flex-col gap-3 border-b border-amber/60 bg-surface px-4 py-3"
+      className="flex flex-col items-start gap-3 border-b border-amber/60 bg-surface px-4 py-3"
     >
       <span className="min-w-0 text-amber">
         The panel's address may have changed. This computer is now at{" "}
         <span className="break-all font-mono">{url}</span>.
       </span>
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3 empty:hidden">
         {!waiting && link ? (
           <button
             type="button"
@@ -159,7 +159,9 @@ export function AddressBanner({
             <ErrorNote>{error}</ErrorNote>
           </p>
         ) : null}
-        {since !== null ? <RebootWait since={since} onSilent={silent} /> : null}
+        {since !== null ? (
+          <RebootWait since={since} onSilent={silent} className="" />
+        ) : null}
       </div>
       {error || waiting ? (
         <button type="button" className="btn" onClick={close}>
