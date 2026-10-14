@@ -6,9 +6,11 @@ import { panelOnlineSince } from "../lib/panel-online";
 export function RebootWait({
   since,
   onSilent,
+  className = "px-4 pt-2",
 }: {
   since: number;
   onSilent: () => void;
+  className?: string;
 }) {
   const [stage, setStage] = useState<"waiting" | "online" | "silent">(
     "waiting",
@@ -36,7 +38,7 @@ export function RebootWait({
   }, [since, onSilent]);
 
   return (
-    <p role="status" className="px-4 pt-2">
+    <p role="status" className={className}>
       {stage === "waiting" ? (
         <span className="text-amber">
           Rebooted. Waiting up to 30 s for the panel to poll calico.

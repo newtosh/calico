@@ -7,6 +7,7 @@ import { Picker } from "./device/Picker";
 import { useInfo } from "./lib/use-info";
 import { webhookUrl } from "./lib/webhook";
 import { SettingsView } from "./settings/SettingsView";
+import { AddressBanner } from "./shell/AddressBanner";
 import { DriftBanner } from "./shell/DriftBanner";
 import { ServerErrorPanel } from "./shell/ServerErrorPanel";
 import { PanelBattery } from "./shell/PanelBattery";
@@ -34,6 +35,13 @@ export function App() {
         <main className="min-h-0 flex-1 overflow-y-auto">
           {info ? (
             <DriftBanner info={info} onRepoint={() => setView("device")} />
+          ) : null}
+          {info ? (
+            <AddressBanner
+              info={info}
+              link={link}
+              onOpenDevice={() => setView("device")}
+            />
           ) : null}
           {info?.serverError ? (
             <ServerErrorPanel error={info.serverError} />

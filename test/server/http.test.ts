@@ -1,4 +1,5 @@
 import { request } from "node:http";
+import { networkInterfaces } from "node:os";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { defaultConfig, type CalicoConfig } from "../../src/server/config";
@@ -6,6 +7,8 @@ import {
   asciiJson,
   createCompanionServer,
   isLoopback,
+  type PanelSeen,
+  panelSeen,
 } from "../../src/server/http";
 import type { CursorStatus } from "../../src/server/cursor-poll";
 import type { RelayStatus } from "../../src/server/relay";
@@ -19,6 +22,8 @@ async function start(
   allowedOrigins: string[] = [],
   cursorStatus?: () => CursorStatus,
   relayStatus?: () => RelayStatus,
+  onPanelPoll?: (seen: PanelSeen) => void,
+  host = "127.0.0.1",
 ) {
   let current: CalicoConfig = { ...defaultConfig(), ...config };
   const store = new DeskStore();
@@ -27,15 +32,16 @@ async function start(
     allowedOrigins,
     ...(cursorStatus ? { cursorStatus } : {}),
     ...(relayStatus ? { relayStatus } : {}),
+    ...(onPanelPoll ? { onPanelPoll } : {}),
     getConfig: () => current,
     setConfig: (next) => {
       current = next;
     },
   });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve) => server.listen(0, host, resolve));
   close = () => server.close();
   return {
-    base: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
+    base: `http://${host === "0.0.0.0" ? "127.0.0.1" : host}:${(server.address() as AddressInfo).port}`,
     store,
     stats,
   };
@@ -137,6 +143,70 @@ describe("companion server", () => {
     const { base, stats } = await start();
     await fetch(`${base}/api/status`);
     expect(stats.lastPanelPoll).toBeNull();
+  });
+
+  it("does not report a loopback poll as the panel's", async () => {
+    const seen: PanelSeen[] = [];
+    const { base } = await start({}, [], undefined, undefined, (s) =>
+      seen.push(s),
+    );
+    await fetch(`${base}/api/status`);
+    expect(seen).toEqual([]);
+  });
+
+  const lanIp = Object.values(networkInterfaces())
+    .flat()
+    .find((i) => i && i.family === "IPv4" && !i.internal)?.address;
+
+  it.skipIf(!lanIp)(
+    "reports a real non-loopback poll once, with both addresses",
+    async () => {
+      const seen: PanelSeen[] = [];
+      const { base } = await start(
+        {},
+        [],
+        undefined,
+        undefined,
+        (s) => seen.push(s),
+        "0.0.0.0",
+      );
+      const port = new URL(base).port;
+      const res = await fetch(`http://${lanIp}:${port}/api/status`);
+      expect(res.status).toBe(200);
+      expect(seen).toEqual([{ from: lanIp, via: lanIp }]);
+    },
+  );
+
+  it.skipIf(!lanIp)("keeps answering when onPanelPoll throws", async () => {
+    const { base } = await start(
+      {},
+      [],
+      undefined,
+      undefined,
+      () => {
+        throw new Error("consumer bug");
+      },
+      "0.0.0.0",
+    );
+    const port = new URL(base).port;
+    const res = await fetch(`http://${lanIp}:${port}/api/status`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toHaveProperty("unread");
+  });
+
+  it("reads where a panel poll came from, IPv4 only", () => {
+    expect(panelSeen("::ffff:192.168.4.31", "::ffff:192.168.4.30")).toEqual({
+      from: "192.168.4.31",
+      via: "192.168.4.30",
+    });
+    expect(panelSeen("192.168.4.31", "192.168.4.30")).toEqual({
+      from: "192.168.4.31",
+      via: "192.168.4.30",
+    });
+    expect(panelSeen("fe80::1", "fe80::2")).toBeNull();
+    expect(panelSeen("192.168.4.31", "fe80::2")).toBeNull();
+    expect(panelSeen("192.168.4.31", undefined)).toBeNull();
+    expect(panelSeen(undefined, "192.168.4.30")).toBeNull();
   });
 
   it("tells a token-only panel push that it needs a URL, and keeps other panel errors generic", async () => {

@@ -13,6 +13,7 @@ import {
   toReason,
   validateCmd,
 } from "./commands";
+import { WIFI_WRITE_MAX } from "../../../shared/panel-fields";
 
 // The first name is the firmware's (firmware/main/ble_desk.h, checked by a test).
 // A panel flashed before the rename still advertises the old one.
@@ -108,13 +109,20 @@ export class BleLink implements DeviceLink {
           encode(cmd.value === "" ? "\n" : cmd.value),
         );
         return { ok: true };
-      case "wifi":
+      case "wifi": {
+        const body = encode(wifiBody(cmd));
+        // The field limits keep this at 353 bytes and the panel's buffer is 354. Never send more.
+        if (body.length > WIFI_WRITE_MAX)
+          throw new FieldError(
+            `That network is longer than the panel's ${WIFI_WRITE_MAX}-byte Wi-Fi write.`,
+          );
         // Firmware without nets also rejects the four-line form with a raw ATT error.
         // Reading nets first turns that into NotFoundError, before any secret is written.
         if (cmd.url !== undefined || cmd.token !== undefined)
           await this.gatt.read(UUID.nets);
-        await this.gatt.write(UUID.wifi, encode(wifiBody(cmd)));
+        await this.gatt.write(UUID.wifi, body);
         return { ok: true };
+      }
       case "nets":
         return { ok: true, nets: parseNets(await this.gatt.read(UUID.nets)) };
       case "forget":
@@ -189,7 +197,9 @@ export class BleLink implements DeviceLink {
 export const PAIR_FAILED =
   "Pairing did not finish. Confirm the same code on the panel and on this computer, then try again. If no code appeared, remove ginger from this computer's Bluetooth settings and connect again.";
 export const LINK_FAILED =
-  "Could not talk to the panel over Bluetooth. Move closer and connect again.";
+  "Could not reach the panel over Bluetooth. If it just restarted, wait a few seconds and try again. Otherwise move closer.";
+// BlueZ can abort the first connect after a panel restart or a stale link. One retry clears it.
+const CONNECT_RETRY_MS = 2000;
 
 /**
  * Connects and, when the panel says this link is not paired, makes the OS pair. The OS shows its
@@ -201,6 +211,8 @@ export async function connectBle(
   onClosed: () => void,
   onPairing: () => void = () => undefined,
   peerName = "",
+  sleep: (ms: number) => Promise<void> = (ms) =>
+    new Promise((resolve) => setTimeout(resolve, ms)),
 ): Promise<BleLink> {
   const device = await navigator.bluetooth.requestDevice({
     filters: BLE_NAMES.map((name) => ({ name })),
@@ -249,7 +261,13 @@ export async function connectBle(
     }
   };
   try {
-    const server = await step(remote.connect(), LINK_FAILED);
+    const server = await step(
+      remote.connect().catch(async () => {
+        await sleep(CONNECT_RETRY_MS);
+        return remote.connect();
+      }),
+      LINK_FAILED,
+    );
     service = await step(server.getPrimaryService(UUID.svc), LINK_FAILED);
     const status = await step(gatt.read(UUID.status), LINK_FAILED);
     if (requirePairing(status) === "needs-pairing") {

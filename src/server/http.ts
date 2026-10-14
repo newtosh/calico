@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import http from "node:http";
+import { isIPv4 } from "node:net";
 import {
   BadInput,
   type CalicoConfig,
@@ -42,6 +43,31 @@ export interface ServerDeps {
   relayStatus?(): RelayStatus;
   /** Origins allowed to call the server, such as the dev renderer. */
   allowedOrigins?: string[];
+  /** Each non-loopback status poll, with where it came from. Must not throw. */
+  onPanelPoll?(seen: PanelSeen): void;
+}
+
+/** Where a panel poll came from, and the local address it arrived on. */
+export interface PanelSeen {
+  from: string;
+  via: string;
+}
+
+const v4 = (address: string | undefined): string | null => {
+  const plain = address?.startsWith("::ffff:")
+    ? address.slice(7)
+    : (address ?? "");
+  return isIPv4(plain) ? plain : null;
+};
+
+/** The panel polls over IPv4. Anything else gives nothing to compare, so it is null. */
+export function panelSeen(
+  remoteAddress: string | undefined,
+  localAddress: string | undefined,
+): PanelSeen | null {
+  const from = v4(remoteAddress);
+  const via = v4(localAddress);
+  return from && via ? { from, via } : null;
 }
 
 export interface ServerStats {
@@ -199,6 +225,15 @@ export function createCompanionServer(deps: ServerDeps): {
         if (!isLoopback(req.socket.remoteAddress)) {
           stats.lastPanelPoll = Date.now();
           recordPanelBattery(stats, params, Date.now());
+          const seen = panelSeen(
+            req.socket.remoteAddress,
+            req.socket.localAddress,
+          );
+          try {
+            if (seen) deps.onPanelPoll?.(seen);
+          } catch {
+            // A consumer bug must not blind the panel's status poll.
+          }
         }
         const detail = params.get("detail") === "1";
         const body = store.status(detail);

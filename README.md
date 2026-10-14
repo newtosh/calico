@@ -10,6 +10,7 @@ Desktop companion and developer kit for ginger, an ESP32-S3 AMOLED desk panel th
 - Shows a dashboard of agents, events, and the panel's state.
 - Sets up the panel over USB or Bluetooth: Wi-Fi (tested before it is saved), companion URL, token, reboot.
 - Keeps the panel's Wi-Fi networks in one list on this computer, with passwords locked in the system keyring (GNOME Keyring or KWallet). Without a keyring, Calico refuses to save a password.
+- Pushes the saved networks to the panel over Bluetooth after showing exactly what it will add, update and remove, and offers a one-click Bluetooth fix when this computer's address changes and the panel goes quiet. A push releases one saved password at a time to the app window for the moment of the write, a deliberate exception to "the window never sees a password"; the vault list and every other call expose only whether a password or token is set.
 - Lives in the tray and starts at login, so the panel keeps working when the window is closed.
 - Optionally collects agent updates from a relay while the computer is off or on another network (see [Relay](#relay)).
 

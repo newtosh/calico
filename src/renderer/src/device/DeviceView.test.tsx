@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CalicoApi, CalicoInfo } from "../../../shared/ipc";
 import type { Cmd, DeviceLink, Reply } from "./commands";
 import { DeviceView } from "./DeviceView";
+import { pushedAll } from "./PushNetworks";
 
 let dropLink: () => void = () => undefined;
 
@@ -52,6 +53,7 @@ const info: CalicoInfo = {
   autostart: { enabled: false, available: false },
   version: "0.0.0-test",
   hostname: "test-host",
+  addressChange: null,
 };
 
 afterEach(() => {
@@ -108,6 +110,30 @@ describe("DeviceView provisioning", () => {
     await screen.findByText(/Waiting up to 30 s/);
     await vi.advanceTimersByTimeAsync(31_000);
     expect(await screen.findByText(/has not reached calico/)).toBeTruthy();
+  });
+});
+
+describe("DeviceView push to panel", () => {
+  it("keeps the outcome and restarts the panel after a full push", async () => {
+    window.calico = {
+      info: async () => info,
+      networksList: async () => ({
+        networks: [
+          { ssid: "home", url: "", password_set: true, token_set: true },
+        ],
+        error: "",
+        notice: "",
+      }),
+      networksConfirmPush: async () => ({ ok: true }),
+      networksRelease: async () => ({ ok: true, password: "p", token: "t" }),
+      networksEndPush: async () => undefined,
+    } as unknown as CalicoApi;
+    render(<Harness />);
+    fireEvent.click(screen.getByText("Connect over Bluetooth"));
+    fireEvent.click(await screen.findByText("Push to panel"));
+    fireEvent.click(await screen.findByText("Push 1 change"));
+    expect(await screen.findByText(pushedAll(1))).toBeTruthy();
+    expect(await screen.findByText(/Waiting up to 30 s/)).toBeTruthy();
   });
 });
 

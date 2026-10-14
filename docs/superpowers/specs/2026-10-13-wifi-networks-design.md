@@ -2,7 +2,7 @@
 
 Status: draft for review. Date: 2026-10-13.
 
-> **Superseded in part (2026-10-13).** Hardware testing showed that Electron's `setBluetoothPairingHandler` is never called on Linux with BlueZ, because BlueZ pairs through the desktop's own agent. Pairing is now numeric comparison done at the OS level: the panel shows a 6-digit code with Yes and No buttons on its glass, the computer's system dialog shows the same code, and the app only guides, verifies and recovers. Wherever this document describes a typed passkey or an in-app PIN prompt, read it as that. The Phase 1 pull request carries the final design and the hardware results.
+> **Superseded in part (2026-10-13).** Hardware testing showed that Electron's `setBluetoothPairingHandler` is never called on Linux with BlueZ, because BlueZ pairs through the desktop's own agent. Pairing is now numeric comparison done at the OS level: the panel shows a 6-digit code with Yes and No buttons on its glass, the computer's system dialog shows the same code, and the app only guides, verifies and recovers. Wherever this document describes a typed passkey or an in-app PIN prompt, read it as that. The Phase 1 pull request carries the final design and the hardware results. Phase 3 relaxes "the renderer never receives a password or token" for one path only: after the person confirms a push plan, main releases each confirmed network's password and token to the window once, which passes it straight to the Bluetooth write (`docs/superpowers/plans/2026-10-13-sync-and-address-banner.md`, Global Constraints).
 
 ## Goal
 

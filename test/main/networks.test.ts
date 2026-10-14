@@ -11,9 +11,13 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
+  keyringChanged,
   NetworkVault,
   NO_KEYRING,
+  NOT_IN_PLAN,
   PLAINTEXT_KEYRING,
+  PLAN_EXPIRED,
+  PUSH_WINDOW_MS,
   type SecretBox,
 } from "../../src/main/networks";
 import type { NetworksState } from "../../src/shared/ipc";
@@ -29,6 +33,11 @@ function box(backend = "gnome_libsecret", available = true) {
     encrypt: (text) => {
       seen.push(text);
       return Buffer.from(`sealed-${seen.length}`);
+    },
+    decrypt: (sealed) => {
+      const text = seen[Number(sealed.toString().replace("sealed-", "")) - 1];
+      if (text === undefined) throw new Error("not sealed by this keyring");
+      return text;
     },
   };
   return { fake, seen };
@@ -281,6 +290,7 @@ describe("NetworkVault", () => {
           ];
         return Buffer.from("sealed");
       },
+      decrypt: () => "",
     });
     const outer = vault.save({ ...home, ssid: "a", password: PASS });
     expect(inner.map((s) => s.error)).toEqual(["", ""]);
@@ -310,6 +320,7 @@ describe("NetworkVault", () => {
       encrypt: (text) => {
         throw new Error(`keyring refused ${text}`);
       },
+      decrypt: () => "",
     }).save({ ...home, password: PASS });
     expect(state.error).toBe(NO_KEYRING);
     expect(JSON.stringify(state)).not.toContain(PASS);
@@ -328,6 +339,7 @@ describe("NetworkVault", () => {
       const vault = new NetworkVault(path, {
         ...fake,
         encrypt: () => Buffer.from("sealed"),
+        decrypt: () => "",
       });
       expect(vault.save({ ...home, password: PASS }).error).toBe(NO_KEYRING);
       expect(existsSync(path)).toBe(false);
@@ -351,5 +363,162 @@ describe("NetworkVault", () => {
     } finally {
       now.mockRestore();
     }
+  });
+});
+
+describe("push release", () => {
+  function vaultWith(now: () => number, fake: SecretBox = box().fake) {
+    const vault = new NetworkVault(file(), fake, now);
+    vault.save({ ...home, password: PASS, token: TOKEN });
+    vault.save({ ssid: "cafe", url: "", edit: false });
+    return vault;
+  }
+
+  it("releases a password once, only for an SSID in the confirmed plan", () => {
+    const vault = vaultWith(() => 0);
+    expect(vault.release("home")).toEqual({ ok: false, error: PLAN_EXPIRED });
+    expect(vault.confirmPush(["home", "cafe"])).toEqual({ ok: true });
+    expect(vault.release("home")).toEqual({
+      ok: true,
+      password: PASS,
+      token: TOKEN,
+    });
+    expect(vault.release("home")).toEqual({ ok: false, error: NOT_IN_PLAN });
+    expect(vault.release("cafe")).toEqual({
+      ok: true,
+      password: "",
+      token: "",
+    });
+    expect(JSON.stringify(vault.list())).not.toContain(PASS);
+    expect(JSON.stringify(vault.list())).not.toContain(TOKEN);
+  });
+
+  it("refuses an SSID outside the plan, and a plan that names an unsaved or repeated network", () => {
+    const vault = vaultWith(() => 0);
+    expect(vault.confirmPush(["cafe"])).toEqual({ ok: true });
+    expect(vault.release("home")).toEqual({ ok: false, error: NOT_IN_PLAN });
+    expect(vault.release(42)).toEqual({ ok: false, error: NOT_IN_PLAN });
+    for (const bad of [["home", "home"], ["nope"], "home", [1], null]) {
+      expect(vault.confirmPush(bad).ok).toBe(false);
+    }
+    // A refused confirmation also drops the plan before it.
+    expect(vault.release("cafe")).toEqual({ ok: false, error: PLAN_EXPIRED });
+  });
+
+  it("stops releasing when the plan expires or the push ends", () => {
+    let t = 0;
+    const vault = vaultWith(() => t);
+    vault.confirmPush(["home", "cafe"]);
+    t = PUSH_WINDOW_MS + 1;
+    expect(vault.release("home")).toEqual({ ok: false, error: PLAN_EXPIRED });
+    vault.confirmPush(["home"]);
+    vault.endPush();
+    expect(vault.release("home")).toEqual({ ok: false, error: PLAN_EXPIRED });
+  });
+
+  it("refuses, without throwing or echoing, when the keyring is locked or changed", () => {
+    const { fake } = box();
+    const vault = vaultWith(() => 0, {
+      ...fake,
+      decrypt: () => {
+        throw new Error(`keyring locked ${PASS}`);
+      },
+    });
+    vault.confirmPush(["home"]);
+    const reply = vault.release("home");
+    expect(reply).toEqual({ ok: false, error: keyringChanged("home") });
+    expect(JSON.stringify(reply)).not.toContain(PASS);
+  });
+
+  it("refuses when the keyring became the plaintext fallback", () => {
+    let backend = "gnome_libsecret";
+    const { fake } = box();
+    const vault = vaultWith(() => 0, { ...fake, backend: () => backend });
+    backend = "basic_text";
+    vault.confirmPush(["home"]);
+    expect(vault.release("home")).toEqual({
+      ok: false,
+      error: keyringChanged("home"),
+    });
+  });
+
+  it("replaces an earlier plan rather than adding to it", () => {
+    const vault = vaultWith(() => 0);
+    vault.confirmPush(["home"]);
+    vault.confirmPush(["cafe"]);
+    expect(vault.release("home")).toEqual({ ok: false, error: NOT_IN_PLAN });
+  });
+
+  it("refuses a plan of more than the panel's eight networks", () => {
+    const vault = vaultWith(() => 0);
+    const nine = ["home", "cafe", "a", "b", "c", "d", "e", "f", "g"];
+    expect(vault.confirmPush(nine).ok).toBe(false);
+  });
+
+  it("releases the token of a network that has a token and no password", () => {
+    const vault = vaultWith(() => 0);
+    vault.save({ ssid: "office", url: "", edit: false, token: TOKEN });
+    vault.confirmPush(["office"]);
+    expect(vault.release("office")).toEqual({
+      ok: true,
+      password: "",
+      token: TOKEN,
+    });
+  });
+
+  it("uses up a release that failed to unlock", () => {
+    const { fake } = box();
+    let locked = true;
+    const vault = vaultWith(() => 0, {
+      ...fake,
+      decrypt: (sealed) => {
+        if (locked) throw new Error("keyring locked");
+        return fake.decrypt(sealed);
+      },
+    });
+    vault.confirmPush(["home"]);
+    expect(vault.release("home").ok).toBe(false);
+    locked = false;
+    expect(vault.release("home")).toEqual({ ok: false, error: NOT_IN_PLAN });
+  });
+
+  it("refuses a planned network that was removed before its release", () => {
+    const vault = vaultWith(() => 0);
+    vault.confirmPush(["cafe"]);
+    vault.remove("cafe");
+    expect(vault.release("cafe")).toEqual({ ok: false, error: NOT_IN_PLAN });
+  });
+
+  it("keeps no secret in the vault or its errors after a release", () => {
+    const { fake } = box();
+    const vault = vaultWith(() => 0, {
+      ...fake,
+      decrypt: (sealed) => {
+        if (sealed.toString() !== "sealed-1")
+          throw new Error(`locked ${PASS} ${TOKEN}`);
+        return fake.decrypt(sealed);
+      },
+    });
+    vault.save({
+      ssid: "office",
+      url: "",
+      edit: false,
+      password: "other-placeholder",
+    });
+    vault.confirmPush(["home", "office"]);
+    expect(vault.release("home").ok).toBe(true);
+    const errors = [
+      vault.release("office"),
+      vault.release("home"),
+      vault.release("nope"),
+      vault.confirmPush(["nope"]),
+      vault.release("home"),
+    ];
+    expect(errors.every((e) => !e.ok)).toBe(true);
+    const replies = JSON.stringify({ errors, state: vault.list() });
+    expect(replies).not.toContain(PASS);
+    expect(replies).not.toContain(TOKEN);
+    // The token is stored as plain text by design; the password never is, nor kept after release.
+    expect(JSON.stringify(vault)).not.toContain(PASS);
   });
 });

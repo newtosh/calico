@@ -37,6 +37,7 @@ const info: CalicoInfo = {
   autostart: { enabled: true, available: true },
   version: "0.1.9",
   hostname: "test-host",
+  addressChange: null,
 };
 
 // The panel the person sees: the others are mounted but hidden. happy-dom does

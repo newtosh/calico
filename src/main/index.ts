@@ -1,6 +1,13 @@
 import { hostname } from "node:os";
 import { join } from "node:path";
-import { app, BrowserWindow, dialog, safeStorage, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  powerMonitor,
+  safeStorage,
+  shell,
+} from "electron";
 import {
   ConfigError,
   type CalicoConfig,
@@ -9,6 +16,12 @@ import {
 } from "../server/config";
 import { version } from "../../package.json";
 import { NetworkVault } from "./networks";
+import {
+  AddressWatch,
+  loadSeen,
+  localAddresses,
+  saveSeen,
+} from "./panel-address";
 import { CursorState, startCursorPoll } from "../server/cursor-poll";
 import { RelayState, startRelayPoll } from "../server/relay";
 import { createCompanionServer } from "../server/http";
@@ -89,6 +102,8 @@ async function start(): Promise<void> {
   const userData = app.getPath("userData");
   const configPath = join(userData, "config.json");
   const statePath = join(userData, "state.json");
+  const seenPath = join(userData, "panel-seen.json");
+  const addressWatch = new AddressWatch(loadSeen(seenPath), Date.now);
 
   let loaded: { config: CalicoConfig; existed: boolean };
   try {
@@ -123,6 +138,10 @@ async function start(): Promise<void> {
     // Dev serves the renderer over http, so it sends an Origin. Packaged builds load file:// and send none.
     cursorStatus: () => cursorState.snapshot(config.cursor_api_key !== ""),
     relayStatus: () => relayState.snapshot(config.relay_url !== ""),
+    // Saved only when the poll came from somewhere new, not on every poll.
+    onPanelPoll: (seen) => {
+      if (addressWatch.polled(seen)) saveSeen(seenPath, seen);
+    },
     allowedOrigins:
       !app.isPackaged && process.env.ELECTRON_RENDERER_URL
         ? [new URL(process.env.ELECTRON_RENDERER_URL).origin]
@@ -158,21 +177,28 @@ async function start(): Promise<void> {
     relayState,
   );
 
-  const info = (): CalicoInfo => ({
-    serverUrl: bound ? `http://127.0.0.1:${bound}` : null,
-    port: bound,
-    expectedPort: panelPort.expected,
-    lanUrls: bound ? lanUrls(bound) : [],
-    lastPanelPoll: stats.lastPanelPoll,
-    panelBattery: stats.panelBattery,
-    webhookToken: config.webhook_token,
-    webhook: stats.webhook,
-    serverError,
-    autostart: autostartState(),
-    // app.getVersion() returns Electron's version when launched from the entry file.
-    version,
-    hostname: hostname(),
-  });
+  const info = (): CalicoInfo => {
+    const offer = bound ? addressWatch.check(localAddresses()) : null;
+    return {
+      serverUrl: bound ? `http://127.0.0.1:${bound}` : null,
+      port: bound,
+      expectedPort: panelPort.expected,
+      lanUrls: bound ? lanUrls(bound) : [],
+      lastPanelPoll: stats.lastPanelPoll,
+      panelBattery: stats.panelBattery,
+      webhookToken: config.webhook_token,
+      webhook: stats.webhook,
+      serverError,
+      autostart: autostartState(),
+      // app.getVersion() returns Electron's version when launched from the entry file.
+      version,
+      hostname: hostname(),
+      addressChange:
+        offer && bound ? { url: `http://${offer}:${bound}` } : null,
+    };
+  };
+  // After sleep the panel has had no chance to poll: count its silence from the wake.
+  powerMonitor.on("resume", () => addressWatch.woke());
 
   const relaySetup = new RelaySetupService(
     (signal, report) =>
@@ -196,10 +222,29 @@ async function start(): Promise<void> {
         : "os",
     available: () => safeStorage.isEncryptionAvailable(),
     encrypt: (text) => safeStorage.encryptString(text),
+    decrypt: (sealed) => safeStorage.decryptString(sealed),
   });
 
   registerIpc({
     networks,
+    dismissAddress: () => addressWatch.dismiss(),
+    askPush: async (ssids) => {
+      const box = {
+        type: "question" as const,
+        title: "Send passwords to the panel",
+        message: "Send these saved Wi-Fi passwords to the panel?",
+        detail: ssids.join("\n"),
+        buttons: ["Cancel", "Send"],
+        defaultId: 0,
+        cancelId: 0,
+      };
+      const { response } =
+        win && !win.isDestroyed()
+          ? await dialog.showMessageBox(win, box)
+          : await dialog.showMessageBox(box);
+      return response === 1;
+    },
+    appContents: () => (win && !win.isDestroyed() ? win.webContents : null),
     relaySetup,
     botNote: () =>
       config.relay_url && config.relay_send_token

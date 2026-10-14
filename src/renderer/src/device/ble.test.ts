@@ -10,6 +10,8 @@ import {
   UUID,
   wifiBody,
 } from "./ble";
+import { PASS_MAX, SSID_MAX, TOKEN_MAX, URL_MAX } from "./commands";
+import { WIFI_WRITE_MAX } from "../../../shared/panel-fields";
 
 function fakeGatt(
   reads: Record<string, string[]>,
@@ -36,6 +38,23 @@ const instant = async () => undefined;
 afterEach(() => vi.unstubAllGlobals());
 
 describe("BleLink", () => {
+  it("writes the longest legal network in at most 354 bytes", async () => {
+    const { gatt, writes } = fakeGatt({ [UUID.nets]: ["count=0\n"] });
+    const reply = await new BleLink(gatt, instant).send({
+      op: "wifi",
+      ssid: "s".repeat(SSID_MAX),
+      pass: "p".repeat(PASS_MAX),
+      url: `http://${"u".repeat(URL_MAX - 7)}`,
+      token: "t".repeat(TOKEN_MAX),
+    });
+    expect(reply).toEqual({ ok: true });
+    expect(WIFI_WRITE_MAX).toBe(354);
+    expect(new TextEncoder().encode(writes[0]?.[1] ?? "").length).toBe(
+      WIFI_WRITE_MAX - 1,
+    );
+    expect(header).toContain("#define BLE_DESK_WIFI_CFG_MAX");
+  });
+
   it("reads status", async () => {
     const { gatt } = fakeGatt({
       [UUID.status]: ["name=ginger\nfw=1\nssid=home\nurl=none\ntoken=none\n"],
@@ -285,7 +304,7 @@ describe("requirePairing", () => {
 const PAIR_FAILED =
   "Pairing did not finish. Confirm the same code on the panel and on this computer, then try again. If no code appeared, remove ginger from this computer's Bluetooth settings and connect again.";
 const LINK_FAILED =
-  "Could not talk to the panel over Bluetooth. Move closer and connect again.";
+  "Could not reach the panel over Bluetooth. If it just restarted, wait a few seconds and try again. Otherwise move closer.";
 
 describe("connectBle pairing", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -370,6 +389,44 @@ describe("connectBle pairing", () => {
     await expect(connectBle(() => {})).rejects.toThrow(LINK_FAILED);
     expect(s.server.disconnect).toHaveBeenCalledTimes(1);
     expect(s.order).toEqual(["remove:gattserverdisconnected", "disconnect"]);
+  });
+
+  it("retries a failed connect once and then succeeds", async () => {
+    const s = setup("pair=1\npaired=1\n");
+    const connect = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("le-connection-abort-by-local"))
+      .mockResolvedValue(s.server);
+    s.server.connect = connect;
+    const sleep = vi.fn(async () => undefined);
+    await expect(
+      connectBle(
+        () => {},
+        () => undefined,
+        "",
+        sleep,
+      ),
+    ).resolves.toBeInstanceOf(BleLink);
+    expect(connect).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledTimes(1);
+  });
+
+  it("gives up after one retry and hides the raw error", async () => {
+    const s = setup("pair=1\npaired=1\n");
+    const connect = vi
+      .fn()
+      .mockRejectedValue(new Error("le-connection-abort-by-local"));
+    s.server.connect = connect;
+    await expect(
+      connectBle(
+        () => {},
+        () => undefined,
+        "",
+        async () => undefined,
+      ),
+    ).rejects.toThrow(LINK_FAILED);
+    expect(connect).toHaveBeenCalledTimes(2);
+    expect(s.server.disconnect).toHaveBeenCalledTimes(1);
   });
 
   it("disconnects when the service lookup fails", async () => {
