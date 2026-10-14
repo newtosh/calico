@@ -77,12 +77,6 @@ export function pickAddress(
   );
 }
 
-const key = (addrs: LocalAddress[]) =>
-  addrs
-    .map((a) => a.address)
-    .sort()
-    .join(",");
-
 /**
  * When to show "The panel's address may have changed". The panel's last poll arrived on `via`.
  * Once that address is gone from this computer and the panel has been silent for SILENCE_MS, it
@@ -92,7 +86,7 @@ const key = (addrs: LocalAddress[]) =>
 export class AddressWatch {
   /** Silence counts from the latest of app start, the last poll, and the last wake. */
   private since: number;
-  private dismissed = "";
+  private dismissed = false;
 
   constructor(
     private last: PanelSeen | null,
@@ -107,7 +101,7 @@ export class AddressWatch {
       this.last?.from !== seen.from || this.last?.via !== seen.via;
     this.last = seen;
     this.since = this.now();
-    this.dismissed = "";
+    this.dismissed = false;
     return changed;
   }
 
@@ -116,17 +110,20 @@ export class AddressWatch {
     this.since = this.now();
   }
 
-  /** "Not now": quiet until this computer's addresses change or the panel polls. */
-  dismiss(addrs: LocalAddress[]): void {
-    this.dismissed = key(addrs);
+  /** "Not now": quiet until the panel polls again or the app restarts. */
+  dismiss(): void {
+    this.dismissed = true;
   }
 
   /** The address to offer, or null when there is no reason to show the banner. */
   check(addrs: LocalAddress[]): string | null {
     const last = this.last;
-    if (!last || this.now() - this.since < SILENCE_MS) return null;
+    // A self-assigned address is not one the panel can be reached on, and localAddresses drops it,
+    // so it would always look gone: treat it as no history.
+    if (!last || linkLocal(last.via) || this.now() - this.since < SILENCE_MS)
+      return null;
     if (addrs.some((a) => a.address === last.via)) return null;
-    if (this.dismissed && this.dismissed === key(addrs)) return null;
+    if (this.dismissed) return null;
     return pickAddress(addrs, last.from);
   }
 }

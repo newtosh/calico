@@ -231,17 +231,28 @@ describe("AddressWatch", () => {
     expect(watch.check([tailscale, docker, wifi])).toBe("192.168.4.30");
   });
 
-  it("holds Not now until this computer's addresses change or the panel polls", () => {
+  it("holds Not now until the panel polls, whatever this computer's addresses do", () => {
     const c = clock();
     const watch = new AddressWatch(seen, c.now);
     c.advance(SILENCE_MS);
-    watch.dismiss([wifi]);
+    watch.dismiss();
     expect(watch.check([wifi])).toBeNull();
-    expect(watch.check([wifi, wired])).toBe("192.168.4.30");
-    watch.dismiss([wifi]);
+    // A new Docker network, Tailscale coming up, a second LAN address: still dismissed.
+    expect(watch.check([wifi, docker, tailscale])).toBeNull();
+    expect(watch.check([wifi, wired])).toBeNull();
     watch.polled(seen);
     c.advance(SILENCE_MS);
     expect(watch.check([wifi])).toBe("192.168.4.30");
+  });
+
+  it("offers nothing when the panel last polled over a self-assigned address", () => {
+    const c = clock();
+    const watch = new AddressWatch(
+      { from: "169.254.1.2", via: "169.254.1.1" },
+      c.now,
+    );
+    c.advance(SILENCE_MS * 10);
+    expect(watch.check([wifi])).toBeNull();
   });
 });
 
