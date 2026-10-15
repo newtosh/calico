@@ -4,15 +4,15 @@ export const NO_STATUS =
   "Could not read the panel's settings, so nothing was written. Connect again.";
 
 export function ownUrl(ssid: string): string {
-  return `The panel is on ${ssid}, which has its own companion URL saved on the panel, so a new default address would not change where it polls. Edit ${ssid} in Settings, then push networks from the Device page.`;
+  return `The panel is on ${ssid}, which has its own Calico address saved on the panel, so a new default address would not change where it polls. Edit ${ssid} in Settings, then push networks from the Panel page.`;
 }
 
 export function sameUrl(url: string): string {
-  return `The panel already polls ${url}. It may be off its network, or a firewall may block it. See Panel not connecting on the Device page.`;
+  return `The panel already polls ${url}. It may be off its network, or a firewall may block it. See Panel not connecting on the Panel page.`;
 }
 
 /**
- * The banner's one-click fix: writes the panel's default companion URL and reboots it. Writes no
+ * The banner's one-click fix: writes the panel's default Calico address and reboots it. Writes no
  * password and no token. Reads status and nets first and writes nothing when that would not help:
  * a network with its own URL on the panel wins for that network (R6), and old firmware without
  * nets gets the link's OLD_FIRMWARE error.

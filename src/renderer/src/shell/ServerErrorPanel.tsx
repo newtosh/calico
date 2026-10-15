@@ -5,11 +5,11 @@ export function ServerErrorPanel({ error }: { error: ServerErrorInfo }) {
   return (
     <section role="alert" className="m-4 border border-red/60 bg-surface p-4">
       <p className="font-medium">
-        <ErrorNote>The companion server is not running.</ErrorNote>
+        <ErrorNote>Calico's server is not running.</ErrorNote>
       </p>
       <p className="mt-1 text-muted">
         Ports {error.first} to {error.last} are all in use, so the panel and
-        agent webhooks cannot reach calico. Device setup over USB and Bluetooth
+        agent webhooks cannot reach calico. Panel setup over USB and Bluetooth
         still works.
       </p>
       <p className="mt-2 text-muted">

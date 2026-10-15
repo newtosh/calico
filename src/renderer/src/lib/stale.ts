@@ -5,7 +5,7 @@ export const STALE_AFTER_MS = 30 * 60_000;
 
 /**
  * A short line for when nothing has come in for a while, empty while things are
- * fresh. The dashboard shows it so a quiet desk does not look like a working one.
+ * fresh. The dashboard shows it so a quiet panel does not look like a working one.
  */
 export function staleUpdateText(
   events: readonly { at: string }[],

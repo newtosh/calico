@@ -101,7 +101,7 @@ export function NetworkForm({
           Open network (no password)
         </label>
         <label className="label">
-          Companion URL for this network
+          Calico's address on this network
           <input
             className="field mt-1 font-mono"
             value={url}
@@ -125,7 +125,7 @@ export function NetworkForm({
         <p className="pt-2 text-muted">
           {link
             ? "For a hidden network, type its name."
-            : "Connect the panel on the Device page to scan for networks. For a hidden network, type its name."}
+            : "Connect the panel on the Panel page to scan for networks. For a hidden network, type its name."}
         </p>
       ) : null}
       <div className="flex gap-3 pt-3">

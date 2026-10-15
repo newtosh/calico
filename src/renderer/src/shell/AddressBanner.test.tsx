@@ -345,7 +345,7 @@ describe("AddressBanner", () => {
     expect(container.textContent).toContain(TARGET);
   });
 
-  it("with a link already open, sends the person to the Device page", () => {
+  it("with a link already open, sends the person to the Panel page", () => {
     const onOpenDevice = vi.fn();
     const open: DeviceLink = {
       kind: "ble",
@@ -355,7 +355,7 @@ describe("AddressBanner", () => {
     render(
       <AddressBanner info={info} link={open} onOpenDevice={onOpenDevice} />,
     );
-    fireEvent.click(screen.getByText("Update on the Device page"));
+    fireEvent.click(screen.getByText("Update on the Panel page"));
     expect(onOpenDevice).toHaveBeenCalled();
     expect(connect).not.toHaveBeenCalled();
     expect(screen.queryByText("Update over Bluetooth")).toBeNull();

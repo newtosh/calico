@@ -74,7 +74,7 @@ describe("App address banner wiring", () => {
     expect(dismissAddress).toHaveBeenCalled();
   });
 
-  it("with a link open, the banner opens the Device page at the offered address", async () => {
+  it("with a link open, the banner opens the Panel page at the offered address", async () => {
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Panel" }));
     fireEvent.click(await screen.findByText("Connect over Bluetooth"));
@@ -84,7 +84,7 @@ describe("App address banner wiring", () => {
     expect(
       screen.queryByLabelText("Calico's address (the panel polls this)"),
     ).toBeNull();
-    fireEvent.click(screen.getByText("Update on the Device page"));
+    fireEvent.click(screen.getByText("Update on the Panel page"));
     expect(
       (
         (await screen.findByLabelText(
@@ -94,7 +94,7 @@ describe("App address banner wiring", () => {
     ).toBe(OFFER);
   });
 
-  it("on the Device page with a link open, the URL field follows a new offer", async () => {
+  it("on the Panel page with a link open, the URL field follows a new offer", async () => {
     current = { ...base, addressChange: null };
     render(<App />);
     fireEvent.click(await screen.findByRole("button", { name: "Panel" }));
@@ -107,7 +107,7 @@ describe("App address banner wiring", () => {
     await screen.findByText(/The panel's address may have changed/, undefined, {
       timeout: 3000,
     });
-    fireEvent.click(screen.getByText("Update on the Device page"));
+    fireEvent.click(screen.getByText("Update on the Panel page"));
     expect(field.value).toBe(OFFER);
   });
 });

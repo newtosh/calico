@@ -9,7 +9,7 @@ export const EVENT_CAP = 50;
 export const COLOR_LIMIT = 32;
 export const SHAPE_LIMIT = 16;
 export const ICON_LIMIT = 200;
-// A launch POST that nobody refreshes must not pin the desk on the 2 s poll.
+// A launch POST that nobody refreshes must not pin the panel on the 2 s poll.
 export const RUNNING_TTL_MS = 120_000;
 // One 480x480 RGB565 BMP plus the 66-byte header and a little slack.
 export const FRAME_MAX = 480 * 480 * 2 + 256;
@@ -115,7 +115,7 @@ export function faceEventTitle(title: string, message = ""): string {
   return title === "Dismissed" && !message ? "" : title;
 }
 
-/** Python's str() of a JSON value, which the old companion stored. */
+/** Python's str() of a JSON value, which the old Python version stored. */
 function pyStr(value: unknown, fallback = ""): string {
   if (value === undefined) return fallback;
   if (value === null) return "None";
@@ -375,7 +375,7 @@ export class DeskStore {
   status(detail = false): StatusBody {
     // attention, then newest updated_at. Two needs_you in one second follow
     // event order (later event first). id is the last tie. Stable sorts keep
-    // the earlier key, exactly like the Python companion.
+    // the earlier key, exactly like the Python version.
     const recent = new Map<string, number>();
     this.events.forEach((event, index) => {
       if (event.agent_id && !recent.has(event.agent_id))

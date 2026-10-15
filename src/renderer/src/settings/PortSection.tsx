@@ -35,7 +35,7 @@ export function PortSection() {
 
   return (
     <section>
-      <h2 className="section-title">Companion port</h2>
+      <h2 className="section-title">Calico server port</h2>
       <p className="max-w-2xl px-4 pb-2 text-muted">
         The port the panel and your agents reach calico on. A change takes
         effect after calico restarts.

@@ -9,7 +9,7 @@ import { ErrorNote } from "./ErrorNote";
 export const NO_PANEL =
   "No panel was chosen. If it did not appear, check that it is on and within reach, then try again.";
 export const SILENT =
-  "The panel has not polled Calico since it restarted. Check that it is on its network, then see Panel not connecting on the Device page.";
+  "The panel has not polled Calico since it restarted. Check that it is on its network, then see Panel not connecting on the Panel page.";
 const quiet = () => undefined;
 
 /**
@@ -121,7 +121,7 @@ export function AddressBanner({
             disabled={working}
             onClick={onOpenDevice}
           >
-            Update on the Device page
+            Update on the Panel page
           </button>
         ) : null}
         {!waiting && !link ? (
