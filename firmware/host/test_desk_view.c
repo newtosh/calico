@@ -709,6 +709,17 @@ int main(void) {
         check(hdr[62] == 0x1f && hdr[63] == 0x00, "blue mask");
     }
 
+    {
+        /* The highlighted row clears on a touch and comes back with the next real update. */
+        check(desk_hot_cleared(0, 0, 1) == 1, "a touch clears the highlight");
+        check(desk_hot_cleared(1, 0, 0) == 1, "it stays cleared while nothing changes");
+        check(desk_hot_cleared(1, 0, 1) == 1, "a second touch keeps it cleared");
+        check(desk_hot_cleared(1, 1, 0) == 0, "a new update highlights again");
+        check(desk_hot_cleared(0, 1, 0) == 0, "an update with nothing cleared stays lit");
+        check(desk_hot_cleared(0, 0, 0) == 0, "no touch and no update leaves it lit");
+        check(desk_hot_cleared(0, 1, 1) == 0, "an update in the same pass as a touch still highlights");
+    }
+
     if (g_failed) {
         return 1;
     }

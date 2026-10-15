@@ -105,6 +105,9 @@ int desk_aside_scroll(const desk_view_t *prev, const desk_view_t *view);
 /* Rows that are new, or whose status, attention, or aside changed.
  * 0 when either view is missing. Color and order alone do not count. */
 int desk_unseen_updates(const desk_view_t *prev, const desk_view_t *view);
+/* Whether the highlighted row stays cleared. A touch clears it. The next real
+ * status change (fresh) lights it again, even in the same pass as a touch. */
+int desk_hot_cleared(int cleared, int fresh, int touched);
 /* Index of the first waiting agent, or -1. Status order is newest waiter first. */
 int desk_sheet_agent(const desk_view_t *view);
 /* Waiting agents in status order, newest first. Writes up to cap indexes.
