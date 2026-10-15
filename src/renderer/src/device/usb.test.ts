@@ -53,7 +53,7 @@ describe("UsbLink", () => {
     await vi.advanceTimersByTimeAsync(10_000);
     expect(await pending).toEqual({
       ok: false,
-      error: "The desk did not answer in 10 seconds.",
+      error: "The panel did not answer in 10 seconds.",
     });
   });
 

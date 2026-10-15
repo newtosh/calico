@@ -103,7 +103,7 @@ export class BleLink implements DeviceLink {
         await this.gatt.write(UUID.url, encode(cmd.value));
         return { ok: true };
       case "token":
-        // A zero-length ATT write is easy to drop. One newline strips to empty on the desk.
+        // A zero-length ATT write is easy to drop. One newline strips to empty on the panel.
         await this.gatt.write(
           UUID.token,
           encode(cmd.value === "" ? "\n" : cmd.value),
@@ -132,7 +132,7 @@ export class BleLink implements DeviceLink {
         try {
           await this.gatt.write(UUID.reboot, encode("reboot"));
         } catch {
-          // The desk resets as it handles the write, so the link often drops first.
+          // The panel resets as it handles the write, so the link often drops first.
         }
         return { ok: true };
       case "scan": {
@@ -145,15 +145,15 @@ export class BleLink implements DeviceLink {
         if (body === null)
           return {
             ok: false,
-            error: "The desk did not finish scanning in 30 seconds.",
+            error: "The panel did not finish scanning in 30 seconds.",
           };
         const { state, aps } = parseScan(body);
         return state === "ready"
           ? { ok: true, aps }
-          : { ok: false, error: "The desk could not scan for networks." };
+          : { ok: false, error: "The panel could not scan for networks." };
       }
       case "verify": {
-        // The desk sets state=busy before this write returns (firmware
+        // The panel sets state=busy before this write returns (firmware
         // ble_link.c, write_verify), so polling right after the write cannot
         // see an older state=ok.
         await this.gatt.write(UUID.verify, encode(`${cmd.ssid}\n${cmd.pass}`));
@@ -219,7 +219,7 @@ export async function connectBle(
     optionalServices: [UUID.svc],
   });
   const remote = device.gatt;
-  if (!remote) throw new Error("This device has no GATT server.");
+  if (!remote) throw new Error("This Bluetooth device has no GATT server.");
   // A refused code drops the link at once, while the OS read it started can hang for about 25 s.
   // Failing on the drop ends this attempt then, so a late rejection never disconnects the next one.
   let dropped: () => void = () => undefined;

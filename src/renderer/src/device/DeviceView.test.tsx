@@ -9,7 +9,7 @@ import { pushedAll } from "./PushNetworks";
 
 let dropLink: () => void = () => undefined;
 
-// The desk resets on reboot, so the link drops right after the write.
+// The panel resets on reboot, so the link drops right after the write.
 function fakeLink(): DeviceLink {
   return {
     kind: "ble",

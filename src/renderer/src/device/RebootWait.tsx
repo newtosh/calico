@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { panelOnlineSince } from "../lib/panel-online";
 
-// Lives in DeviceView, not the flow that rebooted the desk: the reboot drops
+// Lives in DeviceView, not the flow that rebooted the panel: the reboot drops
 // the link, which unmounts everything that needs one.
 export function RebootWait({
   since,

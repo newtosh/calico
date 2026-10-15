@@ -34,7 +34,7 @@ export function toReply(obj: Record<string, unknown>): Reply {
   if (obj.ok !== true) {
     const reply: Reply = {
       ok: false,
-      error: str(obj.error) || "The desk reported an error.",
+      error: str(obj.error) || "The panel reported an error.",
     };
     if (typeof obj.reason === "string") reply.reason = toReason(obj.reason);
     return reply;
@@ -78,7 +78,7 @@ interface Pending {
   timer: ReturnType<typeof setTimeout>;
 }
 
-// Secrets sent since the app started. The desk reboots after provisioning and
+// Secrets sent since the app started. The panel reboots after provisioning and
 // the app reconnects on a new link, so a per-link set would forget them just
 // when the boot log may echo them.
 const sessionSecrets = new Set<string>();
@@ -133,7 +133,7 @@ export class UsbLink implements DeviceLink {
         this.pending.delete(id);
         resolve({
           ok: false,
-          error: `The desk did not answer in ${seconds} seconds.`,
+          error: `The panel did not answer in ${seconds} seconds.`,
         });
       }, timeoutFor(cmd));
       this.pending.set(id, { resolve, timer });

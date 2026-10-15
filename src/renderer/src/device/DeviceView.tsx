@@ -30,7 +30,7 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
   const [pushNote, setPushNote] = useState("");
   const showFirewall = useCallback(() => setAssist("firewall"), []);
 
-  // The desk resets as it takes the command, so the link drop that follows is
+  // The panel resets as it takes the command, so the link drop that follows is
   // expected. RebootWait reports the outcome from here, where it stays mounted.
   async function reboot(target: DeviceLink) {
     setError("");
@@ -59,7 +59,7 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
         manualClose.current = false;
         return;
       }
-      setError("Lost the connection to the desk. Connect again.");
+      setError("Lost the connection to the panel. Connect again.");
     };
     setProgress("Connecting.");
     try {
@@ -131,7 +131,7 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
         </>
       ) : (
         <>
-          <h2 className="section-title">Connect to the desk</h2>
+          <h2 className="section-title">Connect to the panel</h2>
           <div className="flex gap-3 px-4">
             <button
               type="button"
@@ -157,8 +157,8 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
           ) : null}
           <p className="max-w-2xl px-4 pt-2 text-muted">
             USB works with any firmware that has the serial console and is the
-            only way to recover a desk that will not boot. Bluetooth works
-            without a cable once the desk is advertising.
+            only way to recover a panel that will not boot. Bluetooth works
+            without a cable once the panel is advertising.
           </p>
         </>
       )}

@@ -86,9 +86,9 @@ export function ProvisionFlow({
     <section>
       <h2 className="section-title">Set up Wi-Fi</h2>
       <p className="max-w-2xl px-4 text-muted">
-        The desk tries the network first. A wrong password is not saved. When it
-        joins, calico also sends this computer's URL and the webhook token, then
-        reboots the desk.
+        The panel tries the network first. A wrong password is not saved. When
+        it joins, calico also sends this computer's URL and the webhook token,
+        then reboots the panel.
       </p>
       <div className="flex max-w-2xl flex-wrap items-end gap-3 px-4 pt-3">
         <ScanSelect
@@ -132,7 +132,7 @@ export function ProvisionFlow({
       </div>
       <details className="max-w-2xl px-4 pt-3">
         <summary className="cursor-pointer text-muted">
-          This network's own companion URL and token (optional)
+          This network's own Calico address and token (optional)
         </summary>
         <p className="pt-2 text-muted">
           Leave both empty to keep what this network already has. To clear them,
@@ -140,7 +140,7 @@ export function ProvisionFlow({
         </p>
         <div className="grid grid-cols-2 gap-3 pt-2">
           <label className="label">
-            Companion URL for this network
+            Calico's address on this network
             <input
               className="field mt-1 font-mono"
               autoComplete="off"

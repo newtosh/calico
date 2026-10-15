@@ -22,7 +22,9 @@ afterEach(cleanup);
 function field(info: CalicoInfo) {
   render(<LinkActions info={info} link={link} onReboot={async () => {}} />);
   return (
-    screen.getByLabelText("Companion URL for the desk") as HTMLInputElement
+    screen.getByLabelText(
+      "Calico's address (the panel polls this)",
+    ) as HTMLInputElement
   ).value;
 }
 
@@ -44,7 +46,7 @@ describe("LinkActions", () => {
     );
     const { rerender } = render(view(base));
     const input = screen.getByLabelText(
-      "Companion URL for the desk",
+      "Calico's address (the panel polls this)",
     ) as HTMLInputElement;
     rerender(view({ ...base, addressChange: offer }));
     expect(input.value).toBe(offer.url);

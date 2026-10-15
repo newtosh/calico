@@ -18,8 +18,8 @@ export function ConsoleView({
       <div className="flex items-center gap-3 border-b border-stroke/40 px-4 py-2">
         <span className="text-muted">
           {usbConnected
-            ? "Serial output from the desk"
-            : "Connect over USB in Device to see serial output."}
+            ? "Serial output from the panel"
+            : "Connect over USB on the Panel page to see serial output."}
         </span>
         <button type="button" className="btn ml-auto" onClick={onClear}>
           Clear

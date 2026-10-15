@@ -63,7 +63,7 @@ export function FirewallAssist({ port }: { port: number | null }) {
       ) : (
         <p className="max-w-2xl px-4 text-muted">
           {fw.kind} is active. Allow inbound TCP port {port} from your LAN in
-          its ruleset, then reboot the desk.
+          its ruleset, then reboot the panel.
         </p>
       )}
       {result ? (
