@@ -61,8 +61,8 @@ importers:
         specifier: ^26.15.3
         version: 26.15.3(electron-builder-squirrel-windows@26.15.3)(supports-color@7.2.0)
       electron-vite:
-        specifier: ^6.0.0-beta.8
-        version: 6.0.0-beta.8(supports-color@7.2.0)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
+        specifier: ^6.0.0
+        version: 6.0.0(supports-color@7.2.0)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
       eslint:
         specifier: ^10.12.0
         version: 10.12.0(jiti@2.7.0)(supports-color@7.2.0)
@@ -1231,8 +1231,8 @@ packages:
   electron-to-chromium@1.5.446:
     resolution: {integrity: sha512-kWlGMPHzuitCKx0O+MbY1ZGvQmP14JtckrnGjD4JsusTxh2cX9wu4bb4rOYZqLSvENjFFrHzlqY8kXhseucR/w==}
 
-  electron-vite@6.0.0-beta.8:
-    resolution: {integrity: sha512-K8P92gd4d/N3MaN9Qgp/vTgZN/F7egEctpRiw7nXDDg3QQMEZ2n4/K3g9WYzO7yIc3PATJAdlMv1ArvkBGps9Q==}
+  electron-vite@6.0.0:
+    resolution: {integrity: sha512-zafg2uizgll7jdx0BNDkkzO/SowsUBsiHqYN3v9Ieq7XPDHreRGZ4G9IRY/+RslgBktpLOjLM4jlP+IVpV0BGw==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -3644,7 +3644,7 @@ snapshots:
 
   electron-to-chromium@1.5.446: {}
 
-  electron-vite@6.0.0-beta.8(supports-color@7.2.0)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)):
+  electron-vite@6.0.0(supports-color@7.2.0)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)):
     dependencies:
       '@babel/core': 7.29.7(supports-color@7.2.0)
       '@babel/plugin-transform-arrow-functions': 7.29.7(@babel/core@7.29.7(supports-color@7.2.0))
