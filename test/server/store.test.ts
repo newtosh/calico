@@ -383,6 +383,50 @@ describe("DeskStore agent titles", () => {
     expect(store.status().agents).toHaveLength(2);
   });
 
+  it("drops a replayed event that would bring back an older same-title record", () => {
+    const store = new DeskStore({ now: clock().now });
+    store.applyEvent({
+      type: "agent.finished",
+      agent_id: "uuid-1",
+      title: "Scaffold",
+    });
+    expect(
+      store.applyReplayed(
+        { type: "agent.finished", agent_id: "scaffold", title: "Scaffold" },
+        "2026-10-07T11:00:00Z",
+      ),
+    ).toBe("stale");
+    expect(agents(store)).toEqual([["uuid-1", "Scaffold", "idle"]]);
+  });
+
+  it("never merges Cursor agents that share a title", () => {
+    const store = new DeskStore({ now: clock().now });
+    for (const id of ["a", "b", "a", "b"])
+      store.applyEvent({
+        type: "agent.finished",
+        agent_id: id,
+        title: "Untitled",
+        source: "cursor",
+      });
+    expect(store.status().agents).toHaveLength(2);
+  });
+
+  it("treats an empty source as grok-bot on both sides", () => {
+    const store = new DeskStore({ now: clock().now });
+    store.applyEvent({
+      type: "agent.finished",
+      agent_id: "old",
+      title: "Scaffold",
+      source: "",
+    });
+    store.applyEvent({
+      type: "agent.launched",
+      agent_id: "new",
+      title: "Scaffold",
+    });
+    expect(agents(store)).toEqual([["new", "Scaffold", "running"]]);
+  });
+
   it("keeps agents with no title apart", () => {
     const store = new DeskStore({ now: clock().now });
     store.applyEvent({ type: "agent.finished", agent_id: "x" });

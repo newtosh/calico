@@ -232,6 +232,23 @@ export class DeskStore {
     const cleared = raw.type === "note" && stamp <= this.noteFloor;
     if (at !== undefined && (behind || cleared))
       return { event: this.stale(raw, stamp), stale: true };
+    // A bot that renames an agent's id (a slug, then a UUID) must not show it twice. A new id
+    // retires the idle record with the same title. A replay of the old id arriving after the
+    // new record is stale and must not bring it back. Running and waiting agents stay.
+    if (AGENT_TYPES.has(raw.type) && !known) {
+      const others = this.namesakes(agentId, raw.title ?? "", raw.source ?? "");
+      if (at !== undefined) {
+        if (
+          others.some((id) => stamp < (this.agents.get(id)?.updated_at ?? ""))
+        )
+          return { event: this.stale(raw, stamp), stale: true };
+      } else {
+        for (const id of others) {
+          const a = this.agents.get(id);
+          if (a && a.status === "idle" && !a.attention) this.agents.delete(id);
+        }
+      }
+    }
     const title = raw.title ?? "";
     const message = raw.message ?? "";
     const event = makeEvent({
@@ -489,7 +506,6 @@ export class DeskStore {
     message: string | null = null,
   ): void {
     const current = this.agents.get(agentId);
-    if (!current) this.retireSameTitle(agentId, title, event.source);
     this.agents.set(agentId, {
       id: agentId,
       title: title || current?.title || "",
@@ -504,28 +520,18 @@ export class DeskStore {
     });
   }
 
-  /**
-   * A bot that changes how it names an agent (a slug, then a UUID) would leave the old record
-   * behind and show the agent twice. A new id retires an idle agent with the same title from the
-   * same source. Running and waiting agents stay, and so does anything with no title.
-   */
-  private retireSameTitle(
-    agentId: string,
-    title: string,
-    source: string,
-  ): void {
+  /** Same-title records of another id that the bot may have renamed. Grok Bot only. */
+  private namesakes(agentId: string, title: string, source: string): string[] {
     const key = title.trim().toLowerCase();
-    if (!key) return;
-    for (const [id, a] of this.agents) {
-      if (
-        id !== agentId &&
-        a.status === "idle" &&
-        !a.attention &&
-        a.source === (source || "grok-bot") &&
-        a.title.trim().toLowerCase() === key
+    if (!key || (source || "grok-bot") !== "grok-bot") return [];
+    return [...this.agents.values()]
+      .filter(
+        (a) =>
+          a.id !== agentId &&
+          (a.source || "grok-bot") === "grok-bot" &&
+          a.title.trim().toLowerCase() === key,
       )
-        this.agents.delete(id);
-    }
+      .map((a) => a.id);
   }
 
   /** Badge equals waiting agents. A note counts only when nothing is waiting. */
