@@ -15,6 +15,7 @@ const info: CalicoInfo = {
   port: 8787,
   expectedPort: 8787,
   lanUrls: ["http://192.168.4.30:8787"],
+  panelUrl: "http://192.168.4.30:8787",
   lastPanelPoll: null,
   panelBattery: null,
   webhookToken: "",
@@ -127,6 +128,39 @@ describe("AgentUpdatesSection", () => {
     // No panel URL yet, so one is sent. Every call after the change carries the new token.
     expect(calls[2]?.body).toEqual({ url: "http://192.168.4.30:8787", token });
     expect(calls[2]?.auth).toBe(`Bearer ${token}`);
+  });
+
+  it("stores no address when the panel has not polled, and says how to set one", async () => {
+    configureApi(info.serverUrl ?? "", "");
+    const { calls, releasePanel } = serve("");
+    releasePanel();
+    render(<AgentUpdatesSection info={{ ...info, panelUrl: null }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Set a token/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate and apply" }));
+    expect(await screen.findByText(/has not polled/)).toBeTruthy();
+    expect(screen.getByText(/Panel push/)).toBeTruthy();
+    expect(calls.map((c) => c.method)).toEqual(["PUT", "GET"]);
+  });
+
+  it("uses the address the panel is polling, not the first interface", async () => {
+    configureApi(info.serverUrl ?? "", "");
+    const { calls, releasePanel } = serve("");
+    releasePanel();
+    render(
+      <AgentUpdatesSection
+        info={{
+          ...info,
+          lanUrls: ["http://172.17.0.1:8787", "http://192.168.4.30:8787"],
+          panelUrl: "http://192.168.4.30:8787",
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Set a token/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Generate and apply" }));
+    await screen.findByText(/sent to the panel/);
+    expect((calls.at(-1)?.body as { url: string }).url).toBe(
+      "http://192.168.4.30:8787",
+    );
   });
 
   it("keeps the panel's working URL and sends only the token", async () => {

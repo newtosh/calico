@@ -37,7 +37,10 @@ export interface CalicoInfo {
   port: number | null;
   /** Saved port the panel was told. */
   expectedPort: number;
+  /** This computer's addresses as Calico URLs, best first: the panel's subnet, then LAN, then VPN. */
   lanUrls: string[];
+  /** Calico's address on the network the panel last polled from, while still here. Null otherwise. */
+  panelUrl: string | null;
   /** Epoch ms of the last non-loopback GET /api/status. */
   lastPanelPoll: number | null;
   /** The panel's last reported battery, null until it reports one. */

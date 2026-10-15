@@ -2,7 +2,6 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { describe, expect, it } from "vitest";
 import {
-  lanUrls,
   listenWithFallback,
   PanelPort,
   PortsBusyError,
@@ -57,17 +56,6 @@ describe("port selection", () => {
       persist: false,
       drift: false,
     });
-  });
-
-  it("lists non-internal IPv4 addresses", () => {
-    const ifaces = {
-      lo: [{ address: "127.0.0.1", family: "IPv4", internal: true }],
-      wlan0: [
-        { address: "192.168.4.20", family: "IPv4", internal: false },
-        { address: "fe80::1", family: "IPv6", internal: false },
-      ],
-    } as unknown as NodeJS.Dict<import("node:os").NetworkInterfaceInfo[]>;
-    expect(lanUrls(8787, ifaces)).toEqual(["http://192.168.4.20:8787"]);
   });
 });
 
