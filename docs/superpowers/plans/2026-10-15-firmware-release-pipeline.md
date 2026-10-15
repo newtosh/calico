@@ -20,6 +20,7 @@
 - `firmware.json` fields: `version`, `min_app`, `artifact`, `sha256`, `size`, `notes_url`.
 - No wireless updates: do not touch `firmware/partitions.csv`, and add no OTA code or Bluetooth characteristic.
 - Releasing never touches NVS. Do not erase.
+- Firmware releases are never "latest": pass `--latest=false`, because the app's stable download URL (`releases/latest/download/Calico-x64.pacman`) depends on the latest release being an app release.
 - Pin every third-party action to a full commit SHA with a version comment, as `release.yml` does.
 - No Claude session links in PR bodies. Minimize em-dashes in prose and comments.
 
@@ -439,6 +440,7 @@ def test_publish_only_runs_for_a_tag_and_after_build():
     assert "startsWith(github.ref, 'refs/tags/fw-v')" in publish
     assert "RELEASE_GPG_KEY" in publish
     assert "--draft" in publish
+    assert "--latest=false" in publish
     assert "packaging/calico-release.asc" in publish
     assert "actions/attest@" in publish
 ```
@@ -542,7 +544,7 @@ jobs:
         with:
           subject-path: dist/*.bin
       - name: Draft release
-        run: gh release create "$GITHUB_REF_NAME" --draft --generate-notes --verify-tag dist/*.bin dist/*.bin.sig dist/firmware.json dist/SHA256SUMS
+        run: gh release create "$GITHUB_REF_NAME" --draft --latest=false --generate-notes --verify-tag dist/*.bin dist/*.bin.sig dist/firmware.json dist/SHA256SUMS
         env:
           GH_TOKEN: ${{ github.token }}
 ```

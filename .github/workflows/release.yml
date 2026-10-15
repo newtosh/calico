@@ -50,6 +50,18 @@ jobs:
           export GNUPGHOME="$(mktemp -d)"
           gpg --batch --quiet --import packaging/calico-release.asc
           for f in dist/*.pacman; do gpg --batch --verify "$f.sig" "$f"; done
+      - name: Stable-name copies for the latest-download URL
+        # `releases/latest/download/Calico-x64.pacman` only works if every release
+        # carries an asset with that exact name. The copy is byte-identical, so the
+        # signature made above stays valid under the new name.
+        run: |
+          for f in dist/Calico-*-x64.pacman; do
+            cp "$f" dist/Calico-x64.pacman
+            cp "$f.sig" dist/Calico-x64.pacman.sig
+          done
+          export GNUPGHOME="$(mktemp -d)"
+          gpg --batch --quiet --import packaging/calico-release.asc
+          gpg --batch --verify dist/Calico-x64.pacman.sig dist/Calico-x64.pacman
       - run: cd dist && sha256sum *.AppImage *.deb *.pacman > SHA256SUMS
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
