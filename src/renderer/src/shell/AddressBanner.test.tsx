@@ -120,9 +120,7 @@ describe("AddressBanner", () => {
   it("connects inside the click, writes only the URL, reboots, waits for the first poll and releases the link", async () => {
     const { sent, close } = panel();
     show();
-    expect(
-      screen.getByText(/The panel's address may have changed/),
-    ).toBeTruthy();
+    expect(screen.getByText(/Calico's address may have changed/)).toBeTruthy();
     fireEvent.click(screen.getByText("Update over Bluetooth"));
     // Web Bluetooth only opens its picker inside the click: no await may come first.
     expect(connect).toHaveBeenCalledTimes(1);

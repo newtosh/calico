@@ -68,7 +68,7 @@ describe("App address banner wiring", () => {
   it("shows the banner from CalicoInfo.addressChange and Not now tells main", async () => {
     render(<App />);
     expect(
-      await screen.findByText(/The panel's address may have changed/),
+      await screen.findByText(/Calico's address may have changed/),
     ).toBeTruthy();
     fireEvent.click(screen.getByText("Not now"));
     expect(dismissAddress).toHaveBeenCalled();
@@ -104,7 +104,7 @@ describe("App address banner wiring", () => {
     )) as HTMLInputElement;
     expect(field.value).toBe("http://192.168.1.2:8787");
     current = base;
-    await screen.findByText(/The panel's address may have changed/, undefined, {
+    await screen.findByText(/Calico's address may have changed/, undefined, {
       timeout: 3000,
     });
     fireEvent.click(screen.getByText("Update on the Panel page"));

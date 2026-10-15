@@ -87,7 +87,7 @@ export function ProvisionFlow({
       <h2 className="section-title">Set up Wi-Fi</h2>
       <p className="max-w-2xl px-4 text-muted">
         The panel tries the network first. A wrong password is not saved. When
-        it joins, Calico also sends Calico's address and the webhook token, then
+        it joins, Calico sends the panel its address and the webhook token, then
         reboots the panel.
       </p>
       <div className="flex max-w-2xl flex-wrap items-end gap-3 px-4 pt-3">
