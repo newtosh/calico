@@ -1,5 +1,11 @@
 import { readFileSync, renameSync } from "node:fs";
 import { basename } from "node:path";
+import {
+  BASE64,
+  keyringRefusal,
+  NO_KEYRING,
+  type SecretBox,
+} from "../server/keyring";
 import { writeAtomic } from "../server/state-file";
 import type {
   NetworkInput,
@@ -8,6 +14,14 @@ import type {
   PushRelease,
   SavedNetwork,
 } from "../shared/ipc";
+
+export {
+  BASE64,
+  keyringRefusal,
+  NO_KEYRING,
+  PLAINTEXT_KEYRING,
+  type SecretBox,
+} from "../server/keyring";
 import {
   checkPass,
   checkSsid,
@@ -17,16 +31,6 @@ import {
   NETWORKS_MAX,
 } from "../shared/panel-fields";
 
-/** What the vault needs from Electron's safeStorage, injected so tests never touch a keyring. */
-export interface SecretBox {
-  /** safeStorage.getSelectedStorageBackend() on Linux. */
-  backend(): string;
-  available(): boolean;
-  encrypt(text: string): Buffer;
-  /** safeStorage.decryptString. Throws when the keyring is locked or did not seal it. */
-  decrypt(sealed: Buffer): string;
-}
-
 interface StoredNetwork {
   ssid: string;
   url: string;
@@ -35,10 +39,6 @@ interface StoredNetwork {
   password: string;
 }
 
-export const NO_KEYRING =
-  "Calico could not reach a system keyring, so it did not save the password. Unlock GNOME Keyring or KWallet, then try again.";
-export const PLAINTEXT_KEYRING =
-  "This desktop gives Calico no keyring, so the password would be stored as plain text. Calico did not save it. Install GNOME Keyring or KWallet, then try again.";
 const BAD_INPUT = "That network could not be saved.";
 const BAD_REMOVE = "That network could not be removed.";
 /** How long a confirmed plan may release passwords. Pushing 8 networks takes well under this. */
@@ -53,7 +53,6 @@ const BAD_PLAN =
 export function keyringChanged(ssid: string): string {
   return `Calico could not unlock the saved password for ${ssid}. The system keyring is locked or has changed. Unlock it, or edit ${ssid} in Settings and type its password again.`;
 }
-const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -123,13 +122,6 @@ function networkInput(raw: unknown): NetworkInput {
   checkFields(input.ssid, input.url, input.token ?? "");
   if (input.password !== undefined) checkPass(input.password);
   return input;
-}
-
-function keyringRefusal(box: SecretBox): string | null {
-  const backend = box.backend();
-  if (backend === "basic_text") return PLAINTEXT_KEYRING;
-  if (backend === "unknown" || !box.available()) return NO_KEYRING;
-  return null;
 }
 
 // ponytail: synchronous file I/O serializes saves, and the single-instance lock makes main the

@@ -7,8 +7,10 @@ import {
   asciiJson,
   createCompanionServer,
   isLoopback,
+  observeStatusPoll,
   type PanelSeen,
   panelSeen,
+  type ServerStats,
 } from "../../src/server/http";
 import type { CursorStatus } from "../../src/server/cursor-poll";
 import type { RelayStatus } from "../../src/server/relay";
@@ -224,6 +226,91 @@ describe("companion server", () => {
     const res = await fetch(`http://${lanIp}:${port}/api/status`);
     expect(res.status).toBe(200);
     expect(await res.json()).toHaveProperty("unread");
+  });
+
+  function freshStats(): ServerStats {
+    return {
+      lastPanelPoll: null,
+      panelBattery: null,
+      webhook: { accepted: null, refused: { count: 0, last: null } },
+    };
+  }
+
+  it("counts an IPv6 or unreadable poll without treating it as an IPv4 sighting", () => {
+    const stats = freshStats();
+    const status: (number | null)[] = [];
+    const panels: PanelSeen[] = [];
+    const deps = {
+      onStatusPoll: (previous: number | null) => status.push(previous),
+      onPanelPoll: (seen: PanelSeen) => panels.push(seen),
+    };
+    observeStatusPoll(
+      deps,
+      stats,
+      "2001:db8::1",
+      "2001:db8::2",
+      new URLSearchParams("bat=50&chg=0&ext=1"),
+      1_000,
+    );
+    expect(stats.lastPanelPoll).toBe(1_000);
+    expect(stats.panelBattery?.pct).toBe(50);
+    expect(status).toEqual([null]);
+    expect(panels).toEqual([]);
+
+    observeStatusPoll(
+      deps,
+      stats,
+      undefined,
+      undefined,
+      new URLSearchParams(),
+      2_000,
+    );
+    expect(status).toEqual([null, 1_000]);
+    expect(panels).toEqual([]);
+
+    observeStatusPoll(
+      deps,
+      stats,
+      "192.168.1.9",
+      "192.168.1.1",
+      new URLSearchParams(),
+      5_000,
+    );
+    expect(status).toEqual([null, 1_000, 2_000]);
+    expect(panels).toEqual([{ from: "192.168.1.9", via: "192.168.1.1" }]);
+
+    const before = stats.lastPanelPoll;
+    observeStatusPoll(deps, stats, "::1", "::1", new URLSearchParams(), 9_000);
+    observeStatusPoll(
+      deps,
+      stats,
+      "127.0.0.1",
+      "127.0.0.1",
+      new URLSearchParams(),
+      9_000,
+    );
+    expect(stats.lastPanelPoll).toBe(before);
+    expect(status).toHaveLength(3);
+  });
+
+  it("still tells the address watch when the status hook throws", () => {
+    const stats = freshStats();
+    const panels: PanelSeen[] = [];
+    observeStatusPoll(
+      {
+        onStatusPoll: () => {
+          throw new Error("notifier bug");
+        },
+        onPanelPoll: (seen) => panels.push(seen),
+      },
+      stats,
+      "10.0.0.8",
+      "10.0.0.1",
+      new URLSearchParams(),
+      4_000,
+    );
+    expect(stats.lastPanelPoll).toBe(4_000);
+    expect(panels).toEqual([{ from: "10.0.0.8", via: "10.0.0.1" }]);
   });
 
   it("reads where a panel poll came from, IPv4 only", () => {

@@ -2,18 +2,19 @@ import { useEffect, useState } from "react";
 import {
   fetchNotify,
   putNotify,
+  type NotifyDelivery,
   type NotifyInfo,
   type NotifyPatch,
 } from "../lib/api";
+import { ago } from "../lib/time";
 import { parseWhole } from "../lib/whole";
 
-function lastLine(info: NotifyInfo): string {
-  const last = info.last;
-  if (!last) return "Nothing sent yet.";
-  const what = last.type === "calico.online" ? "Panel online" : "Dismissed";
-  if (last.ok) return `${what} sent ${last.at}.`;
-  const why = last.status ? `HTTP ${last.status}` : last.error;
-  return `${what} failed (${why}).`;
+function line(delivery: NotifyDelivery): string {
+  const what = delivery.type === "calico.online" ? "Panel online" : "Dismissed";
+  const when = ago(delivery.at);
+  if (delivery.ok) return `${what} sent ${when}.`;
+  const why = delivery.status ? `HTTP ${delivery.status}` : delivery.error;
+  return `${what} failed (${why}) ${when}.`;
 }
 
 export function NotifySection() {
@@ -23,11 +24,17 @@ export function NotifySection() {
   const [offline, setOffline] = useState("180");
   const [key, setKey] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
+  const [noticeErr, setNoticeErr] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  function say(text: string, err = false) {
+    setNotice(text);
+    setNoticeErr(err);
+  }
 
   function fill(next: NotifyInfo) {
     setInfo(next);
-    setUrl(next.url);
+    setUrl("");
     setHeader(next.header === "Authorization" ? "" : next.header);
     setOffline(String(next.offline_seconds));
   }
@@ -43,8 +50,9 @@ export function NotifySection() {
         })
         .catch((err: unknown) => {
           if (on)
-            setNotice(
+            say(
               err instanceof Error ? err.message : "Could not load settings",
+              true,
             );
         });
     };
@@ -58,13 +66,13 @@ export function NotifySection() {
 
   async function apply(patch: NotifyPatch) {
     setSaving(true);
-    setNotice("");
+    say("");
     try {
       fill(await putNotify(patch));
       setKey(null);
-      setNotice(patch.clear ? "Cleared." : "Saved.");
+      say(patch.clear ? "Cleared." : "Saved.");
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Save failed");
+      say(err instanceof Error ? err.message : "Save failed", true);
     } finally {
       setSaving(false);
     }
@@ -73,82 +81,132 @@ export function NotifySection() {
   function save() {
     const seconds = parseWhole(offline, 30, 86400);
     if (seconds === null)
-      return setNotice(
+      return say(
         "Offline threshold must be a whole number of seconds from 30 to 86400.",
+        true,
       );
-    if (!url.trim())
-      return setNotice("A webhook address is required, http or https.");
+    const typed = url.trim();
+    if (!typed && !info?.url)
+      return say("A webhook address is required, http or https.", true);
     void apply({
-      url: url.trim(),
+      ...(typed ? { url: typed } : {}),
       header,
       offline_seconds: seconds,
       ...(key !== null ? { key } : {}),
     });
   }
 
+  const address = url.trim() || info?.url || "";
+  const keyWillSend = key !== null ? key !== "" : Boolean(info?.key_set);
+  const httpKey = address.startsWith("http://") && keyWillSend;
+  const older = (info?.recent ?? []).filter(
+    (item) =>
+      !info?.last ||
+      item.at !== info.last.at ||
+      item.type !== info.last.type ||
+      item.ok !== info.last.ok ||
+      item.error !== info.last.error,
+  );
+
   return (
     <section>
       <h2 className="section-title">Outbound webhook</h2>
-      <p id="notify-help" className="max-w-2xl px-4 pb-2 text-muted">
+      <p className="max-w-2xl px-4 pb-2 text-muted">
         Calico POSTs here when the panel polls again after being quiet, and when
-        a needs-you is dismissed. The address is http or https. The sender key
-        is sealed with the system keyring and never shown again. Leave the
-        header blank to send Authorization: Bearer and the key. A custom header
-        name sends the raw key as that header's value, with no Bearer prefix.
-        The panel counts as offline after the threshold below, 180 seconds
-        unless you change it.
+        a needs-you is dismissed.
       </p>
       <div className="grid max-w-2xl grid-cols-2 gap-3 px-4">
-        <label className="label col-span-2">
-          Webhook address
-          <input
-            className="field mt-1 font-mono"
-            value={url}
-            placeholder="https://example.com/calico"
-            aria-describedby="notify-help"
-            onChange={(e) => setUrl(e.target.value)}
-          />
-        </label>
-        <label className="label">
-          Sender key
-          <input
-            type="password"
-            className="field mt-1"
-            autoComplete="off"
-            value={key ?? ""}
-            placeholder={
-              info?.key_set
-                ? "Set (type to replace, clear to remove)"
-                : "Not set"
-            }
-            aria-describedby="notify-help"
-            onChange={(e) => setKey(e.target.value)}
-          />
-        </label>
-        <label className="label">
-          Header name
-          <input
-            className="field mt-1 font-mono"
-            value={header}
-            placeholder="Authorization"
-            aria-describedby="notify-help"
-            onChange={(e) => setHeader(e.target.value)}
-          />
-        </label>
-        <label className="label">
-          Offline threshold seconds
-          <input
-            className="field mt-1"
-            inputMode="numeric"
-            value={offline}
-            aria-describedby="notify-help"
-            onChange={(e) => setOffline(e.target.value)}
-          />
-        </label>
+        <div className="col-span-2">
+          <label className="label">
+            Webhook address
+            <input
+              className="field mt-1 font-mono"
+              value={url}
+              placeholder="https://example.com/calico"
+              aria-describedby="notify-url-hint"
+              onChange={(e) => setUrl(e.target.value)}
+            />
+          </label>
+          <p id="notify-url-hint" className="pt-1 text-muted">
+            https, or http on localhost, a private address, .local, or a
+            Tailscale name. Leave this blank to keep the saved address.
+          </p>
+        </div>
+        <div>
+          <label className="label">
+            Sender key
+            <input
+              type="password"
+              className="field mt-1"
+              autoComplete="off"
+              value={key ?? ""}
+              placeholder={info?.key_set ? "Set" : "Not set"}
+              aria-describedby="notify-key-hint"
+              onChange={(e) => setKey(e.target.value)}
+            />
+          </label>
+          <p id="notify-key-hint" className="pt-1 text-muted">
+            The sender key is sealed with the system keyring and never shown
+            again.
+          </p>
+        </div>
+        <div>
+          <label className="label">
+            Header name
+            <input
+              className="field mt-1 font-mono"
+              value={header}
+              placeholder="Authorization"
+              aria-describedby="notify-header-hint"
+              onChange={(e) => setHeader(e.target.value)}
+            />
+          </label>
+          <p id="notify-header-hint" className="pt-1 text-muted">
+            Blank sends Authorization: Bearer and the key. A custom name sends
+            the raw key.
+          </p>
+        </div>
+        <div>
+          <label className="label">
+            Offline threshold seconds
+            <input
+              className="field mt-1"
+              inputMode="numeric"
+              value={offline}
+              aria-describedby="notify-offline-hint"
+              onChange={(e) => setOffline(e.target.value)}
+            />
+          </label>
+          <p id="notify-offline-hint" className="pt-1 text-muted">
+            How long Calico can go without hearing the panel. Default 180
+            seconds.
+          </p>
+        </div>
       </div>
-      <p role="status" className="max-w-2xl px-4 pt-2 text-muted">
-        {info ? lastLine(info) : "Loading the last send."}
+      {info?.url ? (
+        <p className="max-w-2xl px-4 pt-2 text-muted">
+          Saved address <span className="font-mono">{info.url}</span>
+        </p>
+      ) : null}
+      <p
+        id="notify-http-warning"
+        role="status"
+        className="max-w-2xl px-4 pt-2 text-amber"
+      >
+        {httpKey
+          ? "Plain http sends the sender key in the clear. Use https on a public network."
+          : ""}
       </p>
+      <p role="status" className="max-w-2xl px-4 pt-2 text-muted">
+        {info?.last ? line(info.last) : "Nothing sent yet."}
+      </p>
+      {older.length > 0 ? (
+        <ul className="max-w-2xl px-8 text-muted">
+          {older.map((item, index) => (
+            <li key={`${item.at}-${item.type}-${index}`}>{line(item)}</li>
+          ))}
+        </ul>
+      ) : null}
       <div className="flex items-center gap-3 px-4 py-3">
         <button
           type="button"
@@ -161,16 +219,26 @@ export function NotifySection() {
         <button
           type="button"
           className="btn"
+          disabled={saving || !info?.key_set}
+          onClick={() => void apply({ key: "" })}
+        >
+          Remove key
+        </button>
+        <button
+          type="button"
+          className="btn"
           disabled={saving}
           onClick={() => void apply({ clear: true })}
         >
           Clear
         </button>
-        {notice ? (
-          <span role="status" className="text-muted">
-            {notice}
-          </span>
-        ) : null}
+        <span
+          id="notify-notice"
+          role={noticeErr ? "alert" : "status"}
+          className={noticeErr ? "text-amber" : "text-muted"}
+        >
+          {notice}
+        </span>
       </div>
     </section>
   );

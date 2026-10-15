@@ -158,10 +158,20 @@ async function start(): Promise<void> {
     cursorStatus: () => cursorState.snapshot(config.cursor_api_key !== ""),
     relayStatus: () => relayState.snapshot(config.relay_url !== ""),
     // Saved only when the poll came from somewhere new, not on every poll.
+    onPanelPoll: (seen) => {
+      try {
+        if (addressWatch.polled(seen)) saveSeen(seenPath, seen);
+      } catch {
+        // A watch bug must not stop the poll that already reached the server.
+      }
+    },
     // previousPoll is the gap: lastPanelPoll is already this poll.
-    onPanelPoll: (seen, previousPoll) => {
-      if (addressWatch.polled(seen)) saveSeen(seenPath, seen);
-      notify.notePoll(previousPoll, stats.panelBattery);
+    onStatusPoll: (previousPoll) => {
+      try {
+        notify.notePoll(previousPoll, stats.panelBattery);
+      } catch {
+        // A notifier bug must not stop the poll that already reached the server.
+      }
     },
     allowedOrigins:
       !app.isPackaged && process.env.ELECTRON_RENDERER_URL

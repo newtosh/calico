@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { PanelBatteryInfo } from "../shared/ipc";
 import {
   BadInput,
@@ -7,17 +8,10 @@ import {
   notifyOffline,
   notifyUrl,
 } from "./config";
+import { BASE64, keyringRefusal, type SecretBox } from "./keyring";
 import { isoSeconds } from "./store";
 
-/** What delivery needs from Electron's safeStorage. Tests pass a fake. */
-export interface NotifyBox {
-  /** safeStorage.getSelectedStorageBackend() on Linux. */
-  backend(): string;
-  available(): boolean;
-  encrypt(text: string): Buffer;
-  /** Throws when the keyring is locked or did not seal this blob. */
-  decrypt(sealed: Buffer): string;
-}
+export type NotifyBox = SecretBox;
 
 export const NO_KEYRING =
   "Calico could not reach a system keyring, so it did not save the sender key. Unlock GNOME Keyring or KWallet, then try again.";
@@ -30,8 +24,9 @@ export const NOTIFY_TIMEOUT_MS = 5_000;
 /** Attempts after the first. A network error, 429, or 5xx may try this many more times. */
 export const NOTIFY_RETRIES = 2;
 export const NOTIFY_BACKOFF_MS = [500, 2_000] as const;
-
-const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+/** A Retry-After longer than this still waits only this long. */
+const RETRY_AFTER_CAP_MS = 30_000;
+const RECENT_MAX = 8;
 
 export interface NotifyBattery {
   pct: number;
@@ -41,6 +36,7 @@ export interface NotifyBattery {
 
 export interface OnlinePayload {
   type: "calico.online";
+  id: string;
   at: string;
   offline_seconds: number;
   battery: NotifyBattery | null;
@@ -48,6 +44,7 @@ export interface OnlinePayload {
 
 export interface DismissedPayload {
   type: "needs_you.dismissed";
+  id: string;
   agent_id: string;
   at: string;
 }
@@ -65,12 +62,15 @@ export interface NotifyDelivery {
 }
 
 export interface NotifyPublic {
+  /** Address with its path and query masked. The POST still uses the saved URL. */
   url: string;
   /** Effective header name. `Authorization` when the default Bearer form is in use. */
   header: string;
   offline_seconds: number;
   key_set: boolean;
   last: NotifyDelivery | null;
+  /** Newest first, including `last`. Capped so a later success cannot hide a failure. */
+  recent: NotifyDelivery[];
 }
 
 export interface NotifyOptions {
@@ -82,18 +82,34 @@ export interface NotifyOptions {
   sleep?: (ms: number) => Promise<void>;
   /** Tests pass a short one. Production uses {@link NOTIFY_TIMEOUT_MS}. */
   timeoutMs?: number;
+  /** Tests pass a stable id. Production uses a UUID, the same one on every retry. */
+  id?: () => string;
+}
+
+/** A path or query can itself be a credential, so the view shows only the origin. */
+export function maskNotifyUrl(url: string): string {
+  if (!url) return "";
+  try {
+    const parsed = new URL(url);
+    if (parsed.pathname === "/" && !parsed.search) return url;
+    return `${parsed.origin}/\u2026`;
+  } catch {
+    return "";
+  }
 }
 
 export function notifyPublicView(
   config: CalicoConfig,
   last: NotifyDelivery | null,
+  recent: NotifyDelivery[] = [],
 ): NotifyPublic {
   return {
-    url: config.notify_url,
+    url: maskNotifyUrl(config.notify_url),
     header: config.notify_header || "Authorization",
     offline_seconds: config.notify_offline_seconds,
     key_set: config.notify_key !== "",
     last,
+    recent,
   };
 }
 
@@ -114,13 +130,6 @@ export function notifyHeaders(
   return headers;
 }
 
-function keyringRefusal(box: NotifyBox): string | null {
-  const backend = box.backend();
-  if (backend === "basic_text") return PLAINTEXT_KEYRING;
-  if (backend === "unknown" || !box.available()) return NO_KEYRING;
-  return null;
-}
-
 function batteryOf(info: PanelBatteryInfo | null): NotifyBattery | null {
   if (!info) return null;
   return { pct: info.pct, charging: info.charging, external: info.external };
@@ -132,41 +141,49 @@ function isTimeout(err: unknown): boolean {
   return name === "TimeoutError" || name === "AbortError";
 }
 
+/** Delta-seconds or an HTTP-date. Null when the header is missing or unusable. */
+function retryAfterMs(value: string | null, now: number): number | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (/^\d+$/.test(trimmed))
+    return Math.min(Number(trimmed) * 1000, RETRY_AFTER_CAP_MS);
+  const date = Date.parse(trimmed);
+  if (Number.isNaN(date)) return null;
+  return Math.min(Math.max(0, date - now), RETRY_AFTER_CAP_MS);
+}
+
 const delay = (ms: number) =>
   new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
   });
+
+type Outbound = Omit<OnlinePayload, "id"> | Omit<DismissedPayload, "id">;
 
 /**
  * Posts calico.online and needs_you.dismissed. Sends are not awaited by the
  * caller: a slow webhook must not hold the panel's status response or a dismiss.
  */
 export class OutboundNotifier {
-  private lastSentAt: number | null = null;
-  /**
-   * Set when the first poll arrived before a URL was saved, so that poll is
-   * delivered on the next one once a URL exists.
-   */
-  private startupOwed = false;
   private lastDelivery: NotifyDelivery | null = null;
+  private recent: NotifyDelivery[] = [];
   private inflight = 0;
   private waiters: (() => void)[] = [];
-  private readonly startedAt: number;
   private readonly fetch: typeof fetch;
   private readonly now: () => number;
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly timeoutMs: number;
+  private readonly id: () => string;
 
   constructor(private readonly opts: NotifyOptions) {
     this.now = opts.now ?? Date.now;
-    this.startedAt = this.now();
     this.fetch = opts.fetch ?? fetch;
     this.sleep = opts.sleep ?? delay;
     this.timeoutMs = opts.timeoutMs ?? NOTIFY_TIMEOUT_MS;
+    this.id = opts.id ?? randomUUID;
   }
 
   view(config: CalicoConfig): NotifyPublic {
-    return notifyPublicView(config, this.lastDelivery);
+    return notifyPublicView(config, this.lastDelivery, this.recent);
   }
 
   /** Validate a settings patch and seal a new key. Does not write the file. */
@@ -182,8 +199,13 @@ export class OutboundNotifier {
     if ("offline_seconds" in patch)
       merged.notify_offline_seconds = notifyOffline(patch.offline_seconds);
     if ("header" in patch) merged.notify_header = notifyHeader(patch.header);
-    if ("url" in patch) merged.notify_url = notifyUrl(patch.url);
-    else if (!merged.notify_url) throw new BadInput("bad notify");
+    if ("url" in patch) {
+      const url = notifyUrl(patch.url);
+      // A new address must not inherit the key sealed for the previous one.
+      if (url !== current.notify_url && !("key" in patch))
+        merged.notify_key = "";
+      merged.notify_url = url;
+    } else if (!merged.notify_url) throw new BadInput("bad notify");
     if ("key" in patch) {
       if (typeof patch.key !== "string") throw new BadInput("bad notify");
       merged.notify_key = patch.key === "" ? "" : this.seal(patch.key);
@@ -193,39 +215,23 @@ export class OutboundNotifier {
 
   /**
    * A non-loopback panel status poll. `previous` is the poll time before this
-   * one, null on the first poll after startup. `lastPanelPoll` has already
-   * moved on by the time the hook runs, so this argument is the gap.
+   * one, null on the first poll after startup. The first poll does not send:
+   * there is no gap yet. `lastPanelPoll` has already moved on by the time the
+   * hook runs.
    */
   notePoll(previous: number | null, battery: PanelBatteryInfo | null): void {
-    // A hook that omits the argument is the startup poll: there is no earlier one.
-    const prior = previous ?? null;
+    if (previous === null) return;
     const config = this.opts.getConfig();
-    if (!config.notify_url) {
-      if (prior === null) this.startupOwed = true;
-      return;
-    }
+    if (!config.notify_url) return;
     const now = this.now();
-    const thresholdMs = config.notify_offline_seconds * 1000;
-    if (this.lastSentAt !== null && now - this.lastSentAt < thresholdMs) return;
-    const gap = prior === null ? null : now - prior;
-    const due =
-      prior === null ||
-      this.startupOwed ||
-      (gap !== null && gap >= thresholdMs);
-    if (!due) return;
-    const offlineSeconds =
-      gap === null
-        ? Math.max(0, Math.floor((now - this.startedAt) / 1000))
-        : Math.floor(Math.max(0, gap) / 1000);
-    const sent = this.send({
+    const gap = now - previous;
+    if (gap < config.notify_offline_seconds * 1000) return;
+    this.send({
       type: "calico.online",
       at: isoSeconds(new Date(now)),
-      offline_seconds: offlineSeconds,
+      offline_seconds: Math.floor(Math.max(0, gap) / 1000),
       battery: batteryOf(battery),
     });
-    if (!sent) return;
-    this.startupOwed = false;
-    this.lastSentAt = now;
   }
 
   /** One POST per agent whose attention was actually cleared. An empty list sends nothing. */
@@ -247,7 +253,11 @@ export class OutboundNotifier {
   private seal(key: string): string {
     const plain = notifyKey(key);
     if (!plain) throw new BadInput("bad notify");
-    const refused = keyringRefusal(this.opts.box);
+    const refused = keyringRefusal(
+      this.opts.box,
+      NO_KEYRING,
+      PLAINTEXT_KEYRING,
+    );
     if (refused) throw new BadInput(refused);
     try {
       const sealed = this.opts.box.encrypt(plain).toString("base64");
@@ -262,7 +272,10 @@ export class OutboundNotifier {
   private openKey(
     sealed: string,
   ): { ok: true; key: string } | { ok: false; error: string } {
-    if (!BASE64.test(sealed) || keyringRefusal(this.opts.box))
+    if (
+      !BASE64.test(sealed) ||
+      keyringRefusal(this.opts.box, NO_KEYRING, PLAINTEXT_KEYRING)
+    )
       return { ok: false, error: KEYRING_CHANGED };
     try {
       return {
@@ -274,25 +287,34 @@ export class OutboundNotifier {
     }
   }
 
-  /** False when nothing was posted, so the caller does not count a debounce window. */
-  private send(payload: NotifyPayload): boolean {
+  /** False when nothing was posted. */
+  private send(payload: Outbound): boolean {
     const config = this.opts.getConfig();
     if (!config.notify_url) return false;
-    let key = "";
-    if (config.notify_key) {
-      const opened = this.openKey(config.notify_key);
-      if (!opened.ok) {
-        this.finish(payload.type, {
-          ok: false,
-          status: null,
-          error: opened.error,
-        });
-        return false;
-      }
-      key = opened.key;
-    }
-    const headers = notifyHeaders(config.notify_header, key, this.opts.version);
-    this.track(this.deliver(config.notify_url, headers, payload));
+    const id = this.id();
+    const full: NotifyPayload =
+      payload.type === "calico.online"
+        ? {
+            type: payload.type,
+            id,
+            at: payload.at,
+            offline_seconds: payload.offline_seconds,
+            battery: payload.battery,
+          }
+        : {
+            type: payload.type,
+            id,
+            agent_id: payload.agent_id,
+            at: payload.at,
+          };
+    this.track(
+      this.deliver(
+        config.notify_url,
+        config.notify_header,
+        config.notify_key,
+        full,
+      ),
+    );
     return true;
   }
 
@@ -311,12 +333,31 @@ export class OutboundNotifier {
 
   private async deliver(
     url: string,
-    headers: Record<string, string>,
+    headerName: string,
+    sealed: string,
     payload: NotifyPayload,
   ): Promise<void> {
+    // Yield before decrypt or fetch. A keyring unlock prompt must not stall
+    // the status response that called notePoll.
+    await Promise.resolve();
+    let key = "";
+    if (sealed) {
+      const opened = this.openKey(sealed);
+      if (!opened.ok) {
+        this.finish(payload.type, {
+          ok: false,
+          status: null,
+          error: opened.error,
+        });
+        return;
+      }
+      key = opened.key;
+    }
+    const headers = notifyHeaders(headerName, key, this.opts.version);
     const body = JSON.stringify(payload);
     let status: number | null = null;
     let error = "network error";
+    let retryAfter: string | null;
     for (let attempt = 0; attempt <= NOTIFY_RETRIES; attempt++) {
       try {
         const res = await this.fetch(url, {
@@ -326,6 +367,7 @@ export class OutboundNotifier {
           redirect: "manual",
           signal: AbortSignal.timeout(this.timeoutMs),
         });
+        retryAfter = res.headers.get("retry-after");
         await res.body?.cancel().catch(() => undefined);
         if (res.ok) {
           this.finish(payload.type, {
@@ -340,11 +382,14 @@ export class OutboundNotifier {
         if (res.status !== 429 && res.status < 500) break;
       } catch (err) {
         status = null;
+        retryAfter = null;
         error = isTimeout(err) ? "timed out" : "network error";
       }
       if (attempt === NOTIFY_RETRIES) break;
-      const pause = NOTIFY_BACKOFF_MS[attempt] ?? NOTIFY_BACKOFF_MS[1];
-      await this.sleep(pause);
+      const backoff = NOTIFY_BACKOFF_MS[attempt] ?? NOTIFY_BACKOFF_MS[1];
+      const honored =
+        status === 429 ? retryAfterMs(retryAfter, this.now()) : null;
+      await this.sleep(honored ?? backoff);
     }
     this.finish(payload.type, { ok: false, status, error });
   }
@@ -353,12 +398,14 @@ export class OutboundNotifier {
     type: NotifyPayload["type"],
     result: { ok: boolean; status: number | null; error: string },
   ): void {
-    this.lastDelivery = {
+    const delivery: NotifyDelivery = {
       at: isoSeconds(new Date(this.now())),
       type,
       ok: result.ok,
       status: result.status,
       error: result.error,
     };
+    this.lastDelivery = delivery;
+    this.recent = [delivery, ...this.recent].slice(0, RECENT_MAX);
   }
 }

@@ -114,6 +114,7 @@ export interface NotifyInfo {
   offline_seconds: number;
   key_set: boolean;
   last: NotifyDelivery | null;
+  recent: NotifyDelivery[];
 }
 
 export interface NotifyPatch {
@@ -379,10 +380,15 @@ function deliveryFrom(value: unknown): NotifyDelivery | null {
   };
 }
 
-export async function fetchNotify(): Promise<NotifyInfo> {
-  const value: unknown = await (await call("/api/notify")).json();
+function notifyFrom(value: unknown): NotifyInfo {
   if (!isRecord(value) || typeof value.url !== "string")
     throw new Error("bad notify");
+  const recent = Array.isArray(value.recent)
+    ? value.recent.flatMap((item) => {
+        const delivery = deliveryFrom(item);
+        return delivery ? [delivery] : [];
+      })
+    : [];
   return {
     url: value.url,
     header: s(value.header) || "Authorization",
@@ -390,7 +396,12 @@ export async function fetchNotify(): Promise<NotifyInfo> {
       typeof value.offline_seconds === "number" ? value.offline_seconds : 180,
     key_set: value.key_set === true,
     last: deliveryFrom(value.last),
+    recent,
   };
+}
+
+export async function fetchNotify(): Promise<NotifyInfo> {
+  return notifyFrom(await (await call("/api/notify")).json());
 }
 
 const NOTIFY_REJECTED =
@@ -411,17 +422,7 @@ export async function putNotify(patch: NotifyPatch): Promise<NotifyInfo> {
   if (res.status === 401)
     throw new Error("Unauthorized. Check the webhook token in Settings.");
   if (!res.ok) throw new Error(`/api/notify ${res.status}`);
-  const value: unknown = await res.json();
-  if (!isRecord(value) || typeof value.url !== "string")
-    throw new Error("bad notify");
-  return {
-    url: value.url,
-    header: s(value.header) || "Authorization",
-    offline_seconds:
-      typeof value.offline_seconds === "number" ? value.offline_seconds : 180,
-    key_set: value.key_set === true,
-    last: deliveryFrom(value.last),
-  };
+  return notifyFrom(await res.json());
 }
 
 /** Throws "relay rejected" when the server turns the address or token down. */

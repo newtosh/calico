@@ -223,13 +223,13 @@ const WIFI_KEYS = [
 const PANEL_URL_MAX = 127;
 const PANEL_TOKEN_MAX = 127;
 
-function plainText(value: unknown, limit: number): string {
+function plainText(value: unknown, limit: number, error = "bad panel"): string {
   if (typeof value !== "string" || value.length > limit)
-    throw new BadInput("bad panel");
+    throw new BadInput(error);
   for (const ch of value) {
     const code = ch.codePointAt(0) ?? 0;
     if (code <= 32 || code > 126 || ch === '"' || ch === "\\")
-      throw new BadInput("bad panel");
+      throw new BadInput(error);
   }
   return value;
 }
@@ -287,19 +287,13 @@ export function relayPublicView(config: CalicoConfig) {
 // The relay URL and token end up in a request header and URL, so keep them
 // plain. http is for a self-hosted relay on this computer, nothing else.
 function relayUrl(value: unknown): string {
-  if (typeof value !== "string") throw new BadInput("bad relay");
-  const url = plainText(value.replace(/\/+$/, ""), 512);
-  const [scheme, rest = ""] = url.split("://", 2);
-  const host = rest.split("/", 1)[0] ?? "";
-  if (!host || host.includes("@") || host.startsWith(":"))
-    throw new BadInput("bad relay");
-  // The client appends /json?poll=1&since=, so a query or fragment would eat it.
-  if (/[?#]/.test(url)) throw new BadInput("bad relay");
-  const name = host.replace(/:\d+$/, "");
-  const local = name === "localhost" || name === "127.0.0.1";
-  if (scheme !== "https" && !(scheme === "http" && local))
-    throw new BadInput("bad relay");
-  return url;
+  return parseHttpUrl(value, {
+    error: "bad relay",
+    max: 512,
+    stripSlash: true,
+    allowQuery: false,
+    allowHttp: (name) => name === "localhost" || name === "127.0.0.1",
+  });
 }
 
 function relayToken(value: unknown): string {
@@ -333,30 +327,104 @@ export function mergeRelay(
   };
 }
 
-function visible(value: string, limit: number): string {
-  if (value.length > limit) throw new BadInput("bad notify");
-  for (const ch of value) {
-    const code = ch.codePointAt(0) ?? 0;
-    if (code <= 32 || code > 126 || ch === '"' || ch === "\\")
-      throw new BadInput("bad notify");
-  }
-  return value;
+interface HttpUrlPolicy {
+  error: string;
+  max: number;
+  /** Relay strips them. The webhook keeps the address as typed. */
+  stripSlash: boolean;
+  allowQuery: boolean;
+  /** Called with the host as typed, without a port or brackets. */
+  allowHttp: (name: string) => boolean;
 }
 
-/** http or https, no userinfo. A fragment is dropped by clients, so it is refused. */
+function authorityOf(text: string): string {
+  const rest = text.slice(text.indexOf("://") + 3);
+  return rest.split(/[/?#]/, 1)[0] ?? "";
+}
+
+function hostName(authority: string): string {
+  if (authority.startsWith("[")) {
+    const end = authority.indexOf("]");
+    return end > 0 ? authority.slice(1, end) : "";
+  }
+  return authority.replace(/:\d+$/, "");
+}
+
+/**
+ * One parser for the relay and the outbound webhook. The returned string is
+ * the typed address (trailing slashes removed only when the policy asks).
+ */
+function parseHttpUrl(value: unknown, policy: HttpUrlPolicy): string {
+  if (typeof value !== "string") throw new BadInput(policy.error);
+  const text = plainText(
+    policy.stripSlash ? value.replace(/\/+$/, "") : value,
+    policy.max,
+    policy.error,
+  );
+  if (!text.startsWith("http://") && !text.startsWith("https://"))
+    throw new BadInput(policy.error);
+  if (text.includes("#")) throw new BadInput(policy.error);
+  if (!policy.allowQuery && text.includes("?"))
+    throw new BadInput(policy.error);
+  const authority = authorityOf(text);
+  if (!authority || authority.includes("@") || authority.startsWith(":"))
+    throw new BadInput(policy.error);
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    throw new BadInput(policy.error);
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:")
+    throw new BadInput(policy.error);
+  if (!url.hostname) throw new BadInput(policy.error);
+  if (url.protocol === "http:" && !policy.allowHttp(hostName(authority)))
+    throw new BadInput(policy.error);
+  return text;
+}
+
+/**
+ * Plain http may carry a sender key, so it stays on this machine, a private
+ * LAN, CGNAT (Tailscale's 100.64/10), mDNS, or a Tailscale name.
+ */
+export function httpHostAllowed(hostname: string): boolean {
+  const host = hostname
+    .replace(/^\[|\]$/g, "")
+    .toLowerCase()
+    .replace(/\.+$/, "");
+  if (host === "localhost" || host === "::1") return true;
+  if (host.endsWith(".local") || host.endsWith(".ts.net")) return true;
+  const parts = host.split(".");
+  if (parts.length !== 4) return false;
+  const nums = parts.map((part) => Number(part));
+  if (nums.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return false;
+  const a = nums[0] ?? -1;
+  const b = nums[1] ?? -1;
+  if (a === 127 || a === 10) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  return false;
+}
+
+/** http or https, no userinfo. A fragment is refused. The address is kept as typed. */
 export function notifyUrl(value: unknown): string {
-  if (typeof value !== "string") throw new BadInput("bad notify");
-  const url = visible(value.replace(/\/+$/, ""), NOTIFY_URL_MAX);
-  const [scheme, rest = ""] = url.split("://", 2);
-  const host = rest.split("/", 1)[0]?.split("?", 1)[0] ?? "";
-  if (!host || host.includes("@") || host.startsWith(":"))
-    throw new BadInput("bad notify");
-  if (scheme !== "https" && scheme !== "http") throw new BadInput("bad notify");
-  if (url.includes("#")) throw new BadInput("bad notify");
-  return url;
+  return parseHttpUrl(value, {
+    error: "bad notify",
+    max: NOTIFY_URL_MAX,
+    stripSlash: false,
+    allowQuery: true,
+    allowHttp: httpHostAllowed,
+  });
 }
 
 const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+const RESERVED_HEADERS = new Set([
+  "content-type",
+  "user-agent",
+  "host",
+  "content-length",
+]);
 
 /**
  * Empty, or the default Authorization name, means `Authorization: Bearer <key>`.
@@ -366,7 +434,11 @@ export function notifyHeader(value: unknown): string {
   if (typeof value !== "string") throw new BadInput("bad notify");
   const name = value.trim();
   if (!name || name.toLowerCase() === "authorization") return "";
-  if (name.length > 64 || !HEADER_NAME.test(name))
+  if (
+    name.length > 64 ||
+    !HEADER_NAME.test(name) ||
+    RESERVED_HEADERS.has(name.toLowerCase())
+  )
     throw new BadInput("bad notify");
   return name;
 }
@@ -382,8 +454,7 @@ export function notifyOffline(value: unknown): number {
 
 /** A sender key that can sit in a header. Empty is not a key. */
 export function notifyKey(value: unknown): string {
-  if (typeof value !== "string") throw new BadInput("bad notify");
-  return visible(value, 512);
+  return plainText(value, 512, "bad notify");
 }
 
 function loadNotifyUrl(data: Record<string, unknown>): string {

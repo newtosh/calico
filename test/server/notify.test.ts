@@ -50,12 +50,14 @@ function box(backend = "gnome_libsecret", available = true): NotifyBox {
 function harness(fetchImpl?: typeof fetch, secrets: NotifyBox = box()) {
   let now = 1_700_000_000_000;
   let current = defaultConfig();
+  let seq = 0;
   const posts: { url: string; init: RequestInit }[] = [];
   const sleeps: number[] = [];
   const notify = new OutboundNotifier({
     getConfig: () => current,
     box: secrets,
     version: "9.9.9",
+    id: () => `id-${++seq}`,
     now: () => now,
     sleep: (ms) => {
       sleeps.push(ms);
@@ -121,7 +123,7 @@ describe("notify headers and payloads", () => {
     const h = harness();
     h.arm();
     const at = isoSeconds(new Date(h.at()));
-    h.notify.notePoll(null, {
+    h.notify.notePoll(h.at() - 180_000, {
       pct: 81,
       charging: true,
       external: true,
@@ -141,8 +143,9 @@ describe("notify headers and payloads", () => {
     expect(raw).toBe(
       JSON.stringify({
         type: "calico.online",
+        id: "id-1",
         at,
-        offline_seconds: 0,
+        offline_seconds: 180,
         battery: { pct: 81, charging: true, external: true },
       }),
     );
@@ -152,7 +155,7 @@ describe("notify headers and payloads", () => {
   it("sends a null battery when none is known, and a custom header with the raw key", async () => {
     const h = harness();
     h.arm({ header: "X-Calico-Key" });
-    h.notify.notePoll(null, null);
+    h.notify.notePoll(h.at() - 180_000, null);
     await h.notify.settled();
     expect(headers(h.posts[0])["X-Calico-Key"]).toBe(KEY);
     expect(headers(h.posts[0]).Authorization).toBeUndefined();
@@ -160,24 +163,25 @@ describe("notify headers and payloads", () => {
   });
 });
 
-describe("online debounce and threshold", () => {
-  it("fires on the first poll, then not again until the offline threshold", async () => {
+describe("online threshold", () => {
+  it("stays quiet on the first poll and fires once the gap reaches the threshold", async () => {
     const h = harness();
     h.arm();
     h.notify.notePoll(null, null);
     h.advance(10_000);
     h.notify.notePoll(h.at() - 10_000, null);
-    h.advance(179_000);
-    h.notify.notePoll(h.at() - 179_000, null);
+    h.advance(169_000);
+    h.notify.notePoll(h.at() - 169_000, null);
     await h.notify.settled();
-    expect(h.posts).toHaveLength(1);
+    expect(h.posts).toHaveLength(0);
 
-    h.advance(1_000);
+    h.advance(11_000);
     h.notify.notePoll(h.at() - 180_000, null);
     await h.notify.settled();
-    expect(h.posts).toHaveLength(2);
-    expect(body(h.posts[1])).toMatchObject({
+    expect(h.posts).toHaveLength(1);
+    expect(body(h.posts[0])).toMatchObject({
       type: "calico.online",
+      id: "id-1",
       offline_seconds: 180,
     });
   });
@@ -190,41 +194,17 @@ describe("online debounce and threshold", () => {
     h.advance(180_000 - 1);
     h.notify.notePoll(started, null);
     await h.notify.settled();
-    expect(h.posts).toHaveLength(1);
-  });
-
-  it("debounces a second startup-shaped poll inside the threshold window", async () => {
-    const h = harness();
-    h.arm();
-    h.notify.notePoll(null, null);
-    h.advance(1_000);
-    h.notify.notePoll(null, null);
-    await h.notify.settled();
-    expect(h.posts).toHaveLength(1);
-    h.advance(179_000);
-    h.notify.notePoll(null, null);
-    await h.notify.settled();
-    expect(h.posts).toHaveLength(2);
-    expect(body(h.posts[1])).toMatchObject({
-      offline_seconds: Math.floor(180_000 / 1000),
-    });
-  });
-
-  it("owes the startup ping when the first poll arrives before a URL is saved", async () => {
-    const h = harness();
-    const started = h.at();
-    h.notify.notePoll(null, null);
     expect(h.posts).toHaveLength(0);
+  });
+
+  it("does not send online just because a URL was saved", async () => {
+    const h = harness();
+    h.notify.notePoll(null, null);
     h.arm();
     h.advance(2_000);
-    h.notify.notePoll(started, null);
+    h.notify.notePoll(h.at() - 2_000, null);
     await h.notify.settled();
-    expect(h.posts).toHaveLength(1);
-    expect(body(h.posts[0])).toMatchObject({ offline_seconds: 2 });
-    h.advance(1_000);
-    h.notify.notePoll(h.at() - 1_000, null);
-    await h.notify.settled();
-    expect(h.posts).toHaveLength(1);
+    expect(h.posts).toHaveLength(0);
   });
 
   it("returns before the POST finishes", async () => {
@@ -235,7 +215,7 @@ describe("online debounce and threshold", () => {
     const h = harness(() => pending);
     h.arm();
     const started = Date.now();
-    h.notify.notePoll(null, null);
+    h.notify.notePoll(h.at() - 180_000, null);
     expect(Date.now() - started).toBeLessThan(200);
     release(new Response(null, { status: 204 }));
     await h.notify.settled();
@@ -276,6 +256,7 @@ describe("needs_you.dismissed", () => {
     expect(String(h.posts[0]?.init.body)).toBe(
       JSON.stringify({
         type: "needs_you.dismissed",
+        id: "id-1",
         agent_id: "a1",
         at: "2026-10-14T20:41:00Z",
       }),
@@ -289,6 +270,7 @@ describe("needs_you.dismissed", () => {
     expect(h.posts).toHaveLength(2);
     expect(body(h.posts[1])).toEqual({
       type: "needs_you.dismissed",
+      id: "id-2",
       agent_id: "b2",
       at: "2026-10-14T20:41:00Z",
     });
@@ -331,7 +313,7 @@ describe("delivery retries", () => {
   async function attempts(fetchImpl: typeof fetch) {
     const h = harness(fetchImpl);
     h.arm();
-    h.notify.notePoll(null, null);
+    h.notify.notePoll(h.at() - 180_000, null);
     await h.notify.settled();
     return h;
   }
@@ -444,7 +426,7 @@ describe("sender key", () => {
       header: "Authorization",
       offline_seconds: "240",
     });
-    expect(saved.notify_url).toBe(URL);
+    expect(saved.notify_url).toBe(`${URL}/`);
     expect(saved.notify_header).toBe("");
     expect(saved.notify_offline_seconds).toBe(240);
     expect(saved.notify_key).not.toBe(KEY);
@@ -485,7 +467,10 @@ describe("sender key", () => {
     for (const patch of [
       { url: "ftp://x", key: KEY },
       { url: "http://user@h", key: KEY },
+      { url: "http://hooks.example/calico", key: KEY },
       { url: "https://h/#x", key: KEY },
+      { url: URL, header: "Content-Type", key: KEY },
+      { url: URL, header: "Host", key: KEY },
       { key: KEY },
       { url: URL, header: "Bad Name", key: KEY },
       { url: URL, offline_seconds: 1, key: KEY },
@@ -515,7 +500,7 @@ describe("sender key", () => {
       notify_url: URL,
       notify_key: "not-valid-ciphertext",
     };
-    h.notify.notePoll(null, null);
+    h.notify.notePoll(h.at() - 180_000, null);
     await h.notify.settled();
     expect(h.posts).toHaveLength(0);
     expect(h.notify.view(h.current).last).toMatchObject({
@@ -541,7 +526,7 @@ describe("sender key", () => {
     });
     current = notify.apply(defaultConfig(), { url: URL, key: KEY });
     const sealed = current.notify_key;
-    notify.notePoll(null, null);
+    notify.notePoll(Date.now() - 180_000, null);
     await notify.settled();
     const { server } = createCompanionServer({
       store: new DeskStore(),
@@ -575,6 +560,8 @@ describe("sender key", () => {
       expect(JSON.stringify(notifyPublicView(current, null))).not.toContain(
         KEY,
       );
+      expect(notify.view(current).url).toBe("https://hooks.example/\u2026");
+      expect(texts[3]).not.toContain("/calico");
       expect(notify.view(current).last?.error).toBe("network error");
       expect(logs.join("\n")).not.toContain(KEY);
     } finally {
@@ -636,5 +623,149 @@ describe("dismiss does not wait on the webhook", () => {
     } finally {
       server.close();
     }
+  });
+});
+
+describe("address change, retries, and the public view", () => {
+  it("drops the sealed key when a URL-only patch names a new host", () => {
+    const h = harness();
+    const saved = h.notify.apply(defaultConfig(), { url: URL, key: KEY });
+    const moved = h.notify.apply(saved, {
+      url: "https://other.example/hook",
+    });
+    expect(moved.notify_url).toBe("https://other.example/hook");
+    expect(moved.notify_key).toBe("");
+    expect(h.notify.view(moved).key_set).toBe(false);
+    expect(h.notify.apply(saved, { url: URL }).notify_key).toBe(
+      saved.notify_key,
+    );
+    expect(h.notify.apply(saved, { header: "X-Calico-Key" }).notify_key).toBe(
+      saved.notify_key,
+    );
+    const replaced = h.notify.apply(saved, {
+      url: "https://other.example/hook",
+      key: "next-key",
+    });
+    expect(replaced.notify_key).not.toBe("");
+    expect(replaced.notify_key).not.toBe(saved.notify_key);
+  });
+
+  it("masks a path or query and keeps a bare origin", () => {
+    const view = (url: string) =>
+      notifyPublicView({ ...defaultConfig(), notify_url: url }, null).url;
+    expect(view(URL)).toBe("https://hooks.example/\u2026");
+    expect(view("https://hooks.example/calico?token=1")).toBe(
+      "https://hooks.example/\u2026",
+    );
+    expect(view("https://hooks.example/")).toBe("https://hooks.example/");
+    expect(view("https://hooks.example")).toBe("https://hooks.example");
+  });
+
+  it("keeps one id across retries and honors Retry-After on 429", async () => {
+    let n = 0;
+    const bodies: string[] = [];
+    const h = harness(async (_url, init) => {
+      bodies.push(String(init?.body));
+      n += 1;
+      if (n === 1)
+        return new Response(null, {
+          status: 429,
+          headers: { "Retry-After": "4" },
+        });
+      return new Response(null, { status: 204 });
+    });
+    h.arm();
+    h.notify.notePoll(h.at() - 180_000, null);
+    await h.notify.settled();
+    expect(n).toBe(2);
+    expect(h.sleeps).toEqual([4_000]);
+    expect(
+      bodies.map((text) => (JSON.parse(text) as { id: string }).id),
+    ).toEqual(["id-1", "id-1"]);
+  });
+
+  it("caps a long Retry-After at 30 seconds and falls back when it is unusable", async () => {
+    let n = 0;
+    const h = harness(async () => {
+      n += 1;
+      const header = n === 1 ? "90" : "soon";
+      return new Response(null, {
+        status: 429,
+        headers: { "Retry-After": header },
+      });
+    });
+    h.arm();
+    h.notify.notePoll(h.at() - 180_000, null);
+    await h.notify.settled();
+    expect(h.sleeps).toEqual([30_000, 2_000]);
+  });
+
+  it("waits until an HTTP-date Retry-After", async () => {
+    const h = harness(
+      async () =>
+        new Response(null, {
+          status: 429,
+          headers: {
+            "Retry-After": new Date(1_700_000_000_000 + 5_000).toUTCString(),
+          },
+        }),
+    );
+    h.arm();
+    h.notify.notePoll(h.at() - 180_000, null);
+    await h.notify.settled();
+    expect(h.sleeps[0]).toBe(5_000);
+  });
+
+  it("records a redirect as final", async () => {
+    let n = 0;
+    const h = harness(async () => {
+      n += 1;
+      return new Response(null, {
+        status: 302,
+        headers: { Location: "https://elsewhere.example/hook" },
+      });
+    });
+    h.arm();
+    h.notify.notePoll(h.at() - 180_000, null);
+    await h.notify.settled();
+    expect(n).toBe(1);
+    expect(h.sleeps).toEqual([]);
+    expect(h.notify.view(h.current).last).toMatchObject({
+      ok: false,
+      status: 302,
+      error: "HTTP 302",
+    });
+  });
+
+  it("keeps an earlier failure when a later send succeeds", async () => {
+    let n = 0;
+    const h = harness(async () => {
+      n += 1;
+      return new Response(null, { status: n === 1 ? 400 : 204 });
+    });
+    h.arm();
+    h.notify.dismissed(["a1", "b2"], "2026-10-14T20:41:00Z");
+    await h.notify.settled();
+    const view = h.notify.view(h.current);
+    expect(view.recent).toHaveLength(2);
+    expect(view.last?.ok).toBe(true);
+    expect(view.recent.some((delivery) => !delivery.ok)).toBe(true);
+  });
+
+  it("opens the key only after notePoll has returned", async () => {
+    let pollReturned = false;
+    const secrets = box();
+    const real = secrets.decrypt;
+    secrets.decrypt = (sealed) => {
+      if (!pollReturned) throw new Error("decrypt ran inside notePoll");
+      return real(sealed);
+    };
+    const h = harness(undefined, secrets);
+    h.arm();
+    h.notify.notePoll(h.at() - 180_000, null);
+    pollReturned = true;
+    await h.notify.settled();
+    expect(h.posts).toHaveLength(1);
+    expect(headers(h.posts[0]).Authorization).toBe(`Bearer ${KEY}`);
   });
 });

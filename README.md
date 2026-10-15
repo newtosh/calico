@@ -76,22 +76,23 @@ The Worker's source is in [`tools/relay`](tools/relay), with its tests. Privacy 
 
 ## Outbound webhook
 
-Calico can POST to one webhook you run. It sends `calico.online` when the panel polls again after being quiet for a threshold (180 seconds unless you change it), and once on the first poll after Calico starts. It sends `needs_you.dismissed` when you dismiss an agent that was waiting. Dismiss-all sends one POST for each agent whose lamp actually went out, and sends nothing when nothing was waiting.
+Calico can POST to one webhook you run. It sends `calico.online` when the panel polls again after Calico has not heard a panel poll for a threshold (180 seconds unless you change it). `offline_seconds` is that gap: how long Calico has not heard the panel, which includes the laptop sleeping. The first poll after Calico starts does not send, because there is no gap yet. It sends `needs_you.dismissed` when you dismiss an agent that was waiting. Dismiss-all sends one POST for each agent whose lamp actually went out, and sends nothing when nothing was waiting.
 
 In Settings, Connectivity, next to Relay:
 
-- **Address**: an `http` or `https` URL.
-- **Sender key**: sealed with the system keyring (GNOME Keyring or KWallet), the same way Wi-Fi passwords are. Calico refuses to save it if there is no keyring, because the alternative is plain text. The key is never shown again, never logged, and never returned by `GET /api/config`, `/api/panel`, `/api/relay`, or `/api/notify`. Settings shows only that a key is set.
-- **Header**: leave it blank for `Authorization: Bearer <key>`. A custom header name sends the raw key as that header's value, with no `Bearer` prefix.
+- **Address**: an `https` URL, stored as you type it, including a trailing slash. Plain `http` is refused for a public hostname. It is allowed for `localhost` (and `::1`, and `127.0.0.0/8`), private addresses (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), the shared range `100.64.0.0/10` (CGNAT, which is what Tailscale uses), names ending in `.local`, and `*.ts.net`. Settings warns when the address is `http` and a sender key is set, because the key would travel in the clear. Changing the address without typing a new key clears the saved key. `GET /api/notify` and Settings show the address with its path and query masked (`https://hooks.example/…`), since some webhook URLs are themselves credentials. The POST still uses the full address.
+- **Sender key**: sealed with the system keyring (GNOME Keyring or KWallet), the same way Wi-Fi passwords are. Calico refuses to save it if there is no keyring, because the alternative is plain text. The key is never shown again, never logged, and never returned by `GET /api/config`, `/api/panel`, `/api/relay`, or `/api/notify`. Settings shows only that a key is set. Remove key clears it without clearing the address.
+- **Header**: leave it blank for `Authorization: Bearer <key>`. A custom header name sends the raw key as that header's value, with no `Bearer` prefix. `Content-Type`, `User-Agent`, `Host`, and `Content-Length` are reserved and refused.
 - **Offline threshold**: seconds without a panel poll before the next poll counts as coming back. Default 180, from 30 to 86400.
 
-The POST uses `Content-Type: application/json` and `User-Agent: calico/<version>`, with a 5 second timeout. Calico does not wait for the reply, so a slow webhook cannot stall the panel or the window. It retries twice, waiting 0.5s and then 2s, on a network error, a timeout, HTTP 429, or HTTP 5xx. Any other HTTP 4xx is final. Settings shows the last result, without the key.
+The POST uses `Content-Type: application/json` and `User-Agent: calico/<version>`, with a 5 second timeout. Calico does not wait for the reply, so a slow webhook cannot stall the panel or the window. It retries twice, waiting 0.5s and then 2s, on a network error, a timeout, HTTP 429, or HTTP 5xx. A 429 waits for `Retry-After` instead when that header is a delay in seconds or an HTTP date, capped at 30 seconds. Any other HTTP status, including a redirect, is final. Each POST carries an `id` that stays the same across retries, so a receiver can drop a duplicate. Settings shows the recent results, without the key.
 
-`calico.online` (the battery is `null` until the panel has reported one; on the first poll after startup, `offline_seconds` is how long this process has been up):
+`calico.online` (the battery is `null` until the panel has reported one):
 
 ```json
 {
   "type": "calico.online",
+  "id": "6b1e0c3a-9f2d-4a7e-8c11-2d4f6a8b0c1d",
   "at": "2026-10-14T20:41:00Z",
   "offline_seconds": 180,
   "battery": { "pct": 81, "charging": true, "external": true }
@@ -103,6 +104,7 @@ The POST uses `Content-Type: application/json` and `User-Agent: calico/<version>
 ```json
 {
   "type": "needs_you.dismissed",
+  "id": "6b1e0c3a-9f2d-4a7e-8c11-2d4f6a8b0c1d",
   "agent_id": "grok",
   "at": "2026-10-14T20:41:00Z"
 }

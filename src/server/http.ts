@@ -52,10 +52,17 @@ export interface ServerDeps {
   /** Origins allowed to call the server, such as the dev renderer. */
   allowedOrigins?: string[];
   /**
-   * Each non-loopback IPv4 status poll. `previousPoll` is `stats.lastPanelPoll`
-   * from before this request, null on the first. The field itself is already
-   * this poll by the time the hook runs, so the gap has to come from the
-   * argument. Must not throw, and must not wait on anything.
+   * Each non-loopback status poll, including IPv6 and an address that is not
+   * readable. `previousPoll` is `stats.lastPanelPoll` from before this request,
+   * null on the first. The field itself is already this poll by the time the
+   * hook runs. Must not throw, and must not wait on anything.
+   */
+  onStatusPoll?(previousPoll: number | null): void;
+  /**
+   * Each non-loopback IPv4 status poll. `previousPoll` is the same gap as
+   * `onStatusPoll`. The panel's address watch uses this; the notifier uses
+   * `onStatusPoll` so an IPv6 poll still counts as the panel being heard.
+   * Must not throw, and must not wait on anything.
    */
   onPanelPoll?(seen: PanelSeen, previousPoll: number | null): void;
 }
@@ -72,6 +79,37 @@ const v4 = (address: string | undefined): string | null => {
     : (address ?? "");
   return isIPv4(plain) ? plain : null;
 };
+
+/**
+ * One non-loopback status poll. Updates `lastPanelPoll` and the battery, then
+ * tells every consumer. `onStatusPoll` runs even when the address is not IPv4.
+ * Each consumer is isolated: one throw must not skip the other or the reply.
+ */
+export function observeStatusPoll(
+  deps: Pick<ServerDeps, "onPanelPoll" | "onStatusPoll">,
+  stats: ServerStats,
+  remoteAddress: string | undefined,
+  localAddress: string | undefined,
+  params: URLSearchParams,
+  now = Date.now(),
+): void {
+  if (isLoopback(remoteAddress)) return;
+  const previousPoll = stats.lastPanelPoll;
+  stats.lastPanelPoll = now;
+  recordPanelBattery(stats, params, now);
+  try {
+    deps.onStatusPoll?.(previousPoll);
+  } catch {
+    // A consumer bug must not blind the panel's status poll.
+  }
+  const seen = panelSeen(remoteAddress, localAddress);
+  if (!seen) return;
+  try {
+    deps.onPanelPoll?.(seen, previousPoll);
+  } catch {
+    // A consumer bug must not blind the panel's status poll.
+  }
+}
 
 /** The panel polls over IPv4. Anything else gives nothing to compare, so it is null. */
 export function panelSeen(
@@ -235,22 +273,13 @@ export function createCompanionServer(deps: ServerDeps): {
       }
       if (path === "/api/status") {
         const params = new URL(req.url ?? "/", "http://calico").searchParams;
-        if (!isLoopback(req.socket.remoteAddress)) {
-          // Captured first: the hook below runs after lastPanelPoll moves to now.
-          const previousPoll = stats.lastPanelPoll;
-          const now = Date.now();
-          stats.lastPanelPoll = now;
-          recordPanelBattery(stats, params, now);
-          const seen = panelSeen(
-            req.socket.remoteAddress,
-            req.socket.localAddress,
-          );
-          try {
-            if (seen) deps.onPanelPoll?.(seen, previousPoll);
-          } catch {
-            // A consumer bug must not blind the panel's status poll.
-          }
-        }
+        observeStatusPoll(
+          deps,
+          stats,
+          req.socket.remoteAddress,
+          req.socket.localAddress,
+          params,
+        );
         const detail = params.get("detail") === "1";
         const body = store.status(detail);
         const panel = panelStatusField(deps.getConfig());
