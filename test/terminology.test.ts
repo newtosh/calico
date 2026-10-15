@@ -26,7 +26,7 @@ function hits(paths: string[], banned: RegExp[]): string[] {
 // docs/terminology.md explains why each word is retired.
 const SOURCE = [/\bdesk\b/i, /(?<!python-)\bcompanion\b/i, /\bDevice\b/];
 const DOCS = [
-  /(?<!python-)\bcompanion\b/i,
+  /(?<!python-)(?<!\/)\bcompanion\b(?!\/)/i,
   /\bthe desk\b/i,
   /\bDevice (page|setup|tab)\b/,
   /\bdesk (firmware|app|panel companion)\b/i,
@@ -48,6 +48,18 @@ describe("terminology", () => {
       "docs/usb-console-protocol.md",
     ];
     expect(hits(docs, DOCS)).toEqual([]);
+  });
+
+  it("keeps them out of the packaging, site, templates and kits", () => {
+    const more = [
+      "electron-builder.yml",
+      "package.json",
+      "SECURITY.md",
+      "site/index.html",
+      ...files(".github/ISSUE_TEMPLATE", /\.yml$/),
+      ...files("kits", /\.md$/).filter((f) => !f.includes("node_modules")),
+    ];
+    expect(hits(more, DOCS)).toEqual([]);
   });
 
   it("catches a retired word in JSX text and in a template literal", () => {

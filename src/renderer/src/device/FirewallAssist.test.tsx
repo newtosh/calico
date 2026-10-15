@@ -13,7 +13,7 @@ describe("FirewallAssist", () => {
     } as unknown as CalicoApi;
     render(<FirewallAssist port={null} />);
     expect(
-      await screen.findByText(/calico is not listening on any port/i),
+      await screen.findByText(/^Calico is not listening on any port/),
     ).toBeTruthy();
     expect(screen.queryByText(/port null/i)).toBeNull();
   });

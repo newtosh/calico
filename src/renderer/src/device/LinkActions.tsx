@@ -65,7 +65,7 @@ export function LinkActions({
           <dd>{panelInfo.fw || "unknown"}</dd>
           <dt className="text-muted">Wi-Fi</dt>
           <dd>{panelInfo.ssid || "none"}</dd>
-          <dt className="text-muted">Calico address</dt>
+          <dt className="text-muted">Calico's address</dt>
           <dd className="font-mono">{panelInfo.url || "none"}</dd>
           <dt className="text-muted">Token</dt>
           <dd>{panelInfo.token}</dd>

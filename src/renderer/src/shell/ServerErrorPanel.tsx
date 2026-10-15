@@ -9,11 +9,11 @@ export function ServerErrorPanel({ error }: { error: ServerErrorInfo }) {
       </p>
       <p className="mt-1 text-muted">
         Ports {error.first} to {error.last} are all in use, so the panel and
-        agent webhooks cannot reach calico. Panel setup over USB and Bluetooth
+        agent webhooks cannot reach Calico. Panel setup over USB and Bluetooth
         still works.
       </p>
       <p className="mt-2 text-muted">
-        Close whatever holds those ports, then quit and reopen calico from the
+        Close whatever holds those ports, then quit and reopen Calico from the
         tray.
       </p>
       {error.holders.length ? (

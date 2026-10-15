@@ -13,9 +13,9 @@ export function FirewallAssist({ port }: { port: number | null }) {
   if (port === null)
     return (
       <section className="border-t border-stroke/40">
-        <h2 className="section-title">Panel cannot reach calico</h2>
+        <h2 className="section-title">Panel cannot reach Calico</h2>
         <p className="max-w-2xl px-4 text-muted">
-          calico is not listening on any port, so a firewall is not the problem.
+          Calico is not listening on any port, so a firewall is not the problem.
           See the notice at the top of the window.
         </p>
       </section>
@@ -23,7 +23,7 @@ export function FirewallAssist({ port }: { port: number | null }) {
   if (!fw) return <p className="px-4 text-muted">Checking for a firewall.</p>;
   return (
     <section className="border-t border-stroke/40">
-      <h2 className="section-title">Panel cannot reach calico</h2>
+      <h2 className="section-title">Panel cannot reach Calico</h2>
       {fw.kind === "none" ? (
         <p className="max-w-2xl px-4 text-muted">
           No firewall service is active here. Check that the panel and this

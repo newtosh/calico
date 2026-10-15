@@ -41,7 +41,7 @@ export function RebootWait({
     <p role="status" className={className}>
       {stage === "waiting" ? (
         <span className="text-amber">
-          Rebooted. Waiting up to 30 s for the panel to poll calico.
+          Rebooted. Waiting up to 30 s for the panel to poll Calico.
         </span>
       ) : null}
       {stage === "online" ? (
@@ -49,7 +49,7 @@ export function RebootWait({
       ) : null}
       {stage === "silent" ? (
         <span className="text-amber">
-          The panel has not reached calico since the reboot. See below.
+          The panel has not reached Calico since the reboot. See below.
         </span>
       ) : null}
     </p>

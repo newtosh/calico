@@ -86,7 +86,7 @@ export function AgentUpdatesSection({ info }: { info: CalicoInfo }) {
           : null;
       if (!patch)
         setNote(
-          "Saved. The panel has no URL and calico has no LAN address, so the panel was not updated.",
+          "Saved. The panel has no Calico address and Calico has no LAN address, so the panel was not updated.",
         );
       else {
         // A stale info poll can put the old token back, so send the new one explicitly.

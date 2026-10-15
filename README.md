@@ -6,7 +6,7 @@ Desktop app and developer kit for ginger, an ESP32-S3 AMOLED desk panel that sho
 
 ## What it does
 
-- Runs Calico's server, which the panel polls (`/api/status` on port 8787 by default) and receives agent webhooks.
+- Runs Calico's server, which receives agent webhooks and which the panel polls (`/api/status` on port 8787 by default).
 - Shows a dashboard of agents, events, and the panel's state.
 - Sets up the panel over USB or Bluetooth: Wi-Fi (tested before it is saved), Calico's address, token, reboot.
 - Keeps the panel's Wi-Fi networks in one list on this computer, with passwords locked in the system keyring (GNOME Keyring or KWallet). Without a keyring, Calico refuses to save a password.
