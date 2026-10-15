@@ -10,9 +10,12 @@ import {
   mergeConfig,
   mergePanel,
   mergeRelay,
-  relayPublicView,
+  notifyHeader,
+  notifyUrl,
+  panelPublicView,
   panelStatusField,
   publicView,
+  relayPublicView,
   saveConfig,
 } from "../../src/server/config";
 
@@ -296,5 +299,126 @@ describe("relay settings", () => {
       mergeRelay(on, { url: "https://r.example/inbox", token: "tok" })
         .relay_cursor,
     ).toBe("41");
+  });
+});
+
+describe("outbound webhook config", () => {
+  it("defaults the offline threshold to 180 seconds", () => {
+    expect(defaultConfig().notify_offline_seconds).toBe(180);
+    expect(defaultConfig()).toMatchObject({
+      notify_url: "",
+      notify_key: "",
+      notify_header: "",
+    });
+  });
+
+  it("round-trips the address, header, threshold, and sealed key", () => {
+    const path = file();
+    const config = {
+      ...defaultConfig(),
+      notify_url: "https://hooks.example/calico",
+      notify_key: "Y2lwaGVydGV4dA==",
+      notify_header: "X-Calico-Key",
+      notify_offline_seconds: 240,
+    };
+    saveConfig(path, config);
+    expect(loadConfig(path).config).toEqual(config);
+  });
+
+  it("treats a stored Authorization header as the default", () => {
+    const path = file();
+    writeFileSync(
+      path,
+      JSON.stringify({ notify_header: "Authorization", notify_url: "" }),
+    );
+    expect(loadConfig(path).config.notify_header).toBe("");
+  });
+
+  it.each([
+    [{ notify_url: "ftp://hooks.example/x" }, "notify_url"],
+    [{ notify_url: "http://user:secret@hooks.example/x" }, "notify_url"],
+    [{ notify_url: "http://hooks.example/calico" }, "notify_url"],
+    [{ notify_header: "Not A Header" }, "notify_header"],
+    [{ notify_header: "Content-Type" }, "notify_header"],
+    [{ notify_header: "User-Agent" }, "notify_header"],
+    [{ notify_header: "Host" }, "notify_header"],
+    [{ notify_header: "Content-Length" }, "notify_header"],
+    [{ notify_offline_seconds: 29 }, "notify_offline_seconds"],
+    [{ notify_offline_seconds: 86401 }, "notify_offline_seconds"],
+    [{ notify_key: 12 }, "notify_key"],
+  ] as const)("refuses %j and names %s", (body, key) => {
+    const path = file();
+    const text = JSON.stringify(body);
+    writeFileSync(path, text);
+    expect(() => loadConfig(path)).toThrow(ConfigError);
+    expect(() => loadConfig(path)).toThrow(key);
+    expect(readFileSync(path, "utf8")).toBe(text);
+  });
+
+  it("keeps a trailing slash and allows plain http only on a private host", () => {
+    expect(notifyUrl("https://hooks.example/calico/")).toBe(
+      "https://hooks.example/calico/",
+    );
+    for (const url of [
+      "http://localhost/hook",
+      "http://localhost:9/hook",
+      "http://127.0.0.1/hook",
+      "http://127.1.2.3/hook",
+      "http://[::1]/hook",
+      "http://10.1.2.3/hook",
+      "http://172.16.0.1/hook",
+      "http://172.31.255.255/hook",
+      "http://192.168.1.9/hook",
+      "http://100.64.0.1/hook",
+      "http://100.127.255.1/hook",
+      "http://printer.local/hook",
+      "http://box.ts.net/hook",
+    ])
+      expect(notifyUrl(url)).toBe(url);
+    for (const url of [
+      "http://hooks.example/calico",
+      "http://8.8.8.8/hook",
+      "http://100.63.0.1/hook",
+      "http://100.128.0.1/hook",
+      "http://172.15.0.1/hook",
+      "http://172.32.0.1/hook",
+      "http://11.0.0.1/hook",
+      "http://ts.net/hook",
+      "http://notts.net/hook",
+      "http://[2001:db8::1]/hook",
+    ])
+      expect(() => notifyUrl(url)).toThrow(BadInput);
+    const path = file();
+    const kept = {
+      ...defaultConfig(),
+      notify_url: "https://hooks.example/calico/",
+    };
+    saveConfig(path, kept);
+    expect(loadConfig(path).config.notify_url).toBe(kept.notify_url);
+    expect(() => notifyHeader("content-type")).toThrow(BadInput);
+    expect(() => notifyHeader("User-Agent")).toThrow(BadInput);
+    expect(() => notifyHeader("HOST")).toThrow(BadInput);
+    expect(() => notifyHeader("Content-Length")).toThrow(BadInput);
+    expect(notifyHeader("Authorization")).toBe("");
+    expect(notifyHeader("X-Calico-Key")).toBe("X-Calico-Key");
+  });
+
+  it("leaves the sealed key out of every public view", () => {
+    const key = "sender-key-do-not-leak";
+    const config = {
+      ...defaultConfig(),
+      notify_url: "https://hooks.example/calico",
+      notify_key: key,
+      webhook_token: key,
+      panel_token: key,
+      relay_token: key,
+    };
+    for (const view of [
+      publicView(config),
+      publicView(config, true),
+      panelPublicView(config),
+      relayPublicView(config),
+    ])
+      expect(JSON.stringify(view)).not.toContain(key);
   });
 });

@@ -9,6 +9,7 @@ import { AutostartSection } from "./AutostartSection";
 import { ConfigSection } from "./ConfigSection";
 import { CursorStatus } from "./CursorStatus";
 import { NetworksSection } from "./NetworksSection";
+import { NotifySection } from "./NotifySection";
 import { PanelSection } from "./PanelSection";
 import { PortSection } from "./PortSection";
 import { RelaySection } from "./RelaySection";
@@ -72,6 +73,7 @@ export function SettingsView({
           <>
             <PortSection />
             <RelaySection />
+            <NotifySection />
             <PanelSection />
           </>
         ) : (

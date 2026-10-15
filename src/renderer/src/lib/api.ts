@@ -100,6 +100,31 @@ export interface RelayPatch {
   clear?: boolean;
 }
 
+export interface NotifyDelivery {
+  at: string;
+  type: string;
+  ok: boolean;
+  status: number | null;
+  error: string;
+}
+
+export interface NotifyInfo {
+  url: string;
+  header: string;
+  offline_seconds: number;
+  key_set: boolean;
+  last: NotifyDelivery | null;
+  recent: NotifyDelivery[];
+}
+
+export interface NotifyPatch {
+  url?: string;
+  key?: string;
+  header?: string;
+  offline_seconds?: number;
+  clear?: boolean;
+}
+
 export type MarkShape = "circle" | "square" | "diamond" | "triangle";
 export const NEUTRAL_MARK = "#a39b88";
 
@@ -342,6 +367,62 @@ export async function fetchRelay(): Promise<RelayInfo> {
       budget: num(st.budget),
     },
   };
+}
+
+function deliveryFrom(value: unknown): NotifyDelivery | null {
+  if (!isRecord(value) || typeof value.ok !== "boolean") return null;
+  return {
+    at: s(value.at),
+    type: s(value.type),
+    ok: value.ok,
+    status: num(value.status),
+    error: s(value.error),
+  };
+}
+
+function notifyFrom(value: unknown): NotifyInfo {
+  if (!isRecord(value) || typeof value.url !== "string")
+    throw new Error("bad notify");
+  const recent = Array.isArray(value.recent)
+    ? value.recent.flatMap((item) => {
+        const delivery = deliveryFrom(item);
+        return delivery ? [delivery] : [];
+      })
+    : [];
+  return {
+    url: value.url,
+    header: s(value.header) || "Authorization",
+    offline_seconds:
+      typeof value.offline_seconds === "number" ? value.offline_seconds : 180,
+    key_set: value.key_set === true,
+    last: deliveryFrom(value.last),
+    recent,
+  };
+}
+
+export async function fetchNotify(): Promise<NotifyInfo> {
+  return notifyFrom(await (await call("/api/notify")).json());
+}
+
+const NOTIFY_REJECTED =
+  "That webhook was not accepted. Use an http or https address, a header name with no spaces, and an offline threshold from 30 to 86400 seconds.";
+
+/** Throws the keyring's own sentence when the sender key cannot be sealed. */
+export async function putNotify(patch: NotifyPatch): Promise<NotifyInfo> {
+  const res = await fetch(base + "/api/notify", {
+    method: "PUT",
+    headers: headers(),
+    body: JSON.stringify(patch),
+  });
+  if (res.status === 400) {
+    const body: unknown = await res.json().catch(() => null);
+    const error = isRecord(body) ? s(body.error) : "";
+    throw new Error(!error || error === "bad notify" ? NOTIFY_REJECTED : error);
+  }
+  if (res.status === 401)
+    throw new Error("Unauthorized. Check the webhook token in Settings.");
+  if (!res.ok) throw new Error(`/api/notify ${res.status}`);
+  return notifyFrom(await res.json());
 }
 
 /** Throws "relay rejected" when the server turns the address or token down. */

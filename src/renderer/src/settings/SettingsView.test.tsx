@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CalicoInfo } from "../../../shared/ipc";
+import { configureApi } from "../lib/api";
 import { SettingsView } from "./SettingsView";
 
 beforeEach(() => {
@@ -20,6 +21,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  vi.unstubAllGlobals();
 });
 
 // No server, so only the sections that need none render: that is enough to
@@ -110,6 +112,74 @@ describe("SettingsView", () => {
     expect((container.firstChild as HTMLElement).className).toContain(
       "isolate",
     );
+  });
+
+  it("puts the outbound webhook under Connectivity, next to Relay", async () => {
+    configureApi("http://127.0.0.1:8787", "");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const path = String(url);
+        if (path.includes("/api/notify"))
+          return Response.json({
+            url: "",
+            header: "Authorization",
+            offline_seconds: 180,
+            key_set: false,
+            last: null,
+          });
+        if (path.includes("/api/relay"))
+          return Response.json({
+            url: "",
+            token_set: false,
+            can_copy: false,
+            status: {
+              configured: false,
+              last_poll_at: null,
+              ok: null,
+              applied: 0,
+              refused: 0,
+              error: "",
+              used: null,
+              budget: null,
+            },
+          });
+        if (path.includes("/api/panel"))
+          return Response.json({ url: "", token_set: false });
+        return Response.json({
+          port: 8787,
+          cursor_poll_seconds: 30,
+          webhook_token_set: false,
+          cursor_api_key_set: false,
+          running_timeout_seconds: 120,
+        });
+      }),
+    );
+    Object.assign(window, {
+      calico: {
+        networksList: vi.fn(async () => ({
+          networks: [],
+          error: "",
+          notice: "",
+        })),
+        relaySetupView: vi.fn(async () => ({ phase: "idle" })),
+        onRelaySetup: vi.fn(() => () => undefined),
+      },
+    });
+    render(
+      <SettingsView
+        info={{ ...info, serverUrl: "http://127.0.0.1:8787", port: 8787 }}
+      />,
+    );
+    fireEvent.click(screen.getByRole("tab", { name: "Connectivity" }));
+    const relay = await screen.findByRole("heading", { name: "Relay" });
+    const webhook = await screen.findByRole("heading", {
+      name: "Outbound webhook",
+    });
+    expect(
+      relay.compareDocumentPosition(webhook) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(panel().textContent).toContain("sealed with the system keyring");
   });
 
   it("lets keyboard users reach a panel that has nothing focusable", () => {
