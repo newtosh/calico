@@ -34,6 +34,11 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm dist
+      - name: Stable-name copy for the latest-download URL
+        # `releases/latest/download/Calico-x64.pacman` only works if every release
+        # carries an asset with that exact name. `cp` fails unless the glob matches
+        # exactly one package, and the sign and verify loops below then cover the copy.
+        run: cp dist/Calico-*-x64.pacman dist/Calico-x64.pacman
       - name: Sign the pacman package
         # `pacman -U <url>` needs a detached signature from a key in the user's
         # keyring (RemoteFileSigLevel defaults to Required). Fail loudly rather than

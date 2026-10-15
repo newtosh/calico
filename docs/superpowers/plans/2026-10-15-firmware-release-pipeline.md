@@ -20,6 +20,7 @@
 - `firmware.json` fields: `version`, `min_app`, `artifact`, `sha256`, `size`, `notes_url`.
 - No wireless updates: do not touch `firmware/partitions.csv`, and add no OTA code or Bluetooth characteristic.
 - Releasing never touches NVS. Do not erase.
+- Firmware releases are never "latest": pass `--latest=false`, because the app's stable download URL (`releases/latest/download/Calico-x64.pacman`) depends on the latest release being an app release.
 - Pin every third-party action to a full commit SHA with a version comment, as `release.yml` does.
 - No Claude session links in PR bodies. Minimize em-dashes in prose and comments.
 
@@ -439,6 +440,7 @@ def test_publish_only_runs_for_a_tag_and_after_build():
     assert "startsWith(github.ref, 'refs/tags/fw-v')" in publish
     assert "RELEASE_GPG_KEY" in publish
     assert "--draft" in publish
+    assert "--latest=false" in publish
     assert "packaging/calico-release.asc" in publish
     assert "actions/attest@" in publish
 ```
@@ -542,7 +544,7 @@ jobs:
         with:
           subject-path: dist/*.bin
       - name: Draft release
-        run: gh release create "$GITHUB_REF_NAME" --draft --generate-notes --verify-tag dist/*.bin dist/*.bin.sig dist/firmware.json dist/SHA256SUMS
+        run: gh release create "$GITHUB_REF_NAME" --draft --latest=false --generate-notes --verify-tag dist/*.bin dist/*.bin.sig dist/firmware.json dist/SHA256SUMS
         env:
           GH_TOKEN: ${{ github.token }}
 ```
@@ -593,7 +595,7 @@ Firmware releases separately from the app, on tags named `fw-v<version>`.
 1. Set the new version in `firmware/VERSION` (X.Y.Z) and in `firmware/RELEASE.json`. In the same file set `min_app` to the oldest app version that can talk to this firmware.
 2. Open a pull request, get the checks green, and merge it.
 3. Tag the merge commit `fw-v<version>` and push the tag. The `firmware-release` workflow builds in the ESP-IDF container, runs the host tests, signs the binary and opens a draft release with `ginger-<version>-app.bin`, `firmware.json`, `SHA256SUMS` and a signature.
-4. Check the draft, flash the binary once with `esptool.py` or `idf.py app-flash` on a spare panel, then publish.
+4. Check the draft, flash the binary once with `esptool.py` or `idf.py app-flash` on a spare panel, then publish it with `gh release edit fw-v<version> --draft=false --latest=false`. Do not use the web form's publish button without unticking "Set as latest", or the app's stable download link will point at the firmware.
 
 A manual run of the workflow builds and uploads the artifacts but never publishes. Releases never erase NVS. There are no wireless updates: the panel has one application slot.
 ```
