@@ -19,6 +19,7 @@ import { NetworkVault } from "./networks";
 import {
   AddressWatch,
   loadSeen,
+  lanUrlsFor,
   localAddresses,
   saveSeen,
 } from "./panel-address";
@@ -26,7 +27,6 @@ import { CursorState, startCursorPoll } from "../server/cursor-poll";
 import { RelayState, startRelayPoll } from "../server/relay";
 import { createCompanionServer } from "../server/http";
 import {
-  lanUrls,
   listenWithFallback,
   PanelPort,
   PortsBusyError,
@@ -209,12 +209,15 @@ async function start(): Promise<void> {
   );
 
   const info = (): CalicoInfo => {
-    const offer = bound ? addressWatch.check(localAddresses()) : null;
+    const addrs = localAddresses();
+    const offer = bound ? addressWatch.check(addrs) : null;
+    const working = bound ? addressWatch.working(addrs) : null;
     return {
       serverUrl: bound ? `http://127.0.0.1:${bound}` : null,
       port: bound,
       expectedPort: panelPort.expected,
-      lanUrls: bound ? lanUrls(bound) : [],
+      lanUrls: bound ? lanUrlsFor(addrs, addressWatch.panelFrom, bound) : [],
+      panelUrl: bound && working ? `http://${working}:${bound}` : null,
       lastPanelPoll: stats.lastPanelPoll,
       panelBattery: stats.panelBattery,
       webhookToken: config.webhook_token,

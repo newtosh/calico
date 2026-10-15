@@ -78,6 +78,25 @@ export function pickAddress(
 }
 
 /**
+ * Every address this computer has, best first, as Calico URLs: the one pickAddress gives the
+ * panel, then other real LAN addresses, then VPN and container ones. Nothing is dropped, so a
+ * person can still copy a Tailscale address, but the first is never one the panel cannot reach.
+ */
+export function lanUrlsFor(
+  addrs: LocalAddress[],
+  panelFrom: string | null,
+  port: number,
+): string[] {
+  const best = pickAddress(addrs, panelFrom);
+  const rest = addrs.filter((a) => a.address !== best);
+  return [
+    ...(best ? [best] : []),
+    ...rest.filter((a) => !a.virtual).map((a) => a.address),
+    ...rest.filter((a) => a.virtual).map((a) => a.address),
+  ].map((address) => `http://${address}:${port}`);
+}
+
+/**
  * When to show "Calico's address may have changed". The panel's last poll arrived on `via`.
  * Once that address is gone from this computer and the panel has been silent for SILENCE_MS, it
  * offers an address the panel can reach. A panel that is simply off, with the address still here,
@@ -93,6 +112,21 @@ export class AddressWatch {
     private readonly now: () => number,
   ) {
     this.since = now();
+  }
+
+  /** The address the panel polled from last, null with no saved poll. */
+  get panelFrom(): string | null {
+    return this.last?.from ?? null;
+  }
+
+  /**
+   * The address the panel last polled on, while this computer still has it: one the panel has
+   * provably reached. Null with no saved poll, once it is gone, or for a self-assigned address.
+   */
+  working(addrs: LocalAddress[]): string | null {
+    const via = this.last?.via;
+    if (!via || linkLocal(via)) return null;
+    return addrs.some((a) => a.address === via) ? via : null;
   }
 
   /** A poll arrived. True when it came from somewhere new, so the caller saves it. */

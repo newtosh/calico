@@ -1,5 +1,4 @@
 import type http from "node:http";
-import { type NetworkInterfaceInfo, networkInterfaces } from "node:os";
 
 export const PORT_SPAN = 12;
 
@@ -61,16 +60,6 @@ export function resolvePort(
 ): { persist: boolean; drift: boolean } {
   if (!existed) return { persist: true, drift: false };
   return { persist: false, drift: bound !== configured };
-}
-
-export function lanUrls(
-  port: number,
-  ifaces: NodeJS.Dict<NetworkInterfaceInfo[]> = networkInterfaces(),
-): string[] {
-  return Object.values(ifaces)
-    .flatMap((list) => list ?? [])
-    .filter((info) => info.family === "IPv4" && !info.internal)
-    .map((info) => `http://${info.address}:${port}`);
 }
 
 /**

@@ -7,6 +7,7 @@ import {
   inSubnet,
   loadSeen,
   type LocalAddress,
+  lanUrlsFor,
   localAddresses,
   pickAddress,
   saveSeen,
@@ -167,6 +168,68 @@ describe("pickAddress", () => {
     expect(pickAddress([wired, { ...wifi, cidr: null }], "192.168.4.31")).toBe(
       "10.0.10.110",
     );
+  });
+});
+
+describe("lanUrlsFor", () => {
+  it("lists the address on the panel's subnet first, other LAN addresses next, VPN and container ones last", () => {
+    expect(
+      lanUrlsFor([docker, tailscale, wired, wifi], "192.168.4.31", 8787),
+    ).toEqual([
+      "http://192.168.4.30:8787",
+      "http://10.0.10.110:8787",
+      "http://172.17.0.1:8787",
+      "http://100.101.102.103:8787",
+    ]);
+  });
+
+  it("with no panel history, puts real LAN addresses before container and VPN ones", () => {
+    expect(lanUrlsFor([docker, tailscale, wifi], null, 8787)).toEqual([
+      "http://192.168.4.30:8787",
+      "http://172.17.0.1:8787",
+      "http://100.101.102.103:8787",
+    ]);
+  });
+
+  it("is empty with no addresses", () => {
+    expect(lanUrlsFor([], "192.168.4.31", 8787)).toEqual([]);
+  });
+});
+
+describe("AddressWatch.working", () => {
+  const polled = { from: "192.168.4.31", via: "192.168.4.30" };
+
+  it("is the address the panel last polled while this computer still has it", () => {
+    const watch = new AddressWatch(polled, clock().now);
+    expect(watch.working([docker, wifi])).toBe("192.168.4.30");
+  });
+
+  it("is null once that address is gone from this computer", () => {
+    expect(new AddressWatch(polled, clock().now).working([wired])).toBeNull();
+  });
+
+  it("is null with no saved poll", () => {
+    expect(new AddressWatch(null, clock().now).working([wifi])).toBeNull();
+  });
+
+  it("is null for a self-assigned address", () => {
+    const linkLocal: LocalAddress = {
+      iface: "wlp2s0",
+      address: "169.254.3.4",
+      cidr: "169.254.3.4/16",
+      virtual: false,
+    };
+    const watch = new AddressWatch(
+      { from: "169.254.3.5", via: "169.254.3.4" },
+      clock().now,
+    );
+    expect(watch.working([linkLocal])).toBeNull();
+  });
+
+  it("follows a new poll", () => {
+    const watch = new AddressWatch(polled, clock().now);
+    watch.polled({ from: "10.0.10.50", via: "10.0.10.110" });
+    expect(watch.working([wifi, wired])).toBe("10.0.10.110");
   });
 });
 

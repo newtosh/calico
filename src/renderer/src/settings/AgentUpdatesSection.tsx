@@ -76,17 +76,17 @@ export function AgentUpdatesSection({ info }: { info: CalicoInfo }) {
     configureApi(info.serverUrl, next);
     setToken(next);
     // The panel reads the same token for its dismiss taps. Keep its working URL.
-    const lan = info.lanUrls[0];
+    const working = info.panelUrl;
     try {
       const current = await fetchPanel();
       const patch = current.url
         ? { token: next }
-        : lan
-          ? { url: lan, token: next }
+        : working
+          ? { url: working, token: next }
           : null;
       if (!patch)
         setNote(
-          "Saved. The panel has no Calico address and Calico has no LAN address, so the panel was not updated.",
+          "Saved. The panel has no Calico address and has not polled this computer yet, so the panel was not updated. Set an address under Panel push.",
         );
       else {
         // A stale info poll can put the old token back, so send the new one explicitly.
