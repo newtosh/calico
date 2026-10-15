@@ -25,7 +25,7 @@ export function PortSection() {
       const { restart_required } = await putConfig({ port: portNumber });
       setNotice(
         restart_required
-          ? "Saved. Quit and reopen calico to use the new port."
+          ? "Saved. Quit and reopen Calico to use the new port."
           : "Saved.",
       );
     } catch (err) {
@@ -35,10 +35,10 @@ export function PortSection() {
 
   return (
     <section>
-      <h2 className="section-title">Companion port</h2>
+      <h2 className="section-title">Calico server port</h2>
       <p className="max-w-2xl px-4 pb-2 text-muted">
-        The port the panel and your agents reach calico on. A change takes
-        effect after calico restarts.
+        The port the panel and your agents reach Calico on. A change takes
+        effect after Calico restarts.
       </p>
       <div className="flex max-w-2xl items-end gap-3 px-4">
         <label className="label w-40">

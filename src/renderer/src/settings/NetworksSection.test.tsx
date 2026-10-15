@@ -128,9 +128,12 @@ describe("NetworksSection", () => {
     expect((screen.getByLabelText("SSID") as HTMLInputElement).disabled).toBe(
       true,
     );
-    fireEvent.change(screen.getByLabelText("Companion URL for this network"), {
-      target: { value: "http://10.0.0.9:8787" },
-    });
+    fireEvent.change(
+      screen.getByLabelText("Calico's address on this network"),
+      {
+        target: { value: "http://10.0.0.9:8787" },
+      },
+    );
     fireEvent.click(screen.getByText("Save network"));
     await waitFor(() =>
       expect(api.networksSave).toHaveBeenCalledWith({
@@ -171,7 +174,7 @@ describe("NetworksSection", () => {
       (screen.getByText("Scan networks") as HTMLButtonElement).disabled,
     ).toBe(true);
     expect(
-      screen.getByText(/Connect the panel on the Device page/),
+      screen.getByText(/Connect the panel on the Panel page/),
     ).toBeTruthy();
   });
 

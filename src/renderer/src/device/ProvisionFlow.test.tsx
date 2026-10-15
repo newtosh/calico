@@ -60,9 +60,12 @@ describe("ProvisionFlow", () => {
 
   it("sends this network's own URL and token with wifi", async () => {
     const { sent, onReboot } = setup();
-    fireEvent.change(screen.getByLabelText("Companion URL for this network"), {
-      target: { value: "http://10.0.0.8:8787" },
-    });
+    fireEvent.change(
+      screen.getByLabelText("Calico's address on this network"),
+      {
+        target: { value: "http://10.0.0.8:8787" },
+      },
+    );
     fireEvent.change(screen.getByLabelText("Token for this network"), {
       target: { value: "placeholder-token" },
     });
@@ -84,7 +87,7 @@ describe("ProvisionFlow", () => {
   it("keeps the own fields typed-only and masked", async () => {
     setup();
     for (const label of [
-      "Companion URL for this network",
+      "Calico's address on this network",
       "Token for this network",
     ]) {
       expect(screen.getByLabelText(label).getAttribute("autocomplete")).toBe(
@@ -98,9 +101,12 @@ describe("ProvisionFlow", () => {
 
   it("refuses a bad own URL at once, before the panel tests the network", async () => {
     const { sent } = setup();
-    fireEvent.change(screen.getByLabelText("Companion URL for this network"), {
-      target: { value: "10.0.0.8:8787" },
-    });
+    fireEvent.change(
+      screen.getByLabelText("Calico's address on this network"),
+      {
+        target: { value: "10.0.0.8:8787" },
+      },
+    );
     fireEvent.click(screen.getByText("Test and save"));
     expect((await screen.findByRole("status")).textContent).toContain(
       "http://",
@@ -140,9 +146,12 @@ describe("ProvisionFlow", () => {
   }));
 
   async function ownUrlClick() {
-    fireEvent.change(screen.getByLabelText("Companion URL for this network"), {
-      target: { value: "http://10.0.0.8:8787" },
-    });
+    fireEvent.change(
+      screen.getByLabelText("Calico's address on this network"),
+      {
+        target: { value: "http://10.0.0.8:8787" },
+      },
+    );
     fireEvent.click(screen.getByText("Test and save"));
   }
 

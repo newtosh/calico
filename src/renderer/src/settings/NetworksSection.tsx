@@ -59,7 +59,7 @@ export function NetworksSection({ link }: { link: DeviceLink | null }) {
       <p className="max-w-2xl px-4 pb-2 text-muted">
         The networks the panel can join, kept on this computer. Passwords are
         locked with the system keyring and never shown again. Saving here does
-        not change the panel: to set up the panel now, use Device.
+        not change the panel: to set up the panel now, use the Panel page.
       </p>
       {state.notice ? (
         <p role="status" className="max-w-2xl px-4 pb-2 text-amber">
@@ -118,7 +118,7 @@ export function NetworksSection({ link }: { link: DeviceLink | null }) {
           <div className="border border-amber/60 bg-surface p-3">
             <p className="text-amber">
               Remove {removing} and its password from this computer? The panel
-              keeps it until you forget it there, on the Device page.
+              keeps it until you forget it there, on the Panel page.
             </p>
             <div className="flex gap-3 pt-2">
               <button

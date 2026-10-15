@@ -169,7 +169,7 @@ export function saveConfig(path: string, config: CalicoConfig): void {
   writeAtomic(path, `${JSON.stringify(config, null, 2)}\n`);
 }
 
-/** `detail` adds settings the Python companion never had, so its plain view stays as the panel contract froze it. */
+/** `detail` adds settings the Python version never had, so its plain view stays as the panel contract froze it. */
 export function publicView(config: CalicoConfig, detail = false) {
   return {
     port: config.port,

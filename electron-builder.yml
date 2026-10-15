@@ -20,5 +20,5 @@ linux:
   executableName: calico
   syncDesktopName: true
   icon: resources/icon.png
-  synopsis: Desktop companion for the ginger desk panel
-  description: Runs the companion server the panel polls, shows agent status, and sets up the panel over USB or Bluetooth.
+  synopsis: "Desktop app for the ginger panel: shows what your coding agents are doing"
+  description: Runs Calico's server, which the panel polls, shows agent status, and sets up the panel over USB or Bluetooth.

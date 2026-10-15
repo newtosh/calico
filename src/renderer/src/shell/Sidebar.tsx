@@ -10,7 +10,7 @@ const ITEMS: {
   Icon: ComponentType<{ className?: string }>;
 }[] = [
   { view: "dashboard", label: "Dashboard", Icon: LayoutList },
-  { view: "device", label: "Device", Icon: Cpu },
+  { view: "device", label: "Panel", Icon: Cpu },
   { view: "console", label: "Console", Icon: SquareTerminal },
   { view: "settings", label: "Settings", Icon: Settings },
 ];

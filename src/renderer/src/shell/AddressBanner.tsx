@@ -9,11 +9,11 @@ import { ErrorNote } from "./ErrorNote";
 export const NO_PANEL =
   "No panel was chosen. If it did not appear, check that it is on and within reach, then try again.";
 export const SILENT =
-  "The panel has not polled Calico since it restarted. Check that it is on its network, then see Panel not connecting on the Device page.";
+  "The panel has not polled Calico since it restarted. Check that it is on its network, then see Panel not connecting on the Panel page.";
 const quiet = () => undefined;
 
 /**
- * "The panel's address may have changed". Main decides when (CalicoInfo.addressChange). One click
+ * "Calico's address may have changed". Main decides when (CalicoInfo.addressChange). One click
  * connects over the existing pairing, writes the new URL, reboots the panel and waits for its
  * first poll. Sends no password or token. An inline status, not a modal: it never takes focus
  * when it appears.
@@ -110,8 +110,8 @@ export function AddressBanner({
       className="flex flex-col items-start gap-3 border-b border-amber/60 bg-surface px-4 py-3"
     >
       <span className="min-w-0 text-amber">
-        The panel's address may have changed. This computer is now at{" "}
-        <span className="break-all font-mono">{url}</span>.
+        Calico's address may have changed, so the panel may not find it. Calico
+        is now at <span className="break-all font-mono">{url}</span>.
       </span>
       <div className="flex flex-wrap items-center gap-3 empty:hidden">
         {!waiting && link ? (
@@ -121,7 +121,7 @@ export function AddressBanner({
             disabled={working}
             onClick={onOpenDevice}
           >
-            Update on the Device page
+            Update on the Panel page
           </button>
         ) : null}
         {!waiting && !link ? (

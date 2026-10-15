@@ -52,7 +52,7 @@ export interface CalicoInfo {
   hostname: string;
   /**
    * Set when the panel has been silent for 60 s and the address of this computer it last polled
-   * is gone: the companion URL to give the panel. Null otherwise.
+   * is gone: Calico's address to give the panel. Null otherwise.
    */
   addressChange: { url: string } | null;
 }

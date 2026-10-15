@@ -78,7 +78,7 @@ export function pickAddress(
 }
 
 /**
- * When to show "The panel's address may have changed". The panel's last poll arrived on `via`.
+ * When to show "Calico's address may have changed". The panel's last poll arrived on `via`.
  * Once that address is gone from this computer and the panel has been silent for SILENCE_MS, it
  * offers an address the panel can reach. A panel that is simply off, with the address still here,
  * shows nothing.

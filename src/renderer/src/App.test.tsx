@@ -68,44 +68,46 @@ describe("App address banner wiring", () => {
   it("shows the banner from CalicoInfo.addressChange and Not now tells main", async () => {
     render(<App />);
     expect(
-      await screen.findByText(/The panel's address may have changed/),
+      await screen.findByText(/Calico's address may have changed/),
     ).toBeTruthy();
     fireEvent.click(screen.getByText("Not now"));
     expect(dismissAddress).toHaveBeenCalled();
   });
 
-  it("with a link open, the banner opens the Device page at the offered address", async () => {
+  it("with a link open, the banner opens the Panel page at the offered address", async () => {
     render(<App />);
-    fireEvent.click(await screen.findByText("Device"));
+    fireEvent.click(await screen.findByRole("button", { name: "Panel" }));
     fireEvent.click(await screen.findByText("Connect over Bluetooth"));
     await screen.findByText(/Connected over Bluetooth/);
     fireEvent.click(screen.getByText("Dashboard"));
     await act(async () => undefined);
-    expect(screen.queryByLabelText("Companion URL for the desk")).toBeNull();
-    fireEvent.click(screen.getByText("Update on the Device page"));
+    expect(
+      screen.queryByLabelText("Calico's address (the panel polls this)"),
+    ).toBeNull();
+    fireEvent.click(screen.getByText("Update on the Panel page"));
     expect(
       (
         (await screen.findByLabelText(
-          "Companion URL for the desk",
+          "Calico's address (the panel polls this)",
         )) as HTMLInputElement
       ).value,
     ).toBe(OFFER);
   });
 
-  it("on the Device page with a link open, the URL field follows a new offer", async () => {
+  it("on the Panel page with a link open, the URL field follows a new offer", async () => {
     current = { ...base, addressChange: null };
     render(<App />);
-    fireEvent.click(await screen.findByText("Device"));
+    fireEvent.click(await screen.findByRole("button", { name: "Panel" }));
     fireEvent.click(await screen.findByText("Connect over Bluetooth"));
     const field = (await screen.findByLabelText(
-      "Companion URL for the desk",
+      "Calico's address (the panel polls this)",
     )) as HTMLInputElement;
     expect(field.value).toBe("http://192.168.1.2:8787");
     current = base;
-    await screen.findByText(/The panel's address may have changed/, undefined, {
+    await screen.findByText(/Calico's address may have changed/, undefined, {
       timeout: 3000,
     });
-    fireEvent.click(screen.getByText("Update on the Device page"));
+    fireEvent.click(screen.getByText("Update on the Panel page"));
     expect(field.value).toBe(OFFER);
   });
 });

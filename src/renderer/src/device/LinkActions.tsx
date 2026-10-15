@@ -11,7 +11,7 @@ export function LinkActions({
   link: DeviceLink;
   onReboot: () => Promise<void>;
 }) {
-  const [desk, setDesk] = useState<DeskInfo | null>(null);
+  const [panelInfo, setPanelInfo] = useState<DeskInfo | null>(null);
   // Follows the address banner's offer, even when already open, until the person types.
   const [typed, setTyped] = useState<string | null>(null);
   const url = typed ?? info.addressChange?.url ?? info.lanUrls[0] ?? "";
@@ -19,7 +19,7 @@ export function LinkActions({
 
   const refresh = async () => {
     const reply = await link.send({ op: "status" });
-    if (reply.ok && reply.info) setDesk(reply.info);
+    if (reply.ok && reply.info) setPanelInfo(reply.info);
     else if (!reply.ok) setNotice(reply.error);
   };
 
@@ -32,7 +32,9 @@ export function LinkActions({
     if (!reply.ok) return setNotice(reply.error);
     if (info.port && url.endsWith(`:${info.port}`))
       await window.calico.adoptPort();
-    setNotice("URL saved on the desk. It applies after a reboot.");
+    setNotice(
+      "Calico's address saved on the panel. It applies after a reboot.",
+    );
     await refresh();
   }
 
@@ -42,7 +44,7 @@ export function LinkActions({
       reply.ok
         ? info.webhookToken
           ? "Token sent."
-          : "Token cleared on the desk."
+          : "Token cleared on the panel."
         : reply.error,
     );
     await refresh();
@@ -56,24 +58,24 @@ export function LinkActions({
 
   return (
     <section>
-      <h2 className="section-title">Desk</h2>
-      {desk ? (
+      <h2 className="section-title">Panel</h2>
+      {panelInfo ? (
         <dl className="grid max-w-2xl grid-cols-[8rem_1fr] gap-y-1 px-4">
           <dt className="text-muted">Firmware</dt>
-          <dd>{desk.fw || "unknown"}</dd>
+          <dd>{panelInfo.fw || "unknown"}</dd>
           <dt className="text-muted">Wi-Fi</dt>
-          <dd>{desk.ssid || "none"}</dd>
-          <dt className="text-muted">Companion</dt>
-          <dd className="font-mono">{desk.url || "none"}</dd>
+          <dd>{panelInfo.ssid || "none"}</dd>
+          <dt className="text-muted">Calico's address</dt>
+          <dd className="font-mono">{panelInfo.url || "none"}</dd>
           <dt className="text-muted">Token</dt>
-          <dd>{desk.token}</dd>
+          <dd>{panelInfo.token}</dd>
         </dl>
       ) : (
-        <p className="px-4 text-muted">Reading the desk.</p>
+        <p className="px-4 text-muted">Reading the panel.</p>
       )}
       <div className="flex max-w-2xl items-end gap-3 px-4 pt-3">
         <label className="label flex-1">
-          Companion URL for the desk
+          Calico's address (the panel polls this)
           <input
             className="field mt-1 font-mono"
             value={url}
@@ -90,10 +92,10 @@ export function LinkActions({
       </div>
       <div className="flex gap-3 px-4 pt-3">
         <button type="button" className="btn" onClick={() => void sendToken()}>
-          {info.webhookToken ? "Send webhook token" : "Clear desk token"}
+          {info.webhookToken ? "Send webhook token" : "Clear the panel's token"}
         </button>
         <button type="button" className="btn" onClick={() => void reboot()}>
-          Reboot desk
+          Reboot panel
         </button>
       </div>
       {notice ? (

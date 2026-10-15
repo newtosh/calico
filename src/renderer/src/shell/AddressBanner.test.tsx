@@ -120,9 +120,7 @@ describe("AddressBanner", () => {
   it("connects inside the click, writes only the URL, reboots, waits for the first poll and releases the link", async () => {
     const { sent, close } = panel();
     show();
-    expect(
-      screen.getByText(/The panel's address may have changed/),
-    ).toBeTruthy();
+    expect(screen.getByText(/Calico's address may have changed/)).toBeTruthy();
     fireEvent.click(screen.getByText("Update over Bluetooth"));
     // Web Bluetooth only opens its picker inside the click: no await may come first.
     expect(connect).toHaveBeenCalledTimes(1);
@@ -345,7 +343,7 @@ describe("AddressBanner", () => {
     expect(container.textContent).toContain(TARGET);
   });
 
-  it("with a link already open, sends the person to the Device page", () => {
+  it("with a link already open, sends the person to the Panel page", () => {
     const onOpenDevice = vi.fn();
     const open: DeviceLink = {
       kind: "ble",
@@ -355,7 +353,7 @@ describe("AddressBanner", () => {
     render(
       <AddressBanner info={info} link={open} onOpenDevice={onOpenDevice} />,
     );
-    fireEvent.click(screen.getByText("Update on the Device page"));
+    fireEvent.click(screen.getByText("Update on the Panel page"));
     expect(onOpenDevice).toHaveBeenCalled();
     expect(connect).not.toHaveBeenCalled();
     expect(screen.queryByText("Update over Bluetooth")).toBeNull();

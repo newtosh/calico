@@ -119,7 +119,7 @@ describe("BleLink", () => {
     );
     expect(await link.send({ op: "scan" })).toEqual({
       ok: false,
-      error: "The desk did not finish scanning in 30 seconds.",
+      error: "The panel did not finish scanning in 30 seconds.",
     });
   });
 

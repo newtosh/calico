@@ -29,7 +29,7 @@ export function desktopEntry(exec: string): string {
     "[Desktop Entry]",
     "Type=Application",
     "Name=Calico",
-    "Comment=Desk panel companion",
+    "Comment=Shows your coding agents on the panel",
     `Exec=${quoted} --hidden`,
     "Terminal=false",
     "X-GNOME-Autostart-enabled=true",

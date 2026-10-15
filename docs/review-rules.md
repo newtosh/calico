@@ -10,4 +10,4 @@ Any reviewer, human or bot, flags a change that breaks these.
 6. **Device protocol.** BLE UUIDs and limits in `src/renderer/src/device/commands.ts` and `ble.ts` must match `test/parity/ble_desk.h`. USB messages must match `docs/usb-console-protocol.md`.
 7. **Design.** Renderer changes follow `DESIGN.md`: panel palette tokens only, no inline `style`, no card grids or gradients.
 
-Do not flag: formatting (prettier owns it), import order, or naming that matches the Python companion it was ported from.
+Do not flag: formatting (prettier owns it), import order, or naming that matches the Python version it was ported from.

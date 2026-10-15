@@ -10,6 +10,13 @@ const link: DeviceLink = {
   send: async () => ({ ok: true }),
   close() {},
 };
+const info = {
+  name: "ginger",
+  fw: "1.2",
+  ssid: "home",
+  url: "http://x:1",
+  token: "set" as const,
+};
 const base = {
   port: 8787,
   lanUrls: ["http://192.168.1.2:8787"],
@@ -19,10 +26,21 @@ const base = {
 
 afterEach(cleanup);
 
+it("labels the readout of the address the panel polls", async () => {
+  const sending: DeviceLink = {
+    ...link,
+    send: async () => ({ ok: true, info }),
+  };
+  render(<LinkActions info={base} link={sending} onReboot={async () => {}} />);
+  expect(await screen.findByText("Calico's address")).toBeTruthy();
+});
+
 function field(info: CalicoInfo) {
   render(<LinkActions info={info} link={link} onReboot={async () => {}} />);
   return (
-    screen.getByLabelText("Companion URL for the desk") as HTMLInputElement
+    screen.getByLabelText(
+      "Calico's address (the panel polls this)",
+    ) as HTMLInputElement
   ).value;
 }
 
@@ -44,7 +62,7 @@ describe("LinkActions", () => {
     );
     const { rerender } = render(view(base));
     const input = screen.getByLabelText(
-      "Companion URL for the desk",
+      "Calico's address (the panel polls this)",
     ) as HTMLInputElement;
     rerender(view({ ...base, addressChange: offer }));
     expect(input.value).toBe(offer.url);

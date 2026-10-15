@@ -9,7 +9,7 @@ import { pushedAll } from "./PushNetworks";
 
 let dropLink: () => void = () => undefined;
 
-// The desk resets on reboot, so the link drops right after the write.
+// The panel resets on reboot, so the link drops right after the write.
 function fakeLink(): DeviceLink {
   return {
     kind: "ble",
@@ -109,7 +109,7 @@ describe("DeviceView provisioning", () => {
     await provision();
     await screen.findByText(/Waiting up to 30 s/);
     await vi.advanceTimersByTimeAsync(31_000);
-    expect(await screen.findByText(/has not reached calico/)).toBeTruthy();
+    expect(await screen.findByText(/has not reached Calico/)).toBeTruthy();
   });
 });
 

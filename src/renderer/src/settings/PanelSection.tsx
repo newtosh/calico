@@ -40,13 +40,13 @@ export function PanelSection() {
     <section>
       <h2 className="section-title">Panel push</h2>
       <p className="max-w-2xl px-4 pb-2 text-muted">
-        Sends a companion URL and token to the panel through its status poll.
+        Sends Calico's address and a token to the panel through its status poll.
         Use this when the panel is already online. For a panel that is offline,
-        use Device.
+        use the Panel page.
       </p>
       <div className="grid max-w-2xl grid-cols-2 gap-3 px-4">
         <label className="label">
-          Companion URL
+          Calico's address (the panel polls this)
           <input
             className="field mt-1 font-mono"
             value={url}

@@ -46,7 +46,7 @@ describe("PortSection", () => {
     await vi.waitFor(() => expect(field.value).toBe("8787"));
     fireEvent.change(field, { target: { value: "9001" } });
     fireEvent.click(screen.getByRole("button", { name: "Save port" }));
-    expect(await screen.findByText(/Quit and reopen calico/)).toBeTruthy();
+    expect(await screen.findByText(/Quit and reopen Calico/)).toBeTruthy();
     expect(puts).toEqual([{ port: 9001 }]);
   });
 
