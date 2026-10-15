@@ -29,11 +29,13 @@ export function LinkActions({
   }, [link]);
 
   async function setPanelUrl() {
+    // First: until the panel restarts, a status poll carries the stored address. If it were
+    // still the old one, the panel would probe it, find it live, and adopt it over this write.
+    const synced = await keepStoredAddress(url);
     const reply = await link.send({ op: "url", value: url });
     if (!reply.ok) return setNotice(reply.error);
     if (info.port && url.endsWith(`:${info.port}`))
       await window.calico.adoptPort();
-    const synced = await keepStoredAddress(url);
     setNotice(
       `Calico's address saved on the panel. It applies after a reboot.${synced ? ` ${synced}` : ""}`,
     );

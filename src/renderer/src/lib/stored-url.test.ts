@@ -53,4 +53,34 @@ describe("keepStoredAddress", () => {
     putPanel.mockRejectedValue(new Error("bad panel"));
     expect(await keepStoredAddress(NEW)).toMatch(/bad panel/);
   });
+
+  it("does not double the full stop of an error that already ends with one", async () => {
+    fetchPanel.mockRejectedValue(
+      new Error("Unauthorized. Check the webhook token in Settings."),
+    );
+    const note = await keepStoredAddress(NEW);
+    expect(note).not.toMatch(/\.\./);
+    expect(note).toMatch(/webhook token/);
+  });
+
+  it("says in plain words when Calico rejects the address", async () => {
+    fetchPanel.mockResolvedValue({
+      url: "http://192.168.4.201:8787",
+      token_set: true,
+    });
+    putPanel.mockRejectedValue(new Error("/api/panel 400"));
+    const note = await keepStoredAddress(NEW);
+    expect(note).toMatch(/did not accept that address/);
+    expect(note).not.toMatch(/400/);
+  });
+
+  it("copes with a rejection that is not an Error", async () => {
+    fetchPanel.mockRejectedValue("boom");
+    expect(await keepStoredAddress(NEW)).toMatch(/not updated/);
+  });
+
+  it("names Calico as the owner of the saved address", async () => {
+    fetchPanel.mockRejectedValue(new Error("offline"));
+    expect(await keepStoredAddress(NEW)).toMatch(/^Calico's saved address/);
+  });
 });

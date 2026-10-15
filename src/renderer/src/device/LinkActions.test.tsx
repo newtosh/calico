@@ -105,21 +105,41 @@ describe("Set URL keeps Settings in step", () => {
 
   it("adds the note when the saved address could not be updated", async () => {
     keepStored.mockResolvedValue(
-      "The saved address in Settings was not updated: offline.",
+      "Calico's saved address was not updated: offline.",
     );
     withReply({ ok: true });
     fireEvent.click(screen.getByRole("button", { name: "Set URL" }));
     expect(
       await screen.findByText(
-        `${SAVED} The saved address in Settings was not updated: offline.`,
+        `${SAVED} Calico's saved address was not updated: offline.`,
       ),
     ).toBeTruthy();
   });
 
-  it("leaves the saved address alone when the panel refuses the URL", async () => {
+  it("still shows the panel's error when it refuses the URL", async () => {
     withReply({ ok: false, error: "panel said no" });
     fireEvent.click(screen.getByRole("button", { name: "Set URL" }));
     expect(await screen.findByText("panel said no")).toBeTruthy();
-    expect(keepStored).not.toHaveBeenCalled();
+  });
+
+  it("updates the saved address before writing to the panel, so a poll cannot offer the old one back", async () => {
+    const order: string[] = [];
+    keepStored.mockImplementation(async () => {
+      order.push("sync");
+      return "";
+    });
+    const sending: DeviceLink = {
+      ...link,
+      send: async (cmd) => {
+        order.push(cmd.op);
+        return { ok: true };
+      },
+    };
+    render(
+      <LinkActions info={base} link={sending} onReboot={async () => {}} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Set URL" }));
+    await screen.findByText(SAVED);
+    expect(order.indexOf("sync")).toBeLessThan(order.indexOf("url"));
   });
 });

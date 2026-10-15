@@ -156,12 +156,24 @@ describe("AddressBanner", () => {
   it("says when the saved address could not be updated, and still finishes", async () => {
     panel();
     keepStored.mockResolvedValue(
-      "The saved address in Settings was not updated: offline.",
+      "Calico's saved address was not updated: offline.",
     );
     show();
     fireEvent.click(screen.getByText("Update over Bluetooth"));
     expect(await screen.findByText(/was not updated: offline/)).toBeTruthy();
     await screen.findByText("Panel online.", undefined, { timeout: 4000 });
+  });
+
+  it("clears the note when the person closes the result", async () => {
+    panel();
+    keepStored.mockResolvedValue(
+      "Calico's saved address was not updated: offline.",
+    );
+    show();
+    fireEvent.click(screen.getByText("Update over Bluetooth"));
+    await screen.findByText(/was not updated: offline/);
+    fireEvent.click(await screen.findByText("Close"));
+    expect(screen.queryByText(/was not updated: offline/)).toBeNull();
   });
 
   it("does not touch the saved address when the panel write fails", async () => {
