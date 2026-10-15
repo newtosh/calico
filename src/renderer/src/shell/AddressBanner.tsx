@@ -5,6 +5,7 @@ import { connectBle } from "../device/ble";
 import type { DeviceLink } from "../device/commands";
 import { RebootWait } from "../device/RebootWait";
 import { ErrorNote } from "./ErrorNote";
+import { keepStoredAddress } from "../lib/stored-url";
 
 export const NO_PANEL =
   "No panel was chosen. If it did not appear, check that it is on and within reach, then try again.";
@@ -30,6 +31,8 @@ export function AddressBanner({
   const [working, setWorking] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
+  // The panel was updated, but the address saved in Settings was not.
+  const [note, setNote] = useState("");
   const [since, setSince] = useState<number | null>(null);
   // The URL being written. Kept so the banner stays up when the panel polls and main clears it.
   const [target, setTarget] = useState("");
@@ -56,6 +59,7 @@ export function AddressBanner({
   function close() {
     setTarget("");
     setError("");
+    setNote("");
     setSince(null);
   }
 
@@ -63,6 +67,7 @@ export function AddressBanner({
   async function update() {
     setTarget(url);
     setError("");
+    setNote("");
     setWorking(true);
     setProgress("Looking for the panel over Bluetooth.");
     let panel: DeviceLink;
@@ -92,6 +97,7 @@ export function AddressBanner({
       if (!done.ok) return setError(done.error);
       if (info.port && url.endsWith(`:${info.port}`))
         await window.calico.adoptPort();
+      setNote(await keepStoredAddress(url));
       setSince(at);
     } catch (err) {
       setError((err as Error).message);
@@ -159,6 +165,7 @@ export function AddressBanner({
             <ErrorNote>{error}</ErrorNote>
           </p>
         ) : null}
+        {note ? <p className="text-muted">{note}</p> : null}
         {since !== null ? (
           <RebootWait since={since} onSilent={silent} className="" />
         ) : null}
