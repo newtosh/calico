@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CalicoInfo } from "../../../shared/ipc";
 import type { DeskInfo, DeviceLink } from "./commands";
+import { keepStoredAddress } from "../lib/stored-url";
 
 export function LinkActions({
   info,
@@ -32,8 +33,9 @@ export function LinkActions({
     if (!reply.ok) return setNotice(reply.error);
     if (info.port && url.endsWith(`:${info.port}`))
       await window.calico.adoptPort();
+    const synced = await keepStoredAddress(url);
     setNotice(
-      "Calico's address saved on the panel. It applies after a reboot.",
+      `Calico's address saved on the panel. It applies after a reboot.${synced ? ` ${synced}` : ""}`,
     );
     await refresh();
   }

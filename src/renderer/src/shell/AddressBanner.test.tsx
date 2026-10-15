@@ -13,6 +13,11 @@ import { NO_STATUS, ownUrl, sameUrl } from "../device/address-update";
 import type { Cmd, DeviceLink, PanelNet, Reply } from "../device/commands";
 import { AddressBanner, NO_PANEL, SILENT } from "./AddressBanner";
 
+const keepStored = vi.fn<(url: string) => Promise<string>>();
+vi.mock("../lib/stored-url", () => ({
+  keepStoredAddress: (url: string) => keepStored(url),
+}));
+
 const TARGET = "http://192.168.4.30:8787";
 const OLD = "This panel did not offer that feature. Flash the latest firmware.";
 
@@ -49,6 +54,8 @@ beforeEach(() => {
   };
   Object.assign(window, { calico: api });
   connect.mockReset();
+  keepStored.mockReset();
+  keepStored.mockResolvedValue("");
 });
 afterEach(() => {
   cleanup();
@@ -136,6 +143,36 @@ describe("AddressBanner", () => {
     ]);
     expect(api.adoptPort).toHaveBeenCalled();
     expect(close).toHaveBeenCalled();
+  });
+
+  it("keeps the saved address in Settings in step after the panel is updated", async () => {
+    panel();
+    show();
+    fireEvent.click(screen.getByText("Update over Bluetooth"));
+    await screen.findByText("Panel online.", undefined, { timeout: 4000 });
+    expect(keepStored).toHaveBeenCalledWith(TARGET);
+  });
+
+  it("says when the saved address could not be updated, and still finishes", async () => {
+    panel();
+    keepStored.mockResolvedValue(
+      "The saved address in Settings was not updated: offline.",
+    );
+    show();
+    fireEvent.click(screen.getByText("Update over Bluetooth"));
+    expect(await screen.findByText(/was not updated: offline/)).toBeTruthy();
+    await screen.findByText("Panel online.", undefined, { timeout: 4000 });
+  });
+
+  it("does not touch the saved address when the panel write fails", async () => {
+    panel({
+      reply: (cmd) =>
+        cmd.op === "url" ? { ok: false, error: "write failed" } : undefined,
+    });
+    show();
+    fireEvent.click(screen.getByText("Update over Bluetooth"));
+    await screen.findByText(/write failed/);
+    expect(keepStored).not.toHaveBeenCalled();
   });
 
   it("disables its buttons while working and says when to confirm a pairing code", async () => {
