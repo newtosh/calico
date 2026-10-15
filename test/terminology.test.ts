@@ -29,6 +29,9 @@ const DOCS = [
   /(?<!python-)\bcompanion\b/i,
   /\bthe desk\b/i,
   /\bDevice (page|setup|tab)\b/,
+  /\bdesk (firmware|app|panel companion)\b/i,
+  /(?:^|[.!?:;(|]\s*)Desk\b/,
+  /\bthe device\b/i,
 ];
 
 describe("terminology", () => {

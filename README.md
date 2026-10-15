@@ -1,14 +1,14 @@
 # Calico
 
-Desktop companion and developer kit for ginger, an ESP32-S3 AMOLED desk panel that shows what your coding agents are doing. This repository holds the app, the panel firmware, and the agent kits.
+Desktop app and developer kit for ginger, an ESP32-S3 AMOLED desk panel that shows what your coding agents are doing. This repository holds the app, the panel firmware, and the agent kits.
 
 > Status: alpha. v0.1 targets Linux.
 
 ## What it does
 
-- Runs the companion server the panel polls (`/api/status` on port 8787 by default) and receives agent webhooks.
+- Runs Calico's server, which the panel polls (`/api/status` on port 8787 by default) and receives agent webhooks.
 - Shows a dashboard of agents, events, and the panel's state.
-- Sets up the panel over USB or Bluetooth: Wi-Fi (tested before it is saved), companion URL, token, reboot.
+- Sets up the panel over USB or Bluetooth: Wi-Fi (tested before it is saved), Calico's address, token, reboot.
 - Keeps the panel's Wi-Fi networks in one list on this computer, with passwords locked in the system keyring (GNOME Keyring or KWallet). Without a keyring, Calico refuses to save a password.
 - Pushes the saved networks to the panel over Bluetooth after showing exactly what it will add, update and remove, and offers a one-click Bluetooth fix when this computer's address changes and the panel goes quiet. A push releases one saved password at a time to the app window for the moment of the write, a deliberate exception to "the window never sees a password"; the vault list and every other call expose only whether a password or token is set.
 - Lives in the tray and starts at login, so the panel keeps working when the window is closed.
@@ -16,7 +16,7 @@ Desktop companion and developer kit for ginger, an ESP32-S3 AMOLED desk panel th
 - Optionally POSTs to one outbound webhook when the panel comes back and when a needs-you is dismissed (see [Outbound webhook](#outbound-webhook)).
 
 ![Dashboard](resources/screenshots/dashboard.png)
-![Device setup](resources/screenshots/device.png)
+![Panel setup](resources/screenshots/device.png)
 
 Planned: firmware flashing and a first-run wizard, a screen simulator built from the real firmware UI, more agent integrations, macOS and Windows.
 
@@ -24,13 +24,13 @@ Planned: firmware flashing and a first-run wizard, a screen simulator built from
 
 | Path                      | What it is                                                                                                                                                     |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/`                    | The Electron app: companion server, tray, dashboard, device setup.                                                                                             |
+| `src/`                    | The Electron app: Calico's server, tray, dashboard, panel setup.                                                                                               |
 | `firmware/`               | ESP-IDF firmware for the Waveshare ESP32-S3-Touch-AMOLED-2.16, with host tests and BLE/USB provisioning scripts. See [firmware/README.md](firmware/README.md). |
 | `kits/ginger/`            | The Grok kit: the Grok Bot webhook guide and the original project README.                                                                                      |
-| `tools/python-companion/` | The original Python companion and web UI, kept as the reference implementation the app's contract tests are captured from.                                     |
+| `tools/python-companion/` | The original Python version of Calico and its web UI, kept as the reference implementation the app's contract tests are captured from.                         |
 | `docs/`                   | Protocol docs and design history.                                                                                                                              |
 
-The firmware, kit, and legacy companion arrived with their git history from the old grokbot-buddy repository. That history is not in `main` (the import was squash-merged), but it is kept at the tag [`grokbot-buddy-history`](https://github.com/newtosh/calico/tree/grokbot-buddy-history). Check it out to run `git log` or `git blame` on the original commits.
+The firmware, kit, and the legacy Python app arrived with their git history from the old grokbot-buddy repository. That history is not in `main` (the import was squash-merged), but it is kept at the tag [`grokbot-buddy-history`](https://github.com/newtosh/calico/tree/grokbot-buddy-history). Check it out to run `git log` or `git blame` on the original commits.
 
 ## Install
 
@@ -123,7 +123,7 @@ Checks: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`. Firmware host 
 
 ## Security
 
-The companion listens on your LAN with no accounts. Anyone on the same network can read status. Writes require the bearer token when one is set. Do not port-forward it. Report vulnerabilities through [SECURITY.md](SECURITY.md).
+Calico's server listens on your LAN with no accounts. Anyone on the same network can read status. Writes require the bearer token when one is set. Do not port-forward it. Report vulnerabilities through [SECURITY.md](SECURITY.md).
 
 ## License
 
