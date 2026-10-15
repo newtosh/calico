@@ -718,6 +718,20 @@ int main(void) {
         check(desk_hot_cleared(0, 1, 0) == 0, "an update with nothing cleared stays lit");
         check(desk_hot_cleared(0, 0, 0) == 0, "no touch and no update leaves it lit");
         check(desk_hot_cleared(0, 1, 1) == 0, "an update in the same pass as a touch still highlights");
+        {
+            desk_view_t waiting;
+            const char *json =
+                "{\"phase\":\"running\",\"agents\":["
+                "{\"id\":\"a\",\"title\":\"A\",\"status\":\"running\",\"attention\":true},"
+                "{\"id\":\"b\",\"title\":\"B\",\"status\":\"needs_you\"},"
+                "{\"id\":\"c\",\"title\":\"C\",\"status\":\"idle\"}]}";
+            check(desk_view_from_json(json, &waiting) == 0, "waiting parse");
+            check(desk_agent_waiting(&waiting, 0) == 1, "attention is waiting on the person");
+            check(desk_agent_waiting(&waiting, 1) == 1, "needs_you is waiting on the person");
+            check(desk_agent_waiting(&waiting, 2) == 0, "idle is not waiting");
+            check(desk_agent_waiting(&waiting, 3) == 0, "past the end is not waiting");
+            check(desk_agent_waiting(NULL, 0) == 0, "no view is not waiting");
+        }
     }
 
     if (g_failed) {

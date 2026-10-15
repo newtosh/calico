@@ -3332,8 +3332,10 @@ static void on_agent_scroll(lv_event_t *event) {
 
 static void rows_unhighlight(void) {
     int i;
-    for (i = 0; i < DESK_AGENT_MAX; i++) {
-        if (!s_agent_rows[i]) {
+    /* Only the rows on screen, and never one that is waiting on the person: a question is not a
+     * stale update, and restyling hidden rows would re-lay-out the list on the first scroll frame. */
+    for (i = 0; i < s_applied_view.agent_count && i < DESK_AGENT_MAX; i++) {
+        if (!s_agent_rows[i] || desk_agent_waiting(&s_applied_view, i)) {
             continue;
         }
         lv_obj_set_style_bg_opa(s_agent_rows[i], LV_OPA_TRANSP, 0);
@@ -3383,7 +3385,11 @@ static void build_new_pill(lv_obj_t *screen) {
     lv_obj_align(s_new_btn, LV_ALIGN_TOP_MID, 0, AGENT_Y);
     lv_obj_set_hidden(s_new_btn, true);
     lv_obj_add_event_cb(s_agent_box, on_agent_scroll, LV_EVENT_SCROLL, NULL);
+    /* The descriptor and the grown event array are small mallocs: PSRAM, or they take internal
+     * DMA that NimBLE and the STA need. */
+    psram_objects_begin();
     lv_obj_add_event_cb(s_agent_box, on_agent_touch, LV_EVENT_PRESSED, NULL);
+    psram_objects_end();
 }
 
 static void note_unseen(const desk_view_t *view) {
