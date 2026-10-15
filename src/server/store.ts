@@ -489,6 +489,7 @@ export class DeskStore {
     message: string | null = null,
   ): void {
     const current = this.agents.get(agentId);
+    if (!current) this.retireSameTitle(agentId, title, event.source);
     this.agents.set(agentId, {
       id: agentId,
       title: title || current?.title || "",
@@ -501,6 +502,30 @@ export class DeskStore {
       message: message ?? current?.message ?? "",
       source: event.source || current?.source || "",
     });
+  }
+
+  /**
+   * A bot that changes how it names an agent (a slug, then a UUID) would leave the old record
+   * behind and show the agent twice. A new id retires an idle agent with the same title from the
+   * same source. Running and waiting agents stay, and so does anything with no title.
+   */
+  private retireSameTitle(
+    agentId: string,
+    title: string,
+    source: string,
+  ): void {
+    const key = title.trim().toLowerCase();
+    if (!key) return;
+    for (const [id, a] of this.agents) {
+      if (
+        id !== agentId &&
+        a.status === "idle" &&
+        !a.attention &&
+        a.source === (source || "grok-bot") &&
+        a.title.trim().toLowerCase() === key
+      )
+        this.agents.delete(id);
+    }
   }
 
   /** Badge equals waiting agents. A note counts only when nothing is waiting. */

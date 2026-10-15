@@ -322,6 +322,90 @@ describe("DeskStore", () => {
   });
 });
 
+describe("DeskStore agent titles", () => {
+  const agents = (store: DeskStore) =>
+    store.status().agents.map((a) => [a.id, a.title, a.status]);
+
+  it("retires an idle agent when the same title arrives under a new id", () => {
+    const store = new DeskStore({ now: clock().now });
+    store.applyEvent({
+      type: "agent.finished",
+      agent_id: "scaffold",
+      title: "Scaffold",
+    });
+    store.applyEvent({
+      type: "agent.launched",
+      agent_id: "a3d2b1ed",
+      title: "scaffold ",
+    });
+    expect(agents(store)).toEqual([["a3d2b1ed", "scaffold ", "running"]]);
+  });
+
+  it("keeps a running or waiting agent that shares the title", () => {
+    const store = new DeskStore({ now: clock().now });
+    store.applyEvent({
+      type: "agent.launched",
+      agent_id: "one",
+      title: "Scaffold",
+    });
+    store.applyEvent({
+      type: "agent.needs_you",
+      agent_id: "two",
+      title: "Scaffold",
+      message: "Pick one",
+    });
+    store.applyEvent({
+      type: "agent.launched",
+      agent_id: "three",
+      title: "Scaffold",
+    });
+    expect(
+      store
+        .status()
+        .agents.map((a) => a.id)
+        .sort(),
+    ).toEqual(["one", "three", "two"]);
+  });
+
+  it("does not merge agents from different sources", () => {
+    const store = new DeskStore({ now: clock().now });
+    store.applyEvent({
+      type: "agent.finished",
+      agent_id: "cursor-1",
+      title: "Scaffold",
+      source: "cursor",
+    });
+    store.applyEvent({
+      type: "agent.launched",
+      agent_id: "bot-1",
+      title: "Scaffold",
+    });
+    expect(store.status().agents).toHaveLength(2);
+  });
+
+  it("keeps agents with no title apart", () => {
+    const store = new DeskStore({ now: clock().now });
+    store.applyEvent({ type: "agent.finished", agent_id: "x" });
+    store.applyEvent({ type: "agent.finished", agent_id: "y" });
+    expect(store.status().agents).toHaveLength(2);
+  });
+
+  it("does not retire an agent that reports again under its own id", () => {
+    const store = new DeskStore({ now: clock().now });
+    store.applyEvent({
+      type: "agent.finished",
+      agent_id: "a",
+      title: "Scaffold",
+    });
+    store.applyEvent({
+      type: "agent.finished",
+      agent_id: "a",
+      title: "Scaffold",
+    });
+    expect(store.status().agents).toHaveLength(1);
+  });
+});
+
 describe("DeskStore replayed events", () => {
   const launch = { type: "agent.launched", agent_id: "a1", title: "Scaffold" };
 
