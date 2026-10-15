@@ -194,6 +194,21 @@ describe("lanUrlsFor", () => {
   it("is empty with no addresses", () => {
     expect(lanUrlsFor([], "192.168.4.31", 8787)).toEqual([]);
   });
+
+  it("lists an address once when two interfaces hold it", () => {
+    const bridge: LocalAddress = { ...wired, iface: "br0" };
+    expect(lanUrlsFor([wired, bridge, wifi], "192.168.4.31", 8787)).toEqual([
+      "http://192.168.4.30:8787",
+      "http://10.0.10.110:8787",
+    ]);
+  });
+
+  it("with only VPN and container addresses, lists them in order", () => {
+    expect(lanUrlsFor([tailscale, docker], null, 8787)).toEqual([
+      "http://100.101.102.103:8787",
+      "http://172.17.0.1:8787",
+    ]);
+  });
 });
 
 describe("AddressWatch.working", () => {

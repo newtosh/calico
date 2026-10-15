@@ -89,11 +89,12 @@ export function lanUrlsFor(
 ): string[] {
   const best = pickAddress(addrs, panelFrom);
   const rest = addrs.filter((a) => a.address !== best);
-  return [
+  const ordered = [
     ...(best ? [best] : []),
     ...rest.filter((a) => !a.virtual).map((a) => a.address),
     ...rest.filter((a) => a.virtual).map((a) => a.address),
-  ].map((address) => `http://${address}:${port}`);
+  ];
+  return [...new Set(ordered)].map((address) => `http://${address}:${port}`);
 }
 
 /**
