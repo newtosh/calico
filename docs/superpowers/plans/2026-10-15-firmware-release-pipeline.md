@@ -595,7 +595,7 @@ Firmware releases separately from the app, on tags named `fw-v<version>`.
 1. Set the new version in `firmware/VERSION` (X.Y.Z) and in `firmware/RELEASE.json`. In the same file set `min_app` to the oldest app version that can talk to this firmware.
 2. Open a pull request, get the checks green, and merge it.
 3. Tag the merge commit `fw-v<version>` and push the tag. The `firmware-release` workflow builds in the ESP-IDF container, runs the host tests, signs the binary and opens a draft release with `ginger-<version>-app.bin`, `firmware.json`, `SHA256SUMS` and a signature.
-4. Check the draft, flash the binary once with `esptool.py` or `idf.py app-flash` on a spare panel, then publish.
+4. Check the draft, flash the binary once with `esptool.py` or `idf.py app-flash` on a spare panel, then publish it with `gh release edit fw-v<version> --draft=false --latest=false`. Do not use the web form's publish button without unticking "Set as latest", or the app's stable download link will point at the firmware.
 
 A manual run of the workflow builds and uploads the artifacts but never publishes. Releases never erase NVS. There are no wireless updates: the panel has one application slot.
 ```

@@ -57,7 +57,7 @@ The fingerprint line must read `A9F9 FE8D 26B6 8DD4 21EE  52C8 C491 E349 184F A8
 sudo pacman -U https://github.com/newtosh/calico/releases/latest/download/Calico-x64.pacman
 ```
 
-That URL always points at the newest app release, so the same command installs and upgrades. To pin a version, use `https://github.com/newtosh/calico/releases/download/app-v<version>/Calico-<version>-x64.pacman` and replace the version in both places. pacman fetches the `.sig` next to the package by itself. Signatures start with 0.1.4. The key expires on 2029-10-08.
+That URL always points at the newest app release, so the same command installs and upgrades. It needs pacman 7 or newer; older versions cache the package under the fixed file name and reinstall the old one, so delete `/var/cache/pacman/pkg/Calico-x64.pacman` first. To pin a version, use `https://github.com/newtosh/calico/releases/download/app-v<version>/Calico-<version>-x64.pacman` and replace the version in both places. pacman fetches the `.sig` next to the package by itself. Signatures start with 0.1.4. The key expires on 2029-10-08.
 
 The tray icon needs a StatusNotifier host. KDE and most panels have one. GNOME needs the AppIndicator extension.
 
