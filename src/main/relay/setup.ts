@@ -79,6 +79,8 @@ export class SetupError extends Error {
     message: string,
     readonly cleanedUp: boolean,
     readonly cancelled = false,
+    /** A Cloudflare dashboard page where the person can fix it themselves. */
+    readonly helpUrl?: string,
   ) {
     super(message);
   }
@@ -164,6 +166,8 @@ export async function setupRelay(deps: SetupDeps): Promise<SetupResult> {
         step,
         `A Worker called ${WORKER_NAME} already exists in this account, and calico will not overwrite it. Delete it in Cloudflare, or connect to it with its read token.`,
         true,
+        false,
+        workerSettingsUrl(accountId),
       );
     const sendToken = token("send");
     const readToken = token("read");
@@ -241,8 +245,10 @@ export async function setupRelay(deps: SetupDeps): Promise<SetupResult> {
       err instanceof Stop ||
       (err instanceof OAuthError && err.reason === "cancelled");
     if (err instanceof SetupError)
-      throw cleanedUp ? err : leftBehind(err.step, err.message, err.cancelled);
-    if (!cleanedUp) throw leftBehind(step, describe(err), cancelled);
+      throw cleanedUp
+        ? err
+        : leftBehind(err.step, err.message, err.cancelled, accountId);
+    if (!cleanedUp) throw leftBehind(step, describe(err), cancelled, accountId);
     throw new SetupError(
       step,
       cancelled ? "Setup was cancelled." : describe(err),
@@ -265,15 +271,20 @@ async function revokeTwice(deps: SetupDeps, accessToken: string) {
   return false;
 }
 
+const workerSettingsUrl = (accountId: string) =>
+  `https://dash.cloudflare.com/${accountId}/workers/services/view/${WORKER_NAME}/production/settings`;
+
 function leftBehind(
   step: SetupStep,
   why: string,
   cancelled: boolean,
+  accountId: string,
 ): SetupError {
   return new SetupError(
     step,
     `${why} calico could not remove the Worker it uploaded. Delete the Worker called ${WORKER_NAME} in your Cloudflare dashboard.`,
     false,
     cancelled,
+    accountId ? workerSettingsUrl(accountId) : undefined,
   );
 }
