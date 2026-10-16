@@ -228,6 +228,36 @@ Open `firmware/simulator/index.html` in a browser. It polls `http://127.0.0.1:87
 
 The idle screens are generated art. The sleeping cat comes from the frames in `docs/branding/ginger-idle-anim` (`scripts/gen_idle_cat.py` writes `main/idle_cat.c`), and the link-down icon from `docs/branding/ginger-linkdown/cat-off.svg` (`scripts/gen_linkdown_icon.py` writes `main/linkdown_icon.c`). The simulator shows the same images through `simulator/idle_art.js`, which `scripts/gen_simulator_assets.py` writes. After changing a frame or the icon, run the three scripts. They need Pillow, and the icon ones need `rsvg-convert`. Tests in `scripts/` fail when a generated file is out of date.
 
+## Releasing
+
+Panel firmware releases separately from Calico, on tags named `fw-v<version>`.
+
+1. Set the new version in `firmware/VERSION` (`X.Y.Z`, no `v`) and as `version` in `firmware/RELEASE.json`. In the same file set `min_app` to the oldest Calico version that can talk to this firmware.
+2. Open a pull request, get the checks green, and merge it.
+3. Tag the merge commit `fw-v<version>` (signed, annotated) and push the tag.
+
+The `firmware-release` workflow then:
+
+- checks that the tagged commit is on `main` and that the tag matches `firmware/VERSION` and `firmware/RELEASE.json`;
+- runs the host tests;
+- builds in the pinned ESP-IDF container (`idf.py set-target esp32s3`, then `idf.py build`) against the tracked `firmware/dependencies.lock`, so the components are the ones the panel was tested with. The build fails if CI would change that lock;
+- in a separate job that holds the signing key, re-checks the files, signs `ginger-<version>-app.bin`, attests it, and opens a draft release with the binary, its `.sig`, `firmware.json` and `SHA256SUMS`.
+
+A manual run of the workflow only builds and uploads the artifacts. It never signs or opens a release.
+
+To publish, review the draft, then flash the binary once on a spare panel (the offset is in `build/flash_args`; never erase NVS):
+
+```bash
+esptool.py --chip esp32s3 -p PORT write_flash 0x10000 ginger-<version>-app.bin
+gh release edit fw-v<version> --draft=false --latest=false
+```
+
+Do not publish from the web page without unticking "Set as latest". Calico's stable pacman link `releases/latest/download/Calico-x64.pacman` needs the latest release to be a Calico release.
+
+When a component changes, run `idf.py reconfigure` in `firmware/` and commit the updated `firmware/dependencies.lock`. The CI check fails until you do.
+
+There are no wireless updates: the panel has one application slot, so every update is a flash over USB. A panel that reports a git hash for `fw` predates this scheme.
+
 ## If `idf.py` is missing
 
 `idf.py` was not on the machine that produced this PoC, so `idf.py build` has not been run here. That blocks a board image only. The project is still the Waveshare target: `esp32s3`, BSP `waveshare/esp32_s3_touch_amoled_2_16` `^2.0.1`, LVGL 9, and the `02_lvgl_demo_v9` partition layout. Install ESP-IDF 5.5 and run the flash commands above. Until then, use the host test and the simulator.
