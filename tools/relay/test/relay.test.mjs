@@ -215,6 +215,25 @@ describe("a restart", () => {
       dropState(state);
     }
   });
+
+  // The count was held only in memory, so it read 1 after every idle eviction.
+  it("keeps the daily request count to within 50 of the truth", async () => {
+    const state = newState();
+    const vars = { ...LIMITS, TTL_SECONDS: "86400", MAX_MESSAGES: "200", DAILY_REQUEST_BUDGET: "60000", SEND_TOKEN: SEND, READ_TOKEN: READ };
+    let relay = await startRelay({ state, vars });
+    try {
+      let api = client(relay.base);
+      for (let i = 0; i < 120; i += 1) await api.read();
+      await relay.stop();
+      relay = await startRelay({ state, vars });
+      api = client(relay.base);
+      const used = Number((await api.read()).headers.get("x-relay-requests-today"));
+      assert.ok(used >= 71 && used <= 122, `used ${used}`);
+    } finally {
+      await relay.stop();
+      dropState(state);
+    }
+  });
 });
 
 describe("a relay set up without its tokens", () => {

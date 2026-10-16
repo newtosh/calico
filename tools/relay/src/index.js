@@ -51,6 +51,8 @@ export default {
   },
 };
 
+const SAVE_EVERY = 50;
+
 const secondsUntilMidnightUtc = (now) => Math.max(1, Math.ceil((Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1) - now) / 1000));
 
 export class Inbox extends DurableObject {
@@ -58,9 +60,12 @@ export class Inbox extends DurableObject {
     super(ctx, env);
     this.sql = ctx.storage.sql;
     this.sql.exec("CREATE TABLE IF NOT EXISTS messages (seq INTEGER PRIMARY KEY AUTOINCREMENT, time INTEGER NOT NULL, body TEXT NOT NULL)");
-    // Counted in memory: an approximate guard, and it costs no storage writes.
-    this.day = "";
-    this.requests = 0;
+    // Counted in memory and saved every SAVE_EVERY requests, so an idle eviction loses at most that
+    // many. One row written per SAVE_EVERY requests stays well inside the free plan's write allowance.
+    this.sql.exec("CREATE TABLE IF NOT EXISTS usage (id INTEGER PRIMARY KEY CHECK (id = 1), day TEXT NOT NULL, n INTEGER NOT NULL)");
+    const saved = this.sql.exec("SELECT day, n FROM usage WHERE id = 1").toArray()[0];
+    this.day = saved?.day ?? "";
+    this.requests = saved?.n ?? 0;
   }
 
   num(name, fallback) {
@@ -92,6 +97,7 @@ export class Inbox extends DurableObject {
     }
     const budget = this.num("DAILY_REQUEST_BUDGET", 60000);
     this.requests += 1;
+    if (this.requests % SAVE_EVERY === 1) this.sql.exec("INSERT OR REPLACE INTO usage (id, day, n) VALUES (1, ?, ?)", day, this.requests);
     const used = { "x-relay-requests-today": String(this.requests), "x-relay-budget": String(budget) };
     if (this.requests > budget)
       return json({ code: 42901, error: "daily budget reached, try again after 00:00 UTC" }, 429, { ...used, "retry-after": String(secondsUntilMidnightUtc(now)) });
