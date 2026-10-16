@@ -119,7 +119,7 @@ Service `8d7c4b10-6e2a-4f91-a3c5-67726f6b6465`:
 | nets | `8d7c4b19-6e2a-4f91-a3c5-67726f6b6465` | read | `count=N`, then per saved network two flags (`1` or `0`: own URL, own token), a tab, and the SSID. At most 8 rows, 297 bytes. Never a password, token, or URL |
 | forget | `8d7c4b1a-6e2a-4f91-a3c5-67726f6b6465` | write | an SSID to remove from the saved networks. Optional trailing newline. An SSID that is not saved is not an error. The panel stays on its current network until it restarts |
 
-Status is UTF-8, one `key=value` per line, in this order: `name`, `fw` (git short SHA, or `unknown`), `ssid` (associated AP, or `none`), `url` (the default address the panel polls to reach Calico), `token` (`set` or `none`). A rejected write is an ATT error and does not touch NVS. URL and token commits happen before the response. They do not restart the station. `ssid=none` means the STA is not associated. It does not mean NVS is empty.
+Status is UTF-8, one `key=value` per line, in this order: `name`, `fw` (the firmware version from `firmware/VERSION`, such as `0.2.0`, or `unknown`; a panel flashed before versions reports a git short SHA), `ssid` (associated AP, or `none`), `url` (the default address the panel polls to reach Calico), `token` (`set` or `none`). A rejected write is an ATT error and does not touch NVS. URL and token commits happen before the response. They do not restart the station. `ssid=none` means the STA is not associated. It does not mean NVS is empty.
 
 `nets`, `forget`, and the parsed `wifi` write share one PSRAM scratch allocated at host start, so they take no internal RAM and do not grow the 6144-byte host stack. A four-line `wifi` write is longer than one packet at MTU 256; BlueZ sends it as a prepared (long) write, which needs at most 3 of the 4 prepare entries even at the minimum MTU of 130. If the NVS save after a `wifi` or `forget` write fails, the write is an ATT error, the saved networks go back to what they were in RAM, and the panel saves them again. NVS has no transactions, so if that second save also fails a slot can stay half written until the next good save; the log names both failures. There is no USB console in this firmware yet: `docs/usb-console-protocol.md` describes the same commands for when there is.
 
@@ -227,6 +227,36 @@ gcc -Wall -Werror -I firmware/main firmware/host/test_control_center.c firmware/
 Open `firmware/simulator/index.html` in a browser. It polls `http://127.0.0.1:8787` unless you pass `?base=http://192.168.1.20:8787`. `?settings=1` opens settings. `?bt=off` draws the dim rune. `?bt=conn` draws the sage dotted mark. The default is the cream dotted mark. The settings button does the same, and Done closes it. A swipe down on the status strip opens Control Center. Swipe up on that sheet, or a tap on the dimmed face, closes it. `?cc=1` opens it. Wheel or drag scrolls the agent list inside the face. The bar and the dock stay fixed. A needs-you status raises the sheet over the list and the dock. The bar stays. A downward swipe, or a tap, dismisses the card on screen. A second needs-you while that card is up stacks on top. Swipe left and right to move through the stack. `Dismiss all` clears every waiting card. Two rapid posts that exercise it are in [docs/grok-bot-integration.md](../kits/ginger/docs/grok-bot-integration.md).
 
 The idle screens are generated art. The sleeping cat comes from the frames in `docs/branding/ginger-idle-anim` (`scripts/gen_idle_cat.py` writes `main/idle_cat.c`), and the link-down icon from `docs/branding/ginger-linkdown/cat-off.svg` (`scripts/gen_linkdown_icon.py` writes `main/linkdown_icon.c`). The simulator shows the same images through `simulator/idle_art.js`, which `scripts/gen_simulator_assets.py` writes. After changing a frame or the icon, run the three scripts. They need Pillow, and the icon ones need `rsvg-convert`. Tests in `scripts/` fail when a generated file is out of date.
+
+## Releasing
+
+Panel firmware releases separately from Calico, on tags named `fw-v<version>`.
+
+1. Set the new version in `firmware/VERSION` (`X.Y.Z`, no `v`) and as `version` in `firmware/RELEASE.json`. In the same file set `min_app` to the oldest Calico version that can talk to this firmware.
+2. Open a pull request, get the checks green, and merge it.
+3. Tag the merge commit `fw-v<version>` (signed, annotated) and push the tag.
+
+The `firmware-release` workflow then:
+
+- checks that the tagged commit is on `main` and that the tag matches `firmware/VERSION` and `firmware/RELEASE.json`;
+- runs the host tests;
+- builds in the pinned ESP-IDF container (`idf.py set-target esp32s3`, then `idf.py build`) against the tracked `firmware/dependencies.lock`, so the components are the ones the panel was tested with. The build fails if CI would change that lock;
+- in a separate job that holds the signing key, re-checks the files, signs `ginger-<version>-app.bin`, attests it, and opens a draft release with the binary, its `.sig`, `firmware.json` and `SHA256SUMS`.
+
+A manual run of the workflow only builds and uploads the artifacts. It never signs or opens a release.
+
+To publish, review the draft, then flash the binary once on a spare panel (the offset is in `build/flash_args`; never erase NVS):
+
+```bash
+esptool.py --chip esp32s3 -p PORT write_flash 0x10000 ginger-<version>-app.bin
+gh release edit fw-v<version> --draft=false --latest=false
+```
+
+Do not publish from the web page without unticking "Set as latest". Calico's stable pacman link `releases/latest/download/Calico-x64.pacman` needs the latest release to be a Calico release.
+
+When a component changes, run `idf.py reconfigure` in `firmware/` and commit the updated `firmware/dependencies.lock`. The CI check fails until you do.
+
+There are no wireless updates: the panel has one application slot, so every update is a flash over USB. A panel that reports a git hash for `fw` predates this scheme.
 
 ## If `idf.py` is missing
 

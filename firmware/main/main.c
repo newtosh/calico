@@ -23,6 +23,13 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifndef DESK_FW_VERSION
+#define DESK_FW_VERSION "unknown"
+#endif
+#ifndef DESK_FW_SHA
+#define DESK_FW_SHA "unknown"
+#endif
+
 _Static_assert(BSP_LCD_H_RES == DESK_DMA_WIDTH, "DMA stripe width");
 _Static_assert(BSP_LCD_BITS_PER_PIXEL / 8 == DESK_DMA_BPP, "DMA stripe depth");
 
@@ -624,6 +631,7 @@ static void on_pair_hide(void) {
 }
 
 void app_main(void) {
+    ESP_LOGI("desk", "ginger %s (%s)", DESK_FW_VERSION, DESK_FW_SHA);
     esp_err_t err = nvs_flash_init();
     desk_settings_t fields;
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
