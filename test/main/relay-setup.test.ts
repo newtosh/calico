@@ -244,6 +244,9 @@ describe("setupRelay", () => {
     )) as SetupError;
     expect(error.step).toBe("upload");
     expect(error.message).toContain(WORKER_NAME);
+    expect(error.helpUrl).toBe(
+      `https://dash.cloudflare.com/a1/workers/services/view/${WORKER_NAME}/production/settings`,
+    );
     expect(log).toEqual(["revoke"]);
     expect(api.uploadWorker).not.toHaveBeenCalled();
   });

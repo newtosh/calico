@@ -94,6 +94,8 @@ export type RelaySetupView =
       message: string;
       cleanedUp: boolean;
       cancelled: boolean;
+      /** A Cloudflare dashboard page where the person can fix it. */
+      helpUrl?: string;
     };
 
 /** A saved Wi-Fi network as the window sees it. Never the password or token. */

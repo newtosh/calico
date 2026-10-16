@@ -100,6 +100,7 @@ export class RelaySetupService {
             : "Something went wrong.",
         cleanedUp: e?.cleanedUp ?? true,
         cancelled: e?.cancelled ?? false,
+        helpUrl: e?.helpUrl,
       });
     } finally {
       this.abort = null;
