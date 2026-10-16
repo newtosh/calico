@@ -86,3 +86,68 @@ def test_cli_manifest_writes_json(tmp_path: Path):
     out = tmp_path / "firmware.json"
     assert r.main(["manifest", str(art), str(out), "--repo", "newtosh/calico"]) == 0
     assert json.loads(out.read_text(encoding="utf-8"))["artifact"] == "a.bin"
+
+
+def run_main(capsys, argv: list[str]) -> str:
+    assert r.main(argv) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("error:")
+    assert "Traceback" not in err
+    return err
+
+
+@pytest.mark.parametrize("content", ["{not json", "", "[]", '"str"', "null"])
+def test_main_reports_bad_release_json(tmp_path, monkeypatch, capsys, content):
+    fw = tmp_path / "fw"
+    fw.mkdir()
+    (fw / "VERSION").write_text("0.2.0", encoding="utf-8")
+    (fw / "RELEASE.json").write_text(content, encoding="utf-8")
+    monkeypatch.setattr(r, "FW_DIR", fw)
+    run_main(capsys, ["check-tag", "fw-v0.2.0"])
+
+
+def test_main_reports_missing_and_non_utf8_files(tmp_path, monkeypatch, capsys):
+    fw = tmp_path / "fw"
+    fw.mkdir()
+    monkeypatch.setattr(r, "FW_DIR", fw)
+    run_main(capsys, ["check-tag", "fw-v0.2.0"])
+    (fw / "VERSION").write_bytes(b"\xff\xfe0.2.0")
+    run_main(capsys, ["check-tag", "fw-v0.2.0"])
+    (fw / "VERSION").write_text("0.2.0", encoding="utf-8")
+    run_main(capsys, ["check-tag", "fw-v0.2.0"])  # RELEASE.json missing
+
+
+def test_main_reports_unwritable_out(tmp_path, capsys):
+    art = tmp_path / "a.bin"
+    art.write_bytes(b"x")
+    run_main(capsys, ["manifest", str(art), str(tmp_path / "no" / "o.json"), "--repo", "a/b"])
+    run_main(capsys, ["manifest", str(art), str(tmp_path), "--repo", "a/b"])
+
+
+def test_semver_is_strict(tmp_path: Path):
+    for good in ["0.2.0", "10.20.30"]:
+        ok = write_release(tmp_path, {"version": "0.2.0", "min_app": good})
+        assert r.read_release(ok, "0.2.0")["min_app"] == good
+    for bad in ["0.1.13\n", "0.1.13 ", "٣.٢.٠", "01.2.3"]:
+        p = write_release(tmp_path, {"version": "0.2.0", "min_app": bad})
+        with pytest.raises(r.ReleaseError):
+            r.read_release(p, "0.2.0")
+    v = tmp_path / "VERSION"
+    v.write_text("0.2.0\r\n", encoding="utf-8")
+    assert r.read_version(v) == "0.2.0"
+    v.write_text("01.2.3", encoding="utf-8")
+    with pytest.raises(r.ReleaseError):
+        r.read_version(v)
+
+
+@pytest.mark.parametrize("repo", ["", "a b", "$(id)"])
+def test_manifest_rejects_bad_repo(tmp_path: Path, repo: str):
+    art = tmp_path / "a.bin"
+    art.write_bytes(b"x")
+    with pytest.raises(r.ReleaseError, match="owner/name"):
+        r.make_manifest("0.2.0", "0.1.13", art, repo)
+
+
+def test_manifest_says_directory(tmp_path: Path):
+    with pytest.raises(r.ReleaseError, match="is a directory"):
+        r.make_manifest("0.2.0", "0.1.13", tmp_path, "newtosh/calico")
