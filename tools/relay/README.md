@@ -26,7 +26,7 @@ Set in `wrangler.jsonc` as plain variables.
 
 A reader whose `since` id is ahead of the relay (the relay was deleted and set up again, so ids restarted) gets `409`, and should start over from `since=all`.
 
-Every answer carries `x-relay-requests-today` and `x-relay-budget`. The count is kept in memory, so it is a guard and not an exact meter. A restart of the Durable Object resets it.
+Every answer carries `x-relay-requests-today` and `x-relay-budget`. The count is kept in memory and saved to the Durable Object's storage every 50 requests, so it is a guard and not an exact meter: an eviction or restart can lose up to 49 requests. It resets each day at 00:00 UTC.
 
 ## Deploy by hand
 
