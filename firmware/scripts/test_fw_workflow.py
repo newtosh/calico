@@ -16,7 +16,7 @@ def text() -> str:
 
 def job(name: str) -> str:
     body = text().split(f"\n  {name}:\n", 1)[1]
-    return re.split(r"\n  [a-z-]+:\n", body, maxsplit=1)[0]
+    return re.split(r"\n  [a-z_-]+:\n", body, maxsplit=1)[0]
 
 
 def test_triggers_on_fw_tags_and_manual_runs_only():
@@ -65,3 +65,37 @@ def test_publish_only_runs_for_a_tag_and_after_build():
     assert "--latest=false" in publish
     assert "packaging/calico-release.asc" in publish
     assert "actions/attest@" in publish
+
+
+def test_build_image_is_pinned_by_digest():
+    assert re.search(r"container: espressif/idf:v5\.5\.5@sha256:[0-9a-f]{64}\n", text())
+
+
+def test_build_fails_if_ci_changed_the_lock():
+    build = job("build")
+    after = build[build.index("idf.py build") :]
+    assert "git diff --exit-code -- firmware/dependencies.lock" in after
+
+
+def test_publish_rechecks_the_artifact_before_signing():
+    publish = job("publish")
+    before = publish[: publish.index("detach-sign")]
+    assert "fw_release.py check-tag" in before
+    assert "ls -A dist | sort" in before
+    assert "sha256sum -c SHA256SUMS" in before
+    assert "json.load(open('dist/firmware.json'))['sha256']" in before
+
+
+def test_permissions_are_read_only_except_in_publish():
+    top = text().split("\njobs:", 1)[0]
+    assert top.endswith("\npermissions:\n  contents: read")
+    assert "write" not in top
+    assert "contents: write" not in job("build")
+    assert "contents: write" in job("publish")
+
+
+def test_publish_gate_is_a_job_level_if():
+    publish = job("publish")
+    gate = "    if: startsWith(github.ref, 'refs/tags/fw-v')\n"
+    assert gate in publish
+    assert publish.index(gate) < publish.index("    runs-on:")
