@@ -232,11 +232,16 @@ export class DeskStore {
     const cleared = raw.type === "note" && stamp <= this.noteFloor;
     if (at !== undefined && (behind || cleared))
       return { event: this.stale(raw, stamp), stale: true };
-    // A bot that renames an agent's id (a slug, then a UUID) must not show it twice. A new id
-    // retires the idle record with the same title. A replay of the old id arriving after the
-    // new record is stale and must not bring it back. Running and waiting agents stay.
-    if (AGENT_TYPES.has(raw.type) && !known) {
-      const others = this.namesakes(agentId, raw.title ?? "", raw.source ?? "");
+    // A bot that switches an agent's id (a slug, then a UUID, and sometimes back) must not show
+    // it twice. Any live event retires the idle records with the same title: the latest reporter
+    // wins, whether its id is new or already stored. A replay older than a namesake's latest
+    // report is stale and must not bring the old record back. Running and waiting agents stay.
+    if (AGENT_TYPES.has(raw.type)) {
+      const others = this.namesakes(
+        agentId,
+        raw.title || known?.title || "",
+        raw.source ?? known?.source ?? "",
+      );
       if (at !== undefined) {
         if (
           others.some((id) => stamp < (this.agents.get(id)?.updated_at ?? ""))
