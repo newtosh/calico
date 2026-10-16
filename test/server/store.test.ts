@@ -427,6 +427,104 @@ describe("DeskStore agent titles", () => {
     expect(agents(store)).toEqual([["new", "Scaffold", "running"]]);
   });
 
+  // Both ids already exist, as in a state saved before the dedupe: the new-id rule never fires.
+  const bothKnown = () => {
+    const c = clock("2026-10-07T12:00:00Z");
+    const row = (id: string, status: "idle" | "running", at: string) => ({
+      id,
+      title: "Scaffold",
+      status,
+      updated_at: at,
+      color: "",
+      shape: "",
+      icon: "",
+      attention: false,
+      message: "",
+      source: "grok-bot",
+    });
+    const snapshot: Snapshot = {
+      events: [],
+      unread: 0,
+      agents: [
+        row("scaffold", "idle", "2026-10-07T11:00:00Z"),
+        row("uuid-1", "idle", "2026-10-07T11:30:00Z"),
+      ],
+    };
+    return { store: new DeskStore({ snapshot, now: c.now }), c };
+  };
+
+  it("retires an idle namesake on a live event even when both ids are already known", () => {
+    const { store, c } = bothKnown();
+    expect(store.status().agents).toHaveLength(2);
+    c.advance(1);
+    store.applyEvent({
+      type: "agent.launched",
+      agent_id: "scaffold",
+      title: "Scaffold",
+    });
+    expect(agents(store)).toEqual([["scaffold", "Scaffold", "running"]]);
+  });
+
+  it("lets the most recent reporter win when the bot switches ids back and forth", () => {
+    const { store, c } = bothKnown();
+    for (const id of ["scaffold", "uuid-1", "scaffold", "uuid-1"]) {
+      c.advance(1);
+      store.applyEvent({
+        type: "agent.finished",
+        agent_id: id,
+        title: "Scaffold",
+      });
+      expect(store.status().agents.map((a) => a.id)).toEqual([id]);
+    }
+  });
+
+  it("matches the namesake by the stored title when the event carries none", () => {
+    const { store, c } = bothKnown();
+    c.advance(1);
+    store.applyEvent({ type: "agent.finished", agent_id: "uuid-1" });
+    expect(store.status().agents.map((a) => a.id)).toEqual(["uuid-1"]);
+  });
+
+  it("still keeps a running or waiting namesake when a known id reports", () => {
+    const c = clock();
+    const store = new DeskStore({ now: c.now });
+    store.applyEvent({
+      type: "agent.launched",
+      agent_id: "a",
+      title: "Scaffold",
+    });
+    store.applyEvent({
+      type: "agent.needs_you",
+      agent_id: "b",
+      title: "Scaffold",
+      message: "Pick one",
+    });
+    c.advance(1);
+    store.applyEvent({
+      type: "agent.launched",
+      agent_id: "a",
+      title: "Scaffold",
+    });
+    expect(
+      store
+        .status()
+        .agents.map((a) => a.id)
+        .sort(),
+    ).toEqual(["a", "b"]);
+  });
+
+  it("drops a replay of a known id that is older than a namesake's latest report", () => {
+    const { store } = bothKnown();
+    // uuid-1 reported at 11:30. A replay for scaffold at 11:20 is newer than scaffold's own 11:00
+    // but older than the namesake, so it must not light the row again.
+    expect(
+      store.applyReplayed(
+        { type: "agent.finished", agent_id: "scaffold", title: "Scaffold" },
+        "2026-10-07T11:20:00Z",
+      ),
+    ).toBe("stale");
+  });
+
   it("keeps agents with no title apart", () => {
     const store = new DeskStore({ now: clock().now });
     store.applyEvent({ type: "agent.finished", agent_id: "x" });
