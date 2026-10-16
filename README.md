@@ -74,6 +74,12 @@ In Settings, Relay, either:
 
 The Worker's source is in [`tools/relay`](tools/relay), with its tests. Privacy and what the sign-in does are on the [project site](https://calico.newto.sh/#cloudflare).
 
+## Panel firmware updates
+
+Calico checks GitHub's public releases list for a newer panel firmware when it starts and every 12 hours while it runs. It compares the newest `fw-v*` release with the firmware your panel runs and shows a banner and a "Panel firmware" line on the Panel page. A firmware that needs a newer Calico says so, and asks you to update Calico first. When an update is available, the banner and the Panel page link to the update steps. Nothing about you or your panel is sent, and Calico never changes the panel: the flash steps are in [firmware/README.md](firmware/README.md) under "Releasing".
+
+The switch is in Settings, "Check for panel firmware updates". With it off, Calico never checks on its own, and **Check now** on the Panel page still works. Calico learns the panel's firmware version when the Panel page reads it over Bluetooth or USB.
+
 ## Outbound webhook
 
 Calico can POST to one webhook you run. It sends `calico.online` when the panel polls again after Calico has not heard a panel poll for a threshold (180 seconds unless you change it). `offline_seconds` is that gap: how long Calico has not heard the panel, which includes the laptop sleeping. The first poll after Calico starts does not send, because there is no gap yet. It sends `needs_you.dismissed` when you dismiss an agent that was waiting. Dismiss-all sends one POST for each agent whose lamp actually went out, and sends nothing when nothing was waiting.

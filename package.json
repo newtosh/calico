@@ -1,6 +1,6 @@
 {
   "name": "calico",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "private": true,
   "description": "Desktop app and dev kit for the ginger panel: shows what your coding agents are doing",
   "author": {

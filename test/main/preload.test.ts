@@ -27,6 +27,10 @@ describe("preload", () => {
         "onSerialCandidates",
         "chooseSerial",
         "firewall",
+        "firmwareCheckNow",
+        "firmwareSetCheck",
+        "firmwareDismiss",
+        "firmwarePanelSeen",
         "serialAccess",
         "runFix",
         "portHolders",
@@ -47,6 +51,20 @@ describe("preload", () => {
         "dismissAddress",
       ].sort(),
     );
+  });
+
+  it("each firmware method invokes exactly its channel with its argument", () => {
+    h.invoke.mockClear();
+    void api.firmwareCheckNow();
+    void api.firmwareSetCheck(true);
+    void api.firmwareDismiss("0.3.0");
+    void api.firmwarePanelSeen("0.2.0");
+    expect(h.invoke.mock.calls).toEqual([
+      ["firmware:check-now"],
+      ["firmware:set-check", true],
+      ["firmware:dismiss", "0.3.0"],
+      ["firmware:panel-seen", "0.2.0"],
+    ]);
   });
 
   it.each([

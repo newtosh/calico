@@ -25,6 +25,16 @@ const info: CalicoInfo = {
   version: "0.1.1",
   hostname: "test-host",
   addressChange: null,
+  firmware: {
+    status: "unknown",
+    panel: null,
+    latest: null,
+    checkedAt: null,
+    lastError: "",
+    check: true,
+    dismissed: false,
+    belowMinimum: false,
+  },
 };
 
 const WEBHOOK = "http://192.168.4.30:8787/api/webhook/grok-bot";

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { userInfo } from "node:os";
 import { clipboard, ipcMain, type IpcMainInvokeEvent } from "electron";
 import type { CalicoInfo } from "../shared/ipc";
+import type { FirmwareWatch } from "./firmware-state";
 import type { NetworkVault } from "./networks";
 import type { RelaySetupService } from "./relay/service";
 import {
@@ -38,6 +39,10 @@ export interface IpcDeps {
   >;
   /** "Not now" on the address banner. */
   dismissAddress(): void;
+  firmware: Pick<
+    FirmwareWatch,
+    "checkNow" | "setCheck" | "dismiss" | "panelSeen"
+  >;
   /** A native dialog the window cannot draw or click: true only when the person sends them. */
   askPush(ssids: string[]): Promise<boolean>;
   /** The app window's webContents, null while it does not exist. */
@@ -112,6 +117,18 @@ export function registerIpc(deps: IpcDeps): void {
     push(e, () => deps.networks.endPush()),
   );
   ipcMain.handle("calico:dismiss-address", () => deps.dismissAddress());
+  ipcMain.handle("firmware:check-now", async () => {
+    await deps.firmware.checkNow();
+  });
+  ipcMain.handle("firmware:set-check", (_e, on: unknown) => {
+    if (on === true || on === false) deps.firmware.setCheck(on);
+  });
+  ipcMain.handle("firmware:dismiss", (_e, version: unknown) => {
+    if (typeof version === "string") deps.firmware.dismiss(version);
+  });
+  ipcMain.handle("firmware:panel-seen", (_e, fw: unknown) => {
+    if (typeof fw === "string" && fw.length <= 32) deps.firmware.panelSeen(fw);
+  });
   ipcMain.handle("calico:set-autostart", (_e, on: unknown) =>
     autostartAvailable() ? setAutostart(on === true) : false,
   );

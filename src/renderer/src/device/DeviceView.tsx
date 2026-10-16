@@ -9,6 +9,7 @@ import { ProvisionFlow } from "./ProvisionFlow";
 import { PushNetworks } from "./PushNetworks";
 import { RebootWait } from "./RebootWait";
 import { SerialAssist } from "./SerialAssist";
+import { PanelFirmware } from "./PanelFirmware";
 import { connectUsb } from "./usb";
 import { ErrorNote } from "../shell/ErrorNote";
 
@@ -89,6 +90,7 @@ export function DeviceView({ info, link, setLink, onLog }: Props) {
   // error, and the assists must stay mounted through that.
   return (
     <div className="pb-6">
+      <PanelFirmware info={info} />
       {link ? (
         <>
           <div className="flex items-center gap-3 px-4 pt-4">

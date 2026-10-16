@@ -41,6 +41,16 @@ const base: CalicoInfo = {
   version: "0.0.0-test",
   hostname: "test-host",
   addressChange: { url: OFFER },
+  firmware: {
+    status: "current",
+    panel: "0.2.0",
+    latest: null,
+    checkedAt: null,
+    lastError: "",
+    check: true,
+    dismissed: false,
+    belowMinimum: false,
+  },
 } as unknown as CalicoInfo;
 
 let dismissAddress: ReturnType<typeof vi.fn>;
@@ -109,5 +119,26 @@ describe("App address banner wiring", () => {
     });
     fireEvent.click(screen.getByText("Update on the Panel page"));
     expect(field.value).toBe(OFFER);
+  });
+});
+
+describe("App firmware banner wiring", () => {
+  it("shows the firmware banner on the dashboard page when an update is available", async () => {
+    current = {
+      ...base,
+      firmware: {
+        ...base.firmware,
+        status: "available",
+        latest: {
+          version: "0.3.0",
+          minApp: "0.1.13",
+          notesUrl: "https://example.test/notes",
+        },
+      },
+    };
+    render(<App />);
+    expect(
+      await screen.findByText(/Panel firmware 0\.3\.0 is available/),
+    ).toBeTruthy();
   });
 });

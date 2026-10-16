@@ -8,6 +8,7 @@ import { useInfo } from "./lib/use-info";
 import { webhookUrl } from "./lib/webhook";
 import { SettingsView } from "./settings/SettingsView";
 import { AddressBanner } from "./shell/AddressBanner";
+import { FirmwareBanner } from "./shell/FirmwareBanner";
 import { DriftBanner } from "./shell/DriftBanner";
 import { ServerErrorPanel } from "./shell/ServerErrorPanel";
 import { PanelBattery } from "./shell/PanelBattery";
@@ -43,6 +44,7 @@ export function App() {
               onOpenDevice={() => setView("device")}
             />
           ) : null}
+          {info ? <FirmwareBanner info={info} /> : null}
           {info?.serverError ? (
             <ServerErrorPanel error={info.serverError} />
           ) : null}

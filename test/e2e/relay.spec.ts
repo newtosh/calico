@@ -49,6 +49,7 @@ test("collects what agents sent while calico was away, with the time they sent i
     env: {
       ...process.env,
       CALICO_USER_DATA: mkdtempSync(join(tmpdir(), "calico-e2e-relay-")),
+      CALICO_FIRMWARE_CHECK: "0",
     },
   });
   try {

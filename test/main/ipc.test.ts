@@ -39,6 +39,15 @@ function deps(window: { mainFrame: unknown } | null = contents) {
     botNote: () => null,
     networks,
     dismissAddress: vi.fn(),
+    firmware: {
+      checkNow: vi.fn(async () => ({
+        ok: true as const,
+        release: {} as never,
+      })),
+      setCheck: vi.fn(),
+      dismiss: vi.fn(),
+      panelSeen: vi.fn(),
+    },
     askPush: vi.fn<IpcDeps["askPush"]>(async () => true),
     appContents: () => window,
   } satisfies IpcDeps;
@@ -147,5 +156,26 @@ describe("address banner", () => {
     const d = deps();
     call("calico:dismiss-address", appFrame);
     expect(d.dismissAddress).toHaveBeenCalledOnce();
+  });
+});
+
+describe("firmware channels", () => {
+  it("passes strict values to the watcher and ignores anything else", async () => {
+    const d = deps();
+    expect(await call("firmware:check-now", appFrame)).toBeUndefined();
+    expect(d.firmware.checkNow).toHaveBeenCalledOnce();
+    call("firmware:set-check", appFrame, true);
+    call("firmware:set-check", appFrame, "true");
+    call("firmware:set-check", appFrame, 1);
+    expect(d.firmware.setCheck).toHaveBeenCalledTimes(1);
+    expect(d.firmware.setCheck).toHaveBeenCalledWith(true);
+    call("firmware:dismiss", appFrame, "0.3.0");
+    call("firmware:dismiss", appFrame, { v: "0.3.0" });
+    expect(d.firmware.dismiss).toHaveBeenCalledTimes(1);
+    call("firmware:panel-seen", appFrame, "0.2.0");
+    call("firmware:panel-seen", appFrame, 7);
+    call("firmware:panel-seen", appFrame, "x".repeat(100));
+    expect(d.firmware.panelSeen).toHaveBeenCalledTimes(1);
+    expect(d.firmware.panelSeen).toHaveBeenCalledWith("0.2.0");
   });
 });

@@ -29,7 +29,10 @@ const base = {
   addressChange: null,
 } as unknown as CalicoInfo;
 
+let panelSeen: ReturnType<typeof vi.fn>;
 beforeEach(() => {
+  panelSeen = vi.fn(async () => undefined);
+  Object.assign(window, { calico: { firmwarePanelSeen: panelSeen } });
   keepStored.mockReset();
   keepStored.mockResolvedValue("");
 });
@@ -42,6 +45,60 @@ it("labels the readout of the address the panel polls", async () => {
   };
   render(<LinkActions info={base} link={sending} onReboot={async () => {}} />);
   expect(await screen.findByText("Calico's address")).toBeTruthy();
+});
+
+it("tells main the firmware version once after a good status read", async () => {
+  const sending: DeviceLink = {
+    ...link,
+    send: async () => ({ ok: true, info: { ...info, fw: "0.2.0" } }),
+  };
+  render(<LinkActions info={base} link={sending} onReboot={async () => {}} />);
+  await screen.findByText("Calico's address");
+  expect(panelSeen).toHaveBeenCalledTimes(1);
+  expect(panelSeen).toHaveBeenCalledWith("0.2.0");
+});
+
+it("does not tell main a firmware version after a failed status read", async () => {
+  const failing: DeviceLink = {
+    ...link,
+    send: async () => ({ ok: false, error: "nope" }),
+  };
+  render(<LinkActions info={base} link={failing} onReboot={async () => {}} />);
+  await screen.findByText("nope");
+  expect(panelSeen).not.toHaveBeenCalled();
+});
+
+it.each([
+  ["an empty", ""],
+  ["a missing", undefined],
+])(
+  "does not tell main a firmware version when the status has %s one",
+  async (_n, fw) => {
+    const sending: DeviceLink = {
+      ...link,
+      send: async () => ({
+        ok: true,
+        info: { ...info, fw } as unknown as typeof info,
+      }),
+    };
+    render(
+      <LinkActions info={base} link={sending} onReboot={async () => {}} />,
+    );
+    await screen.findByText("Calico's address");
+    expect(panelSeen).not.toHaveBeenCalled();
+  },
+);
+
+it("a rejected firmwarePanelSeen is not an unhandled rejection", async () => {
+  panelSeen.mockImplementation(() => Promise.reject(new Error("x")));
+  const sending: DeviceLink = {
+    ...link,
+    send: async () => ({ ok: true, info: { ...info, fw: "0.2.0" } }),
+  };
+  render(<LinkActions info={base} link={sending} onReboot={async () => {}} />);
+  await screen.findByText("Calico's address");
+  await new Promise((r) => setTimeout(r, 0));
+  expect(panelSeen).toHaveBeenCalledTimes(1);
 });
 
 function field(info: CalicoInfo) {

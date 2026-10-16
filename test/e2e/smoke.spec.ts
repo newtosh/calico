@@ -7,7 +7,11 @@ test("launches, serves status, and renders the dashboard", async () => {
   const userData = mkdtempSync(join(tmpdir(), "calico-e2e-"));
   const app = await electron.launch({
     args: ["out/main/index.js"],
-    env: { ...process.env, CALICO_USER_DATA: userData },
+    env: {
+      ...process.env,
+      CALICO_USER_DATA: userData,
+      CALICO_FIRMWARE_CHECK: "0",
+    },
   });
   try {
     const page = await app.firstWindow();

@@ -10,6 +10,7 @@ test("the running timeout applies live, in both directions", async () => {
     env: {
       ...process.env,
       CALICO_USER_DATA: mkdtempSync(join(tmpdir(), "calico-e2e-ttl-")),
+      CALICO_FIRMWARE_CHECK: "0",
     },
   });
   try {

@@ -58,6 +58,7 @@ export interface CalicoInfo {
    * is gone: Calico's address to give the panel. Null otherwise.
    */
   addressChange: { url: string } | null;
+  firmware: FirmwareInfo;
 }
 
 export type FirewallKind = "ufw" | "firewalld" | "nftables" | "none";
@@ -167,10 +168,46 @@ export interface CalicoApi {
   networksEndPush(): Promise<void>;
   /** "Not now" on the address banner. */
   dismissAddress(): Promise<void>;
+  /** Look for a newer panel firmware now, whatever the switch says. The result arrives in info(). */
+  firmwareCheckNow(): Promise<void>;
+  /** The Settings switch for scheduled checks. */
+  firmwareSetCheck(on: boolean): Promise<void>;
+  /** "Not now" on the firmware banner, for that version only. */
+  firmwareDismiss(version: string): Promise<void>;
+  /** The firmware version the Panel page just read from the panel. */
+  firmwarePanelSeen(fw: string): Promise<void>;
 }
 
 declare global {
   interface Window {
     calico: CalicoApi;
   }
+}
+
+/** What Calico keeps of a firmware release: the version, the oldest Calico it needs, its notes page. */
+export interface FirmwareRelease {
+  version: string;
+  minApp: string;
+  notesUrl: string;
+}
+export type FirmwareStatus =
+  "unknown" | "current" | "available" | "needs_calico";
+
+/** What the window needs to draw the firmware notice. */
+export interface FirmwareInfo {
+  status: FirmwareStatus;
+  /** The panel's firmware as last seen: a version, a git hash, or null when never seen. */
+  panel: string | null;
+  /** The newest release, or null before the first good check. */
+  latest: FirmwareRelease | null;
+  /** Epoch ms of the last good check. */
+  checkedAt: number | null;
+  /** Why the last check failed, "" after a good one. */
+  lastError: string;
+  /** Scheduled checks are on. */
+  check: boolean;
+  /** "Not now" was pressed for the latest version. */
+  dismissed: boolean;
+  /** The panel is below the first versioned firmware. */
+  belowMinimum: boolean;
 }
