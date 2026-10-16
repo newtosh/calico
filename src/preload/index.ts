@@ -41,6 +41,10 @@ const api: CalicoApi = {
   networksRelease: (ssid) => ipcRenderer.invoke("networks:release", ssid),
   networksEndPush: () => ipcRenderer.invoke("networks:end-push"),
   dismissAddress: () => ipcRenderer.invoke("calico:dismiss-address"),
+  firmwareCheckNow: () => ipcRenderer.invoke("firmware:check-now"),
+  firmwareSetCheck: (on) => ipcRenderer.invoke("firmware:set-check", on),
+  firmwareDismiss: (version) => ipcRenderer.invoke("firmware:dismiss", version),
+  firmwarePanelSeen: (fw) => ipcRenderer.invoke("firmware:panel-seen", fw),
 };
 
 contextBridge.exposeInMainWorld("calico", api);

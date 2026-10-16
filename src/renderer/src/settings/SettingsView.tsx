@@ -6,6 +6,7 @@ import { loadTab, saveTab, type SettingsTab } from "../lib/settings-tab";
 import { AboutSection } from "./AboutSection";
 import { AgentUpdatesSection } from "./AgentUpdatesSection";
 import { AutostartSection } from "./AutostartSection";
+import { FirmwareSection } from "./FirmwareSection";
 import { ConfigSection } from "./ConfigSection";
 import { CursorStatus } from "./CursorStatus";
 import { NetworksSection } from "./NetworksSection";
@@ -85,6 +86,7 @@ export function SettingsView({
       </Panel>
       <Panel id="app" current={tab}>
         <AutostartSection autostart={info.autostart} />
+        <FirmwareSection info={info} />
         <AboutSection version={info.version} />
       </Panel>
     </div>

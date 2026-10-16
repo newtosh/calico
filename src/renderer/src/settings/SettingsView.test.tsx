@@ -41,6 +41,16 @@ const info: CalicoInfo = {
   version: "0.1.9",
   hostname: "test-host",
   addressChange: null,
+  firmware: {
+    status: "unknown",
+    panel: null,
+    latest: null,
+    checkedAt: null,
+    lastError: "",
+    check: true,
+    dismissed: false,
+    belowMinimum: false,
+  },
 };
 
 // The panel the person sees: the others are mounted but hidden. happy-dom does

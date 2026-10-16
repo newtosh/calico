@@ -37,6 +37,12 @@ import { OutboundNotifier } from "../server/notify";
 import { DeskStore } from "../server/store";
 import type { CalicoInfo, ServerErrorInfo } from "../shared/ipc";
 import { execFileP, portHolders } from "./assist";
+import {
+  FirmwareWatch,
+  loadFirmwareFile,
+  saveFirmwareFile,
+} from "./firmware-state";
+import { fetchLatestFirmware } from "./firmware-releases";
 import { initAutostartOnce } from "./autostart";
 import { wireDevicePickers } from "./devices";
 import { autostartState, registerIpc } from "./ipc";
@@ -104,6 +110,7 @@ async function start(): Promise<void> {
   const configPath = join(userData, "config.json");
   const statePath = join(userData, "state.json");
   const seenPath = join(userData, "panel-seen.json");
+  const firmwarePath = join(userData, "firmware.json");
   const addressWatch = new AddressWatch(loadSeen(seenPath), Date.now);
 
   let loaded: { config: CalicoConfig; existed: boolean };
@@ -229,6 +236,7 @@ async function start(): Promise<void> {
       hostname: hostname(),
       addressChange:
         offer && bound ? { url: `http://${offer}:${bound}` } : null,
+      firmware: firmware.view(null),
     };
   };
   // After sleep the panel has had no chance to poll: count its silence from the wake.
@@ -250,8 +258,19 @@ async function start(): Promise<void> {
 
   const networks = new NetworkVault(join(userData, "networks.json"), secretBox);
 
+  const firmware = new FirmwareWatch({
+    file: loadFirmwareFile(firmwarePath),
+    save: (f) => saveFirmwareFile(firmwarePath, f),
+    check: () => fetchLatestFirmware(fetch, version),
+    now: Date.now,
+    calicoVersion: version,
+  });
+  // Tests and e2e set CALICO_FIRMWARE_CHECK=0 so they never reach the network.
+  if (process.env.CALICO_FIRMWARE_CHECK !== "0") firmware.start();
+
   registerIpc({
     networks,
+    firmware,
     dismissAddress: () => addressWatch.dismiss(),
     askPush: async (ssids) => {
       const box = {
@@ -313,6 +332,7 @@ async function start(): Promise<void> {
     }
     stopCursorPoll();
     stopRelayPoll();
+    firmware.stop();
     server.close();
   });
 

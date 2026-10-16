@@ -55,6 +55,16 @@ const info: CalicoInfo = {
   version: "0.0.0-test",
   hostname: "test-host",
   addressChange: null,
+  firmware: {
+    status: "unknown",
+    panel: null,
+    latest: null,
+    checkedAt: null,
+    lastError: "",
+    check: true,
+    dismissed: false,
+    belowMinimum: false,
+  },
 };
 
 afterEach(() => {
@@ -89,6 +99,7 @@ async function provision() {
 describe("DeviceView provisioning", () => {
   it("shows Panel online after the reboot drops the link, without a lost-connection error", async () => {
     window.calico = {
+      firmwarePanelSeen: async () => undefined,
       adoptPort: async () => undefined,
       info: async () => ({ ...info, lastPanelPoll: Date.now() + 60_000 }),
     } as unknown as CalicoApi;
@@ -104,6 +115,7 @@ describe("DeviceView provisioning", () => {
   it("gives up after one 30 s wait, even though the link dropped mid-wait", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     window.calico = {
+      firmwarePanelSeen: async () => undefined,
       adoptPort: async () => undefined,
       info: async () => info,
     } as unknown as CalicoApi;
@@ -117,6 +129,7 @@ describe("DeviceView provisioning", () => {
 describe("DeviceView push to panel", () => {
   it("keeps the outcome and restarts the panel after a full push", async () => {
     window.calico = {
+      firmwarePanelSeen: async () => undefined,
       info: async () => info,
       networksList: async () => ({
         networks: [
@@ -140,7 +153,10 @@ describe("DeviceView push to panel", () => {
 
 describe("DeviceView Bluetooth pairing", () => {
   it("guides while the OS pairs, blocks a second Connect, then shows the error", async () => {
-    window.calico = { info: async () => info } as unknown as CalicoApi;
+    window.calico = {
+      info: async () => info,
+      firmwarePanelSeen: async () => undefined,
+    } as unknown as CalicoApi;
     let fail: (e: Error) => void = () => undefined;
     const saved = connectImpl;
     connectImpl = (_onClosed, onPairing) => {

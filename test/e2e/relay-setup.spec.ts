@@ -81,6 +81,7 @@ async function launch(base: string): Promise<ElectronApplication> {
     env: {
       ...process.env,
       CALICO_USER_DATA: mkdtempSync(join(tmpdir(), "calico-e2e-setup-")),
+      CALICO_FIRMWARE_CHECK: "0",
       CALICO_CF_AUTH_URL: `${base}/oauth2/auth`,
       CALICO_CF_TOKEN_URL: `${base}/oauth2/token`,
       CALICO_CF_REVOKE_URL: `${base}/oauth2/revoke`,

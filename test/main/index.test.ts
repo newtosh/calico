@@ -166,11 +166,14 @@ beforeEach(() => {
   vi.spyOn(Date, "now").mockImplementation(() => h.now);
   h.userData = mkdtempSync(join(tmpdir(), "calico-main-"));
   process.env.CALICO_USER_DATA = h.userData;
+  process.env.CALICO_FIRMWARE_CHECK = "0";
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   delete process.env.CALICO_USER_DATA;
+  delete process.env.CALICO_FIRMWARE_CHECK;
+  vi.useRealTimers();
   rmSync(h.userData, { recursive: true, force: true });
 });
 
@@ -296,5 +299,65 @@ describe("push channels", () => {
         ok: true,
       });
     }
+  });
+});
+
+describe("firmware watcher", () => {
+  const freshProfile = {
+    status: "unknown",
+    panel: null,
+    latest: null,
+    checkedAt: null,
+    lastError: "",
+    check: true,
+    dismissed: false,
+    belowMinimum: false,
+  };
+
+  it("CALICO_FIRMWARE_CHECK=0 never reaches the network", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    vi.useFakeTimers({ toFake: ["setTimeout", "setInterval"] });
+    await boot();
+    expect(info().firmware).toEqual(freshProfile);
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("reports what a stored firmware.json says", async () => {
+    const latest = {
+      version: "0.3.0",
+      minApp: "0.1.13",
+      notesUrl: "https://github.com/newtosh/calico/releases/tag/fw-v0.3.0",
+    };
+    writeFileSync(
+      join(h.userData, "firmware.json"),
+      JSON.stringify({
+        check: false,
+        dismissed: "",
+        latest,
+        checkedAt: 1234,
+        panel: { fw: "0.2.0", at: 5 },
+      }),
+    );
+    await boot();
+    expect(info().firmware).toMatchObject({
+      check: false,
+      latest,
+      checkedAt: 1234,
+      panel: "0.2.0",
+      status: "available",
+      dismissed: false,
+    });
+  });
+
+  it("without it, the first check follows startup", async () => {
+    delete process.env.CALICO_FIRMWARE_CHECK;
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("offline"));
+    vi.useFakeTimers({ toFake: ["setTimeout", "setInterval"] });
+    await boot();
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(fetchSpy).toHaveBeenCalled();
   });
 });

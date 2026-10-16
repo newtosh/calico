@@ -9,5 +9,6 @@ Any reviewer, human or bot, flags a change that breaks these.
 5. **Privileged commands.** Only through `pkexec`, only after a user click, and the command is built in main from validated integers and fixed strings. Never from renderer-supplied text.
 6. **Device protocol.** BLE UUIDs and limits in `src/renderer/src/device/commands.ts` and `ble.ts` must match `test/parity/ble_desk.h`. USB messages must match `docs/usb-console-protocol.md`.
 7. **Design.** Renderer changes follow `DESIGN.md`: panel palette tokens only, no inline `style`, no card grids or gradients.
+8. **Outbound firmware check.** `src/main/firmware-releases.ts` is the only code that contacts GitHub for firmware. GET only, no token, nothing about the person or the panel beyond `User-Agent: Calico/<version>`, `https` and GitHub hosts only, a 10 s timeout and size limits, every field of the release list and of `firmware.json` validated, and `notes_url` equal to the exact release page. It downloads and runs nothing, and sends nothing to the panel. Scheduled checks stop when `firmware.json` has `check: false`; only **Check now** may bypass that. The state lives in `firmware.json`, written by main only.
 
 Do not flag: formatting (prettier owns it), import order, or naming that matches the Python version it was ported from.

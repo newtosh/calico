@@ -20,8 +20,13 @@ export function LinkActions({
 
   const refresh = async () => {
     const reply = await link.send({ op: "status" });
-    if (reply.ok && reply.info) setPanelInfo(reply.info);
-    else if (!reply.ok) setNotice(reply.error);
+    if (reply.ok && reply.info) {
+      setPanelInfo(reply.info);
+      if (reply.info.fw)
+        void window.calico
+          .firmwarePanelSeen(reply.info.fw)
+          .catch(() => undefined);
+    } else if (!reply.ok) setNotice(reply.error);
   };
 
   useEffect(() => {
