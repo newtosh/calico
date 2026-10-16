@@ -980,6 +980,20 @@ int desk_unseen_updates(const desk_view_t *prev, const desk_view_t *view) {
     return n;
 }
 
+int desk_agent_waiting(const desk_view_t *view, int index) {
+    if (!view || index < 0 || index >= view->agent_count) {
+        return 0;
+    }
+    return agent_needs(&view->agents[index]);
+}
+
+int desk_hot_cleared(int cleared, int fresh, int touched) {
+    if (fresh) {
+        return 0;
+    }
+    return touched ? 1 : cleared;
+}
+
 int desk_aside_scroll(const desk_view_t *prev, const desk_view_t *view) {
     const char *aside = "";
     const char *was = "";

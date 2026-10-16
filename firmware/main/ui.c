@@ -290,6 +290,8 @@ static char s_phase_text[24];
 static lv_obj_t *s_new_btn;
 static lv_obj_t *s_new_label;
 static int s_unseen;
+/* A touch cleared the highlighted rows. The next real update lights them again. */
+static int s_hot_cleared;
 
 static void copy_text(char *dest, size_t dest_len, const char *src) {
     size_t i;
@@ -3077,10 +3079,10 @@ void ui_init(ui_save_fn on_save, void (*on_dismiss)(const char *agent_id), ui_sc
     s_ssid = make_field(wifi_card, "SSID", "Network name", 0, &s_ssid_box);
     lv_obj_set_hidden(s_ssid_box, true);
 
-    section_label(s_body, "Companion");
+    section_label(s_body, "Calico");
     companion = settings_card(s_body);
-    s_url = make_field(companion, "URL for this network", "http://192.168.4.30:8787", 0, NULL);
-    s_token = make_field(companion, "Token for this network", "optional", 0, NULL);
+    s_url = make_field(companion, "Calico's address on this network", "http://192.168.4.30:8787", 0, NULL);
+    s_token = make_field(companion, "Webhook token on this network", "optional", 0, NULL);
 
     save = action_button(s_body, "Save", on_save_clicked);
     lv_obj_set_width(save, lv_pct(100));
@@ -3328,6 +3330,30 @@ static void on_agent_scroll(lv_event_t *event) {
     show_unseen();
 }
 
+static void rows_unhighlight(void) {
+    int i;
+    /* Only the rows on screen, and never one that is waiting on the person: a question is not a
+     * stale update, and restyling hidden rows would re-lay-out the list on the first scroll frame. */
+    for (i = 0; i < s_applied_view.agent_count && i < DESK_AGENT_MAX; i++) {
+        if (!s_agent_rows[i] || desk_agent_waiting(&s_applied_view, i)) {
+            continue;
+        }
+        lv_obj_set_style_bg_opa(s_agent_rows[i], LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(s_agent_rows[i], 0, 0);
+        lv_obj_set_style_text_color(s_agent_aside[i], lv_color_hex(INK_DIM), 0);
+    }
+}
+
+/* Any touch on the agent list, a tap or the start of a scroll: the person has looked, so the
+ * highlight has done its job. Local only. Nothing is sent, so no question is dismissed. */
+static void on_agent_touch(lv_event_t *event) {
+    if (lv_event_get_code(event) != LV_EVENT_PRESSED || s_hot_cleared) {
+        return;
+    }
+    s_hot_cleared = desk_hot_cleared(s_hot_cleared, 0, 1);
+    rows_unhighlight();
+}
+
 static void on_new_jump(lv_event_t *event) {
     if (lv_event_get_code(event) != LV_EVENT_CLICKED || !s_agent_box) {
         return;
@@ -3359,6 +3385,11 @@ static void build_new_pill(lv_obj_t *screen) {
     lv_obj_align(s_new_btn, LV_ALIGN_TOP_MID, 0, AGENT_Y);
     lv_obj_set_hidden(s_new_btn, true);
     lv_obj_add_event_cb(s_agent_box, on_agent_scroll, LV_EVENT_SCROLL, NULL);
+    /* The descriptor and the grown event array are small mallocs: PSRAM, or they take internal
+     * DMA that NimBLE and the STA need. */
+    psram_objects_begin();
+    lv_obj_add_event_cb(s_agent_box, on_agent_touch, LV_EVENT_PRESSED, NULL);
+    psram_objects_end();
 }
 
 static void note_unseen(const desk_view_t *view) {
@@ -3389,6 +3420,7 @@ void ui_apply(const desk_view_t *view, int failures) {
         }
     }
     if (fresh) {
+        s_hot_cleared = desk_hot_cleared(s_hot_cleared, 1, 0);
         show_unread(desk_unread_count(view));
         {
             int scroll_top = 0;
