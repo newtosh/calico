@@ -37,6 +37,10 @@ void ble_store_config_init(void);
 #define DESK_FW_SHA "unknown"
 #endif
 
+#ifndef DESK_FW_VERSION
+#define DESK_FW_VERSION "unknown"
+#endif
+
 /* The longest write is wifi with this network's own url and token (354 bytes).
  * That is longer than one ATT packet, so the central sends it as a long write:
  * at MTU 256 two of the four prepare entries (CONFIG_BT_NIMBLE_ATT_MAX_PREP_ENTRIES). */
@@ -337,7 +341,7 @@ static int read_status(uint16_t conn_handle, struct os_mbuf *om) {
     int n;
     /* Until the link is paired and authenticated, the status says only that this panel pairs. */
     if (ble_gap_conn_find(conn_handle, &desc) != 0 || !desc.sec_state.authenticated) {
-        n = ble_desk_format_status_locked(body, sizeof(body), DESK_FW_SHA);
+        n = ble_desk_format_status_locked(body, sizeof(body), DESK_FW_VERSION);
         return append_text(om, body, n);
     }
     ssid[0] = '\0';
@@ -350,7 +354,7 @@ static int read_status(uint16_t conn_handle, struct os_mbuf *om) {
         token_set = s_store->token[0] != '\0';
     }
     ble_link_leave();
-    n = ble_desk_format_status(body, sizeof(body), DESK_FW_SHA, ssid, url, token_set);
+    n = ble_desk_format_status(body, sizeof(body), DESK_FW_VERSION, ssid, url, token_set);
     return append_text(om, body, n);
 }
 
