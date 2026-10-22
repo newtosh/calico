@@ -1,6 +1,6 @@
 # Connect bots: guided setup design
 
-Date: 2026-10-16. Status: draft for review.
+Date: 2026-10-16. Status: approved; amended 2026-10-22 to cover the relay send token.
 
 ## Intent
 
@@ -12,7 +12,8 @@ The owner's words: "A bot, either the default or the one the user is interacting
 
 - One guided dialog, "Connect bots", reachable from Settings > Agent updates and from the first-run state when no bot has announced.
 - The user pastes one prompt into one bot (the coordinator). That bot pulls the list of the other bots it can reach and announces each one to Calico. The owner confirmed bots can talk to each other and pull a list.
-- The prompt contains no token. The user copies the token separately, only when the bot asks for it. The bot saves it once to the shared secret file for all bots on the box.
+- The prompt contains no secret. It may name the relay address, which is not secret. The bot asks for each credential through its own secure input and saves it to its native secret store. The user copies each credential from Calico only when that input appears. This replaces "Copy for Grok Bot", which pasted the relay address and send token together into the bot's chat.
+- Two credentials are covered: the webhook token (the bot posts to Calico on loopback) and, when Calico made the relay, the relay send token (the bot posts to the relay while this computer is away). The relay credential is offered only when a relay made by Calico is connected.
 - Calico shows bots appearing live as they announce, each with its title and time. The user presses Finish when the expected ones are there. There is no expected count.
 - Re-running the same prompt adds new bots. Bots already known show "already connected" and are not duplicated.
 - A checklist in Settings > Agent updates shows: token saved, server listening, relay reachable, and each known bot's last event time. Bots seen only through earlier events appear there too.
@@ -21,9 +22,10 @@ The owner's words: "A bot, either the default or the one the user is interacting
 ## Non-goals and anti-goals
 
 - No manual naming of bots in Calico. Any design that needs the user to type bot names has failed.
-- No per-bot tokens. One shared token stays.
+- No per-bot tokens. One shared webhook token and one relay send token stay.
+- "Copy for Grok Bot" goes away. No screen copies a token together with an address.
 - No change to how bots post today. Existing bots keep working with no action.
-- The token never appears in the prompt, on screen, or in the chat. It is not logged.
+- Neither token appears in the prompt, on screen, or in the chat. Neither is logged. Both are copied through the main process, so the window never holds the relay send token.
 - The prompt never points bots at a LAN address. Bots run on this desktop, so they post to loopback (the desktop changes networks).
 
 ## Constraints
@@ -38,10 +40,10 @@ The owner's words: "A bot, either the default or the one the user is interacting
 ## How it works
 
 1. The user opens Connect bots. Step 1 shows the prompt and a Copy prompt button. The prompt names the loopback address, says to ask the user for the token only when needed, to save it once to the shared secret file (asking before replacing an existing one), to pull the list of bots it can reach, and to announce each one as connected with a stable id and a title.
-2. Step 2 offers Copy token for when the bot asks. The token is not displayed. The clipboard is cleared after about 30 seconds if it still holds the token.
+2. Step 2 offers Copy webhook token and, when a relay made by Calico is connected, Copy relay send token, each for when the bot's secure input asks for that credential. Nothing is displayed. The clipboard is cleared after about 30 seconds if it still holds the credential (the old relay copy used 60).
 3. Step 3 listens. Calico lists every bot that announces while the dialog is open: title, id, time. A bot already known shows "already connected". The list is `aria-live`. No expected count.
 4. Step 4 (Finish) summarizes what connected. If nothing arrived after 60 seconds, Calico shows the last refusal reason and a plain hint for it.
-5. Settings > Agent updates gets the checklist described above, and a Rotate token button that issues a new token and invalidates the old one. After rotating the user re-copies the token to the bot and re-runs step 2.
+5. Settings > Agent updates gets the checklist described above, and a Rotate token button that issues a new token and invalidates the old one. After rotating the user re-copies the token to the bot and re-runs step 2. Setting up the relay again issues a new send token the same way, so the bots hold the old relay send token until the user re-runs step 2 for it.
 
 ## Decisions made with the owner
 
@@ -55,7 +57,8 @@ The owner's words: "A bot, either the default or the one the user is interacting
 - The clipboard auto-clear is about 30 seconds.
 - The 60-second stuck timer and showing the last refusal reason.
 - The prompt asks the bot to confirm before replacing an existing secret file.
-- Loopback is the only address in the prompt.
+- Loopback is the only Calico address in the prompt. The relay address is allowed because it is public and carries no secret.
+- The entry points on the relay section and the relay setup result that said "Copy for Grok Bot" now open Connect bots.
 - Rotate token: Calico stores the new token and shows "bots still hold the old token" until the next accepted announce, which clears it. Bots read the token from the shared file, so the user re-runs steps 1 to 2 once. A run of 401s after a rotate is reported as that state, not as a failed setup.
 - No new event type and no `/api/status` change. A "connected" announce reuses `agent.launched` then `agent.finished`, so a bot's card appears idle on the desk, which is what the owner described ("a card actually showing up").
 - Known bots are derived from the agents the store already holds, so "already connected" survives restarts. No new persistence.
@@ -73,4 +76,4 @@ The owner's words: "A bot, either the default or the one the user is interacting
 
 ## Success
 
-A user with several Grok Bot bots pastes one prompt and one token, watches each bot appear in the dialog, and presses Finish with no typing of bot names. A wrong token or missing header shows its reason in Calico rather than in a bot's chat.
+A user with several Grok Bot bots pastes one prompt, then each credential into the bot's secure input, watches each bot appear in the dialog, and presses Finish with no typing of bot names. A wrong token or missing header shows its reason in Calico rather than in a bot's chat.
