@@ -43,7 +43,7 @@ The owner's words: "A bot, either the default or the one the user is interacting
 2. Step 2 offers Copy webhook token and, when a relay made by Calico is connected, Copy relay send token, each for when the bot's secure input asks for that credential. Nothing is displayed. The clipboard is cleared after about 30 seconds if it still holds the credential (the old relay copy used 60).
 3. Step 3 listens. Calico lists every bot that announces while the dialog is open: title, id, time. A bot already known shows "already connected". The list is `aria-live`. No expected count.
 4. Step 4 (Finish) summarizes what connected. If nothing arrived after 60 seconds, Calico shows the last refusal reason and a plain hint for it.
-5. Settings > Agent updates gets the checklist described above, and a Rotate token button that issues a new token and invalidates the old one. After rotating the user re-copies the token to the bot and re-runs step 2. Setting up the relay again issues a new send token the same way, so the bots hold the old relay send token until the user re-runs step 2 for it.
+5. Settings > Agent updates gets the checklist described above, and a Rotate token button that issues a new token and invalidates the old one. After rotating the user re-copies the token to the bot and re-runs step 2. Setting up the relay again issues a new send token the same way, so the bots hold the old relay send token until the user re-runs step 2 for it. Calico keeps no record of the swap, so step 2 says this in plain text beside the relay button.
 
 ## Decisions made with the owner
 
@@ -58,7 +58,7 @@ The owner's words: "A bot, either the default or the one the user is interacting
 - The 60-second stuck timer and showing the last refusal reason.
 - The prompt asks the bot to confirm before replacing an existing secret file.
 - Loopback is the only Calico address in the prompt. The relay address is allowed because it is public and carries no secret.
-- The entry points on the relay section and the relay setup result that said "Copy for Grok Bot" now open Connect bots.
+- The entry points on the relay section and the relay setup result that said "Copy for Grok Bot" now open Connect bots (the relay section shows it for any connected relay, including one joined by hand, where the relay credential is simply not offered). The relay lines in the prompt, including the bearer header format and the User-Agent requirement the old note carried, appear only when a send token exists.
 - Rotate token: Calico stores the new token and shows "bots still hold the old token" until the next accepted announce, which clears it. Bots read the token from the shared file, so the user re-runs steps 1 to 2 once. A run of 401s after a rotate is reported as that state, not as a failed setup.
 - No new event type and no `/api/status` change. A "connected" announce reuses `agent.launched` then `agent.finished`, so a bot's card appears idle on the desk, which is what the owner described ("a card actually showing up").
 - Known bots are derived from the agents the store already holds, so "already connected" survives restarts. No new persistence.
