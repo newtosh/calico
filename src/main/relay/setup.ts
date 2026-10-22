@@ -272,7 +272,7 @@ async function revokeTwice(deps: SetupDeps, accessToken: string) {
 }
 
 const workerSettingsUrl = (accountId: string) =>
-  `https://dash.cloudflare.com/${accountId}/workers/services/view/${WORKER_NAME}/production/settings`;
+  `https://dash.cloudflare.com/${accountId}/workers/services/view/${WORKER_NAME}/production`;
 
 function leftBehind(
   step: SetupStep,
