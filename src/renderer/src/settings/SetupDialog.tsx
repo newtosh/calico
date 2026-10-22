@@ -227,6 +227,18 @@ export function SetupDialog({
               <p className="mb-2">
                 <ErrorNote>{view.message}</ErrorNote>
               </p>
+              {view.helpUrl ? (
+                <p className="mb-3">
+                  <a
+                    className="underline"
+                    href={view.helpUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open the Worker in Cloudflare
+                  </a>
+                </p>
+              ) : null}
               {view.cleanedUp ? (
                 <p className="mb-3 text-muted">
                   Nothing is left in your account.
